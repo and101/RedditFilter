@@ -19,6 +19,7 @@ on:
 
 jobs:
   build:
+    name: Build (Linux)
     runs-on: ubuntu-22.04
     permissions:
       contents: write  # read TweakDash's hidden draft and create the draft release
@@ -153,3 +154,130 @@ jobs:
           files: packages/*.ipa
           tag_name: v${{ steps.ipa_info.outputs.version }}-${{ steps.package_info.outputs.version }}${{ inputs.debug_menu && '-debug' || '' }}
           body: ${{ steps.hash_files.outputs.hashes }}
+
+  # Same steps and tool versions as the local macOS builds: Xcode's iOS SDK, Theos and theos-jailed
+  # pinned to the tested commits, and insert_dylib compiled for the runner (the copy bundled with
+  # theos-jailed is Intel-only). Uploads the packages as an artifact; the draft release still comes
+  # from the Linux job.
+  build-macos:
+    name: Build (macOS)
+    runs-on: macos-15
+    env:
+      DEBUG_MENU: ${{ inputs.debug_menu && '1' || '0' }}
+      THEOS: ${{ github.workspace }}/theos
+      THEOS_COMMIT: 6e7b8c40e0f5f9f5b2377800dc1e42cd2560d24a
+      THEOS_JAILED_COMMIT: 2a861c0fbdf1306050c3a8bc02dc01e12ae9b3a3
+      INSERT_DYLIB_COMMIT: eb7278162af8fcc372e7f2946a2dee6a386b17d8
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Install dependencies
+        run: brew install ldid-procursus dpkg xmlstarlet libplist
+
+      - name: Cache Theos
+        id: cache-theos
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.THEOS }}
+          key: theos-macos-${{ env.THEOS_COMMIT }}
+
+      - name: Install Theos
+        if: ${{ steps.cache-theos.outputs.cache-hit != 'true' }}
+        run: |
+          git clone https://github.com/theos/theos.git "$THEOS"
+          git -C "$THEOS" checkout "$THEOS_COMMIT"
+          git -C "$THEOS" submodule update --init --recursive
+
+      - name: Download IPA (Auto)
+        if: ${{ inputs.create_release && !inputs.ipa_url }}
+        uses: level3tjg/decryptedappstore-action@main
+        with:
+          appstore_url: "https://apps.apple.com/us/app/reddit/id1064216828"
+          cache: true
+          path: ${{ github.workspace }}/App.ipa
+          token: ${{ secrets.DECRYPTEDAPPSTORE_SESSION_TOKEN }}
+
+      - name: Download IPA (Manual)
+        if: ${{ inputs.create_release && inputs.ipa_url }}
+        env:
+          IPA_URL: ${{ inputs.ipa_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ "$IPA_URL" == https://api.github.com/* ]]; then
+            curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/octet-stream" "$IPA_URL" -o "${{ github.workspace }}/App.ipa"
+          else
+            curl -Lo "${{ github.workspace }}/App.ipa" "$IPA_URL"
+          fi
+          zip -T "${{ github.workspace }}/App.ipa"
+
+      - name: Get IPA Info
+        if: ${{ inputs.create_release }}
+        id: ipa_info
+        run: |
+          plist="$RUNNER_TEMP/Info.plist"
+          unzip -p "${{ github.workspace }}/App.ipa" 'Payload/*.app/Info.plist' > "$plist"
+          echo "version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")" >> "$GITHUB_OUTPUT"
+
+      - name: Install theos-jailed
+        if: ${{ inputs.create_release }}
+        run: |
+          git clone --recursive https://github.com/level3tjg/theos-jailed.git "$RUNNER_TEMP/theos-jailed"
+          git -C "$RUNNER_TEMP/theos-jailed" checkout "$THEOS_JAILED_COMMIT"
+          "$RUNNER_TEMP/theos-jailed/install"
+
+      - name: Build insert_dylib
+        if: ${{ inputs.create_release }}
+        run: |
+          git clone https://github.com/Tyilo/insert_dylib.git "$RUNNER_TEMP/insert_dylib-src"
+          git -C "$RUNNER_TEMP/insert_dylib-src" checkout "$INSERT_DYLIB_COMMIT"
+          clang -O2 -o "$RUNNER_TEMP/insert_dylib" "$RUNNER_TEMP/insert_dylib-src/insert_dylib/main.c"
+
+      - name: Build rootless deb
+        run: make package
+        env:
+          FINALPACKAGE: ${{ inputs.create_release && '1' || '0' }}
+          THEOS_PACKAGE_SCHEME: rootless
+
+      - name: Build rootful deb
+        run: make clean package
+        env:
+          FINALPACKAGE: ${{ inputs.create_release && '1' || '0' }}
+
+      - name: Build IPA
+        if: ${{ inputs.create_release }}
+        run: make clean package INSERT_DYLIB="$RUNNER_TEMP/insert_dylib"
+        env:
+          FINALPACKAGE: 1
+          SIDELOADED: 1
+          IPA: ${{ github.workspace }}/App.ipa
+          APP_VERSION: ${{ steps.ipa_info.outputs.version }}
+
+      - name: Append Debug Suffix to IPA
+        if: ${{ inputs.create_release && inputs.debug_menu }}
+        run: |
+          for file in packages/*.ipa; do
+            [ -f "$file" ] && mv "$file" "${file%.ipa}_debug.ipa"
+          done
+
+      - name: Check IPA
+        if: ${{ inputs.create_release }}
+        run: |
+          ipa=$(find packages -name '*.ipa' | head -1)
+          binary=$(unzip -Z1 "$ipa" | grep -E '^Payload/[^/]+\.app/Frameworks/RedditFilter\.dylib$')
+          unzip -Z1 "$ipa" | grep -E '^Payload/[^/]+\.app/Frameworks/RedditSideloadFix\.dylib$'
+          echo "Injected: $binary"
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: redditfilter-macos${{ inputs.create_release && format('-{0}', steps.ipa_info.outputs.version) || '' }}
+          path: packages/*
+          if-no-files-found: error
