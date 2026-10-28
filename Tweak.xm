@@ -19,6 +19,7 @@ extern "C" void RFReloadPreferences(void) {
   prefs.awards = [defaults boolForKey:kRedditFilterAwards];
   prefs.scores = [defaults boolForKey:kRedditFilterScores];
   prefs.automod = [defaults boolForKey:kRedditFilterAutoCollapseAutoMod];
+  prefs.videosForYou = [defaults boolForKey:kRedditFilterVideosForYou];
   globalPrefs = prefs;
 }
 
@@ -252,6 +253,7 @@ extern "C" void RFClearPendingWebSession(void);
     kRedditFilterAwards : @NO,
     kRedditFilterScores : @NO,
     kRedditFilterAutoCollapseAutoMod : @NO,
+    kRedditFilterVideosForYou : @NO,
   }];
   RFReloadPreferences();
 

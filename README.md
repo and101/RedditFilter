@@ -7,6 +7,7 @@ Filters unwanted content from the Reddit app: promoted posts, recommendations, N
 - **Comment ads** are hidden again.
 - **NSFW filter** now hides NSFW posts in the new feed cards and in community highlights.
 - **Recommended filter** also removes the "Related answers" section on post pages.
+- **Videos for you**: new option to hide the "Videos for you" carousel in your feed.
 - **RedditFilter settings** are back: Profile → Settings, button at the top right.
 - **Logging in** now works on sideloaded installs (see below).
 

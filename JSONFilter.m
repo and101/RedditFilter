@@ -33,7 +33,7 @@ static id RFValueAtPath(id root, NSString *path) {
 }
 
 BOOL RFPrefsAnyEnabled(RFPrefs p) {
-  return p.promoted || p.recommended || p.nsfw || p.awards || p.scores || p.automod;
+  return p.promoted || p.recommended || p.nsfw || p.awards || p.scores || p.automod || p.videosForYou;
 }
 
 #pragma mark - Filtering single objects
@@ -150,9 +150,26 @@ static BOOL RFFilterNodes(NSArray *nodes, const RFContext *ctx) {
   return changed;
 }
 
+// The "Videos for you" carousel: a PostCarousel feed element of type VIDEO_RECOMMENDATIONS.
+static BOOL RFIsVideosForYou(id node) {
+  NSDictionary *carousel = RFDict(node);
+  return [RFString(carousel[@"__typename"]) isEqualToString:@"PostCarousel"] &&
+         [RFString(carousel[@"type"]) isEqualToString:@"VIDEO_RECOMMENDATIONS"];
+}
+
 // An array of { node: ... } wrappers: feed edges and comment trees.
 static BOOL RFFilterEdges(NSArray *edges, const RFContext *ctx) {
   BOOL changed = NO;
+  NSMutableArray *mutableEdges = [edges isKindOfClass:NSMutableArray.class] ? (NSMutableArray *)edges : nil;
+  if (ctx->prefs.videosForYou && mutableEdges) {
+    NSIndexSet *carousels = [mutableEdges indexesOfObjectsPassingTest:^BOOL(id edge, NSUInteger i, BOOL *stop) {
+      return RFIsVideosForYou(RFDict(edge)[@"node"]);
+    }];
+    if (carousels.count) {
+      [mutableEdges removeObjectsAtIndexes:carousels];
+      changed = YES;
+    }
+  }
   for (id edge in edges) changed |= RFFilterNode(RFDict(edge)[@"node"], ctx);
   return changed;
 }

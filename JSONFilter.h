@@ -13,6 +13,7 @@ typedef struct {
   BOOL awards;
   BOOL scores;
   BOOL automod;
+  BOOL videosForYou;
 } RFPrefs;
 
 #ifdef __cplusplus

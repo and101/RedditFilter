@@ -6,6 +6,7 @@
 #define kRedditFilterAwards @"kRedditFilterAwards"
 #define kRedditFilterScores @"kRedditFilterScores"
 #define kRedditFilterAutoCollapseAutoMod @"kRedditFilterAutoCollapseAutoMod"
+#define kRedditFilterVideosForYou @"kRedditFilterVideosForYou"
 
 #define kToggleCellID @"kToggleCellID"
 

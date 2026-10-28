@@ -69,6 +69,18 @@ int main(void) {
     ]}}};
     Check([Filter(highlights, @"Unknown", nsfw)[@"data"][@"subredditInfoByName"][@"highlightedPosts"] count] == 2, @"Filter NSFW highlights only");
     Check([Filter(highlights, @"Unknown", off) isEqual:highlights], @"Disabled filter preserves highlights");
+    RFPrefs videos = {.videosForYou = YES};
+    NSDictionary *videoCarousel = @{@"__typename": @"PostCarousel", @"type": @"VIDEO_RECOMMENDATIONS",
+                                    @"carouselTitle": @"Videos for you", @"videoCarouselPosts": @[@{@"id": @"v"}]};
+    NSDictionary *otherCarousel = @{@"__typename": @"PostCarousel", @"type": @"OTHER", @"carouselPosts": @[]};
+    NSDictionary *withCarousels = Feed(@[Card(@{@"__typename": @"TitleCell"}), videoCarousel, otherCarousel]);
+    for (NSString *op in @[@"HomeFeedSdui", @"PopularFeedSdui", @"Unknown"]) {
+      NSArray *edges = Filter(withCarousels, op, videos)[@"data"][@"homeV3"][@"elements"][@"edges"];
+      Check(edges.count == 2, @"Remove only the Videos for you carousel");
+      Check(![edges[1][@"node"][@"type"] isEqual:@"VIDEO_RECOMMENDATIONS"], @"Keep other carousels");
+      Check([Filter(withCarousels, op, ads) isEqual:withCarousels], @"Other filters keep Videos for you");
+      Check([Filter(withCarousels, op, off) isEqual:withCarousels], @"Disabled filter keeps Videos for you");
+    }
     puts("All JSON filtering regression tests passed.");
   }
   return 0;

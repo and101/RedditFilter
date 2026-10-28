@@ -21,6 +21,8 @@ static const RFToggleRow kToggleRows[] = {
     {kRedditFilterPromoted, @"Promoted", nil, @"rpl3/tag,icon_tag", YES},
     {kRedditFilterRecommended, @"Recommended", nil, @"rpl3/spam,icon_spam", YES},
     {kRedditFilterNSFW, @"NSFW", nil, @"rpl3/nsfw,icon_nsfw_outline,icon_nsfw", YES},
+    {kRedditFilterVideosForYou, @"Videos for you", @"Show the video carousel in your feed",
+     @"rpl3/video,icon_video,icon_play", YES},
     {kRedditFilterAwards, @"Awards", @"Show awards on posts and comments",
      @"rpl3/award,icon_gift_fill,icon_award,icon-award-outline", YES},
     {kRedditFilterScores, @"Scores", @"Show vote count on posts and comments", @"rpl3/upvote,icon_upvote", YES},
