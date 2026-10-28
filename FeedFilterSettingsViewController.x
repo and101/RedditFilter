@@ -123,9 +123,10 @@ typedef struct {
 } RFAboutRow;
 
 static const RFAboutRow kAboutRows[] = {
-    {@"RedditFilter", nil, @"https://github.com/NicholasBly/RedditFilter/releases",
+    {@"RedditFilter", nil, @"https://github.com/and101/RedditFilter/releases",
      @"line.3.horizontal.decrease.circle"},
-    {@"Nicholas Bly", @"Developer", @"https://github.com/NicholasBly/RedditFilter", nil},
+    {@"and101", @"Developer", @"https://github.com/and101/RedditFilter", @"person.crop.circle"},
+    {@"Nicholas Bly", @"Based on his fork", @"https://github.com/NicholasBly/RedditFilter", nil},
     {@"level3tjg", @"Original creator",
      @"https://github.com/level3tjg/RedditFilter", @"person.crop.circle"},
 };
