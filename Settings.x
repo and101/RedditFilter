@@ -11,7 +11,8 @@
   // This runs for every screen in the app, so use cheap C string checks
   // instead of building an NSString each time.
   const char *name = class_getName([self class]);
-  if (!strstr(name, "AppSettingsView") || !strstr(name, "HostingController") || !strstr(name, "RedditSliceKit"))
+  if (!strstr(name, "AppSettingsView") || !strstr(name, "HostingController") ||
+      (!strstr(name, "RedditSliceKit") && !strstr(name, "RedditAppSettings")))
     return;
 
   for (UIBarButtonItem *item in self.navigationItem.rightBarButtonItems)

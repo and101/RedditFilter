@@ -55,6 +55,19 @@ static BOOL RFIsHomeRecommendation(id context) {
   return !popularFiller;
 }
 
+// New feed cards keep their NSFW marker in an IndicatorsCell, sometimes nested
+// inside a title, thumbnail, or video cell.
+static BOOL RFHasNSFWIndicator(id object) {
+  NSDictionary *cell = RFDict(object);
+  for (id value in @[ cell ?: @{}, RFDict(cell[@"indicatorsCell"]) ?: @{} ])
+    for (id indicator in RFArray(RFDict(value)[@"indicators"])) {
+      NSString *text = RFString(indicator);
+      if (text && [text rangeOfString:@"nsfw" options:NSCaseInsensitiveSearch].location != NSNotFound)
+        return YES;
+    }
+  return NO;
+}
+
 // Returns YES if it changed anything.
 static BOOL RFFilterNode(id object, const RFContext *ctx) {
   NSMutableDictionary *node = RFMutableDict(object);
@@ -107,6 +120,14 @@ static BOOL RFFilterNode(id object, const RFContext *ctx) {
     return YES;
   }
 
+  if (p.nsfw) {
+    for (id cell in RFArray(node[@"cells"])) {
+      if (!RFHasNSFWIndicator(cell)) continue;
+      node[@"cells"] = @[];
+      return YES;
+    }
+  }
+
   if (p.awards || p.scores) {
     for (id item in RFArray(node[@"cells"])) {
       NSMutableDictionary *cell = RFMutableDict(item);
@@ -146,6 +167,49 @@ static BOOL RFClearKeys(NSMutableDictionary *dict, NSArray *keys) {
   return changed;
 }
 
+// Older responses use an array; newer ones wrap adPosts in a PdpAds object.
+// Keep the wrapper and pagination fields so Apollo can still decode the response.
+static BOOL RFClearAdKeys(NSMutableDictionary *dict, NSArray *keys) {
+  BOOL changed = NO;
+  for (NSString *key in keys) {
+    id ads = dict[key];
+    if (RFArray(ads)) {
+      dict[key] = @[];
+      changed = YES;
+    } else if (RFMutableDict(ads) && RFArray(ads[@"adPosts"])) {
+      ads[@"adPosts"] = @[];
+      changed = YES;
+    }
+  }
+  return changed;
+}
+
+static BOOL RFFilterPostExtras(NSMutableDictionary *root, const RFContext *ctx) {
+  BOOL changed = NO;
+  NSMutableDictionary *components = RFMutableDict(RFValueAtPath(root, @"detailComponents.components"));
+  NSArray *edges = RFArray(components[@"edges"]);
+  if (ctx->prefs.recommended && edges) {
+    NSArray *filtered = [edges filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(id edge, NSDictionary *bindings) {
+      return ![RFString(RFValueAtPath(edge, @"node.__typename")) isEqualToString:@"RelatedAnswersFeedUnit"];
+    }]];
+    if (filtered.count != edges.count) {
+      components[@"edges"] = filtered;
+      changed = YES;
+    }
+  }
+  NSArray *highlights = RFArray(root[@"highlightedPosts"]);
+  if (ctx->prefs.nsfw && highlights) {
+    NSArray *filtered = [highlights filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(id item, NSDictionary *bindings) {
+      return !RFTrue(RFValueAtPath(item, @"post.isNsfw"));
+    }]];
+    if (filtered.count != highlights.count) {
+      root[@"highlightedPosts"] = filtered;
+      changed = YES;
+    }
+  }
+  return changed;
+}
+
 #pragma mark - Filtering whole responses
 
 // Schema-agnostic fallback for operations without a fast path, or when a fast
@@ -168,8 +232,9 @@ static BOOL RFFilterGeneric(NSDictionary *payload, const RFContext *ctx) {
     changed |= RFFilterEdges(RFArray(RFValueAtPath(dict, @"commentForest.trees")), ctx);
 
     if (ctx->prefs.promoted)
-      changed |= RFClearKeys(dict, @[ @"commentsPageAds", @"commentTreeAds", @"pdpCommentsAds" ]);
+      changed |= RFClearAdKeys(dict, @[ @"commentsPageAds", @"commentTreeAds", @"pdpCommentsAds" ]);
     if (ctx->prefs.recommended) changed |= RFClearKeys(dict, @[ @"recommendations" ]);
+    changed |= RFFilterPostExtras(dict, ctx);
   }
   return changed;
 }
@@ -201,6 +266,9 @@ static BOOL RFFilterPostInfo(NSMutableDictionary *json, NSDictionary *payload, c
 
   BOOL changed = resolved ? RFFilterEdges(trees, ctx) : RFFilterGeneric(payload, ctx);
   changed |= RFFilterNode(post, ctx);
+  if (ctx->prefs.promoted)
+    changed |= RFClearAdKeys(post, @[ @"commentsPageAds", @"commentTreeAds", @"pdpCommentsAds" ]);
+  changed |= RFFilterPostExtras(post, ctx);
   return changed;
 }
 
@@ -216,8 +284,7 @@ static BOOL RFFilterCommentAds(NSMutableDictionary *json, NSDictionary *payload,
   RF_RECORD_SCHEMA(@"PdpCommentsAds", @"data.*.pdpCommentsAds", container != nil, json, RFSchemaSigCommentsAds);
   if (!ctx->prefs.promoted) return NO;
   if (!container) return RFFilterGeneric(payload, ctx);
-  [container setObject:@[] forKey:@"pdpCommentsAds"];
-  return YES;
+  return RFClearAdKeys(container, @[ @"pdpCommentsAds" ]);
 }
 
 static BOOL RFFilterResponse(NSMutableDictionary *json, NSDictionary *payload, NSString *op, const RFContext *ctx) {

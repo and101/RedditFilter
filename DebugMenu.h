@@ -36,7 +36,7 @@ typedef NS_ENUM(NSInteger, RFSchemaSig) {
   RFSchemaSigEdges = 0,   // an array of `{ node: {...} }` (home / popular feeds)
   RFSchemaSigTrees,       // an array of comment-forest trees: `{ node: {...} }`
   RFSchemaSigNodeArray,   // an array of post nodes, each with a `__typename`
-  RFSchemaSigCommentsAds, // an array of comment ads (often empty)
+  RFSchemaSigCommentsAds, // an ad array or a PdpAds object containing adPosts
 };
 
 #if REDDITFILTER_DEBUG

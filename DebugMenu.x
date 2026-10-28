@@ -174,7 +174,9 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
       return NO;
     }
     case RFSchemaSigCommentsAds:
-      return [value isKindOfClass:NSArray.class];
+      return [value isKindOfClass:NSArray.class] ||
+             ([value isKindOfClass:NSDictionary.class] &&
+              [value[@"adPosts"] isKindOfClass:NSArray.class]);
   }
   return NO;
 }
