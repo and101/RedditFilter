@@ -28,7 +28,14 @@ Download the IPA from [Releases](../../releases), sign it with your usual signer
 
 ## Build
 
-Requires [Theos](https://theos.dev).
+On a Mac with Xcode and [Homebrew](https://brew.sh):
 
-- Jailbreak packages: `make package` (add `THEOS_PACKAGE_SCHEME=rootless` for rootless).
-- Sideload IPA: install [theos-jailed](https://github.com/level3tjg/theos-jailed), then run `make package SIDELOADED=1 IPA=/path/to/decrypted.ipa`. The IPA must be decrypted. On Apple Silicon Macs without Rosetta, build [insert_dylib](https://github.com/Tyilo/insert_dylib) yourself and add `INSERT_DYLIB=/path/to/insert_dylib`.
+```sh
+git clone --recursive https://github.com/and101/RedditFilter.git
+cd RedditFilter
+./build-ipa.sh /path/to/decrypted-Reddit.ipa
+```
+
+The IPA is saved in `packages/`, unsigned. The script installs anything missing (Theos, theos-jailed, insert_dylib and a few Homebrew packages) at the versions used for the released IPAs, so builds match. The Reddit IPA must be decrypted.
+
+For jailbroken devices, `make package` builds a deb (add `THEOS_PACKAGE_SCHEME=rootless` for rootless).
