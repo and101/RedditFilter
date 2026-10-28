@@ -119,11 +119,44 @@ extern "C" UIImage *iconWithName(NSString *iconName) {
 
 #pragma mark - Network filtering
 
+extern "C" NSString *RFPendingWebSession(void);
+extern "C" void RFClearPendingWebSession(void);
+
 %hook NSURLSession
 - (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request
                             completionHandler:(void (^)(NSData *data, NSURLResponse *response,
                                                         NSError *error))completionHandler {
   NSString *host = request.URL.host;
+
+  // Browser login (LoginHelper.x): answer the app's password login with the session from the
+  // browser instead of sending it to Reddit, then let the app exchange it for its token as usual.
+  NSString *webSession = RFPendingWebSession();
+  if (webSession && completionHandler && [host hasSuffix:@"reddit.com"]) {
+    if ([request.URL.path isEqualToString:@"/auth/v2/login/password"]) {
+      NSHTTPURLResponse *response = [[NSHTTPURLResponse alloc]
+           initWithURL:request.URL
+            statusCode:200
+           HTTPVersion:@"HTTP/1.1"
+          headerFields:@{
+            @"Content-Type" : @"application/json",
+            @"Set-Cookie" : [NSString
+                stringWithFormat:@"reddit_session=%@; Domain=.reddit.com; Path=/; Secure; HttpOnly",
+                                 webSession],
+          }];
+      return %orig([NSURLRequest requestWithURL:[NSURL URLWithString:@"data:application/json,%7B%7D"]],
+                   ^(NSData *data, NSURLResponse *_, NSError *error) {
+                     completionHandler([@"{}" dataUsingEncoding:NSUTF8StringEncoding], response, nil);
+                   });
+    }
+    if ([request.URL.path isEqualToString:@"/auth/v2/oauth/access-token/session"])
+      return %orig(request, ^(NSData *data, NSURLResponse *response, NSError *error) {
+        if ([response isKindOfClass:NSHTTPURLResponse.class] &&
+            ((NSHTTPURLResponse *)response).statusCode == 200)
+          RFClearPendingWebSession();
+        completionHandler(data, response, error);
+      });
+  }
+
   if (!completionHandler || !RFPrefsAnyEnabled(globalPrefs) ||
       !([host hasPrefix:@"gql"] || [host hasPrefix:@"oauth"]))
     return %orig;
