@@ -428,6 +428,75 @@ NSData *RFFilteredResponseData(NSData *data, NSString *operationName, RFPrefs pr
   return [NSJSONSerialization dataWithJSONObject:json options:0 error:NULL];
 }
 
+#pragma mark - Topping up short first pages
+
+static const NSUInteger kRFMinimumVisiblePosts = 10;
+
+static NSMutableDictionary *RFFeedElements(NSDictionary *json) {
+  for (id root in RFDict(json[@"data"]).allValues) {
+    NSMutableDictionary *elements = RFMutableDict(RFDict(root)[@"elements"]);
+    if (RFArray(elements[@"edges"])) return elements;
+  }
+  return nil;
+}
+
+static BOOL RFIsHiddenFeedElement(NSDictionary *node) {
+  if (RFTrue(node[@"isHidden"])) return YES;
+  NSArray *cells = RFArray(node[@"cells"]);
+  return [RFString(node[@"__typename"]) isEqualToString:@"CellGroup"] && cells && cells.count == 0;
+}
+
+NSURLRequest *RFFeedTopUpRequest(NSURLRequest *request, NSData *filteredData) {
+  if (![RFOperationName(request) isEqualToString:@"HomeFeedSdui"] || !request.HTTPBody.length || !filteredData.length)
+    return nil;
+  NSMutableDictionary *body = RFMutableDict([NSJSONSerialization JSONObjectWithData:request.HTTPBody
+                                                                            options:NSJSONReadingMutableContainers
+                                                                              error:NULL]);
+  NSMutableDictionary *variables = RFMutableDict(body[@"variables"]);
+  if (!variables || RFString(variables[@"after"])) return nil; // only the first page
+
+  NSDictionary *json = RFDict([NSJSONSerialization JSONObjectWithData:filteredData
+                                                             options:NSJSONReadingMutableContainers
+                                                               error:NULL]);
+  NSDictionary *elements = RFFeedElements(json);
+  NSDictionary *pageInfo = RFDict(elements[@"pageInfo"]);
+  NSString *cursor = RFString(pageInfo[@"endCursor"]);
+  if (!RFTrue(pageInfo[@"hasNextPage"]) || !cursor.length) return nil;
+
+  NSUInteger visible = 0;
+  for (id edge in RFArray(elements[@"edges"]))
+    if (!RFIsHiddenFeedElement(RFDict(RFDict(edge)[@"node"]))) visible++;
+  if (visible >= kRFMinimumVisiblePosts) return nil;
+
+  variables[@"after"] = cursor;
+  NSData *newBody = [NSJSONSerialization dataWithJSONObject:body options:0 error:NULL];
+  if (!newBody) return nil;
+  NSMutableURLRequest *next = [request mutableCopy];
+  next.HTTPBody = newBody;
+  [next setValue:[NSString stringWithFormat:@"%lu", (unsigned long)newBody.length] forHTTPHeaderField:@"Content-Length"];
+  return next;
+}
+
+NSData *RFMergedFeedPages(NSData *firstPage, NSData *nextPage) {
+  if (!firstPage.length || !nextPage.length) return nil;
+  NSMutableDictionary *first = RFMutableDict([NSJSONSerialization JSONObjectWithData:firstPage
+                                                                             options:NSJSONReadingMutableContainers
+                                                                               error:NULL]);
+  NSDictionary *next = RFDict([NSJSONSerialization JSONObjectWithData:nextPage
+                                                             options:NSJSONReadingMutableContainers
+                                                               error:NULL]);
+  NSMutableDictionary *firstElements = RFFeedElements(first);
+  NSDictionary *nextElements = RFFeedElements(next);
+  NSMutableArray *edges = RFArray(firstElements[@"edges"]) ? [firstElements[@"edges"] mutableCopy] : nil;
+  NSArray *moreEdges = RFArray(nextElements[@"edges"]);
+  NSDictionary *pageInfo = RFDict(nextElements[@"pageInfo"]);
+  if (!edges || !moreEdges || !pageInfo) return nil;
+  [edges addObjectsFromArray:moreEdges];
+  firstElements[@"edges"] = edges;
+  firstElements[@"pageInfo"] = pageInfo;
+  return [NSJSONSerialization dataWithJSONObject:first options:0 error:NULL];
+}
+
 #pragma mark - Operation name
 
 NSString *RFOperationName(NSURLRequest *request) {

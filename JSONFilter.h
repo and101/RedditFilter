@@ -38,6 +38,15 @@ NSString *RFOperationName(NSURLRequest *request);
 // in which case the caller should pass the original data through.
 NSData *RFFilteredResponseData(NSData *data, NSString *operationName, RFPrefs prefs);
 
+// Hidden posts take no space, so a first Home page that's mostly hidden can be too short to scroll,
+// and the app only loads more when you scroll. Returns the request for the next page when the
+// (already filtered) first page has fewer than a screenful of visible posts, else nil.
+NSURLRequest *RFFeedTopUpRequest(NSURLRequest *request, NSData *filteredData);
+
+// Appends the next page's posts to the first page and takes its pagination info.
+// Returns nil if either page can't be read.
+NSData *RFMergedFeedPages(NSData *firstPage, NSData *nextPage);
+
 #ifdef __cplusplus
 }
 #endif

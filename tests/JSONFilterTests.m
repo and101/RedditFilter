@@ -105,6 +105,30 @@ int main(void) {
       Check([Filter(withCarousels, op, ads) isEqual:withCarousels], @"Other filters keep Videos for you");
       Check([Filter(withCarousels, op, off) isEqual:withCarousels], @"Disabled filter keeps Videos for you");
     }
+    // Short first pages get topped up with the next page.
+    NSMutableURLRequest *feedRequest = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"https://gql-fed.reddit.com/"]];
+    [feedRequest setValue:@"HomeFeedSdui" forHTTPHeaderField:@"X-APOLLO-OPERATION-NAME"];
+    feedRequest.HTTPBody = [NSJSONSerialization dataWithJSONObject:@{@"operationName": @"HomeFeedSdui", @"variables": @{@"sort": @"BEST"}} options:0 error:NULL];
+    NSDictionary *(^Page)(NSUInteger, NSUInteger, NSString *) = ^NSDictionary *(NSUInteger shown, NSUInteger hidden, NSString *cursor) {
+      NSMutableArray *edges = [NSMutableArray array];
+      for (NSUInteger i = 0; i < shown; i++) [edges addObject:@{@"node": Card(@{@"__typename": @"TitleCell"})}];
+      for (NSUInteger i = 0; i < hidden; i++) [edges addObject:@{@"node": @{@"__typename": @"CellGroup", @"cells": @[]}}];
+      return @{@"data": @{@"homeV3": @{@"elements": @{@"edges": edges,
+        @"pageInfo": @{@"endCursor": cursor ?: NSNull.null, @"hasNextPage": @(cursor != nil)}}}}};
+    };
+    NSData *(^Data)(NSDictionary *) = ^NSData *(NSDictionary *o) { return [NSJSONSerialization dataWithJSONObject:o options:0 error:NULL]; };
+    NSURLRequest *topUp = RFFeedTopUpRequest(feedRequest, Data(Page(6, 3, @"c1")));
+    NSDictionary *topUpBody = [NSJSONSerialization JSONObjectWithData:topUp.HTTPBody options:0 error:NULL];
+    Check([topUpBody[@"variables"][@"after"] isEqual:@"c1"] && [topUpBody[@"variables"][@"sort"] isEqual:@"BEST"], @"Ask for the next page after a short first page");
+    Check(RFFeedTopUpRequest(feedRequest, Data(Page(12, 2, @"c1"))) == nil, @"Leave full first pages alone");
+    Check(RFFeedTopUpRequest(feedRequest, Data(Page(3, 0, nil))) == nil, @"Stop at the end of the feed");
+    NSURLRequest *nextPageRequest = topUp;
+    Check(RFFeedTopUpRequest(nextPageRequest, Data(Page(1, 8, @"c2"))) == nil, @"Only top up the first page");
+    NSDictionary *merged = [NSJSONSerialization JSONObjectWithData:RFMergedFeedPages(Data(Page(6, 3, @"c1")), Data(Page(20, 0, @"c2"))) options:0 error:NULL];
+    Check([merged[@"data"][@"homeV3"][@"elements"][@"edges"] count] == 29, @"Merge both pages' posts");
+    Check([merged[@"data"][@"homeV3"][@"elements"][@"pageInfo"][@"endCursor"] isEqual:@"c2"], @"Continue from the second page");
+    Check(RFMergedFeedPages(Data(Page(6, 3, @"c1")), [@"oops" dataUsingEncoding:NSUTF8StringEncoding]) == nil, @"Ignore a bad second page");
+
     puts("All JSON filtering regression tests passed.");
   }
   return 0;

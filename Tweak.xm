@@ -165,13 +165,26 @@ extern "C" void RFClearPendingWebSession(void);
       !([host hasPrefix:@"gql"] || [host hasPrefix:@"oauth"]))
     return %orig;
 
+  NSURLSession *session = self;
   void (^filteringHandler)(NSData *, NSURLResponse *, NSError *) =
       ^(NSData *data, NSURLResponse *response, NSError *error) {
         if (!error && data.length) {
           NSData *filtered = RFFilteredResponseData(data, RFOperationName(request), globalPrefs);
           if (filtered) data = filtered;
         }
-        completionHandler(data, response, error);
+        // A first Home page that's mostly hidden posts can be too short to scroll, and the app only
+        // loads more when you scroll. Fetch the next page now and hand both over together.
+        NSURLRequest *topUp = error ? nil : RFFeedTopUpRequest(request, data);
+        if (!topUp) return completionHandler(data, response, error);
+        NSData *firstPage = data;
+        // Goes through this hook too, so the extra page is filtered as well.
+        [[session dataTaskWithRequest:topUp
+                    completionHandler:^(NSData *nextData, NSURLResponse *nextResponse, NSError *nextError) {
+                      BOOL ok = !nextError && [nextResponse isKindOfClass:NSHTTPURLResponse.class] &&
+                                ((NSHTTPURLResponse *)nextResponse).statusCode == 200;
+                      NSData *merged = ok ? RFMergedFeedPages(firstPage, nextData) : nil;
+                      completionHandler(merged ?: firstPage, response, nil);
+                    }] resume];
       };
   return %orig(request, filteringHandler);
 }
