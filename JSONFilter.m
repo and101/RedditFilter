@@ -213,27 +213,31 @@ static BOOL RFIsVideosForYou(id node) {
          [RFString(carousel[@"type"]) isEqualToString:@"VIDEO_RECOMMENDATIONS"];
 }
 
-// Empties the carousel rather than removing it from the feed: taking the element out stops the
-// feed loading more posts on some devices.
-static BOOL RFHideVideosForYou(id node) {
-  NSMutableDictionary *carousel = RFMutableDict(node);
-  if (!RFIsVideosForYou(carousel)) return NO;
-  BOOL changed = NO;
-  for (NSString *key in @[ @"carouselPosts", @"videoCarouselPosts" ]) {
-    if (![RFArray(carousel[key]) count]) continue;
-    carousel[key] = @[];
-    changed = YES;
-  }
-  return changed;
+// Swaps the carousel for an empty post card, the same thing the other filters leave behind for a
+// hidden post. Removing the carousel, or emptying it in place, can stop the feed loading more posts.
+static NSDictionary *RFEmptyCard(NSDictionary *carousel) {
+  NSString *identifier = [@"redditfilter-" stringByAppendingString:RFString(carousel[@"id"]) ?: @"video_in_feed_unit"];
+  return [@{
+    @"__typename" : @"CellGroup",
+    @"id" : identifier,
+    @"groupId" : identifier,
+    @"cells" : @[],
+    @"adPayload" : NSNull.null,
+    @"recommendationContext" : NSNull.null,
+  } mutableCopy];
 }
 
 // An array of { node: ... } wrappers: feed edges and comment trees.
 static BOOL RFFilterEdges(NSArray *edges, const RFContext *ctx) {
   BOOL changed = NO;
   for (id edge in edges) {
-    id node = RFDict(edge)[@"node"];
-    if (ctx->prefs.videosForYou) changed |= RFHideVideosForYou(node);
-    changed |= RFFilterNode(node, ctx);
+    NSMutableDictionary *wrapper = RFMutableDict(edge);
+    if (ctx->prefs.videosForYou && wrapper && RFIsVideosForYou(wrapper[@"node"])) {
+      wrapper[@"node"] = RFEmptyCard(wrapper[@"node"]);
+      changed = YES;
+      continue;
+    }
+    changed |= RFFilterNode(RFDict(edge)[@"node"], ctx);
   }
   return changed;
 }

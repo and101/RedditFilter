@@ -99,7 +99,8 @@ int main(void) {
     for (NSString *op in @[@"HomeFeedSdui", @"PopularFeedSdui", @"Unknown"]) {
       NSArray *edges = Filter(withCarousels, op, videos)[@"data"][@"homeV3"][@"elements"][@"edges"];
       Check(edges.count == 3, @"Keep every feed element so the feed keeps loading");
-      Check([edges[1][@"node"][@"videoCarouselPosts"] count] == 0, @"Empty the Videos for you carousel");
+      Check([edges[1][@"node"][@"__typename"] isEqual:@"CellGroup"] && [edges[1][@"node"][@"cells"] count] == 0,
+            @"Swap the Videos for you carousel for an empty card");
       Check([edges[2][@"node"][@"carouselPosts"] count] == 1, @"Keep other carousels");
       Check([Filter(withCarousels, op, ads) isEqual:withCarousels], @"Other filters keep Videos for you");
       Check([Filter(withCarousels, op, off) isEqual:withCarousels], @"Disabled filter keeps Videos for you");
