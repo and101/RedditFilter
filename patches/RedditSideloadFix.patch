@@ -1,0 +1,144 @@
+diff --git a/Tweak.x b/Tweak.x
+index e0b5572..3f3b604 100644
+--- a/Tweak.x
++++ b/Tweak.x
+@@ -66,91 +66,80 @@ static void loadKeychainAccessGroup() {
+     (__bridge id)kSecReturnAttributes : @YES,
+   };
+ 
+-  CFTypeRef result;
++  CFTypeRef result = NULL;
+   OSStatus ret = SecItemCopyMatching((__bridge CFDictionaryRef)dummyItem, &result);
+   if (ret == errSecItemNotFound) ret = SecItemAdd((__bridge CFDictionaryRef)dummyItem, &result);
+ 
+-  if (ret == errSecSuccess && result) {
++  if (ret == errSecSuccess && result && CFGetTypeID(result) == CFDictionaryGetTypeID()) {
+     NSDictionary *resultDict = (__bridge id)result;
+-    keychainAccessGroup = resultDict[(__bridge id)kSecAttrAccessGroup];
+-    originalKeychainAccessGroup =
+-        [keychainAccessGroup stringByReplacingCharactersInRange:NSMakeRange(0, 10)
+-                                                     withString:TEAM_ID];
+-    NSLog(@"loaded keychainAccessGroup: %@", keychainAccessGroup);
++    NSString *group = resultDict[(__bridge id)kSecAttrAccessGroup];
++    // "<team ID>.<bundle ID>": swap in the original team ID.
++    if ([group isKindOfClass:NSString.class] && group.length > 10) {
++      keychainAccessGroup = group;
++      originalKeychainAccessGroup = [group stringByReplacingCharactersInRange:NSMakeRange(0, 10)
++                                                                   withString:TEAM_ID];
++      NSLog(@"loaded keychainAccessGroup: %@", keychainAccessGroup);
++    }
+   }
++  if (!keychainAccessGroup) NSLog(@"couldn't load keychainAccessGroup (%d)", (int)ret);
+ 
+-  CFRelease(result);
++  if (result) CFRelease(result);
+ }
+ 
+ %end
+ 
++// A copy of dict with its access group set to group, or NULL if it has none (or group is unknown).
++// The caller releases the copy.
++static CFDictionaryRef copyWithAccessGroup(CFDictionaryRef dict, NSString *group) {
++  if (!group || !dict || !CFDictionaryContainsKey(dict, kSecAttrAccessGroup)) return NULL;
++  CFMutableDictionaryRef mutableDict = CFDictionaryCreateMutableCopy(kCFAllocatorDefault, 0, dict);
++  CFDictionarySetValue(mutableDict, kSecAttrAccessGroup, (__bridge void *)group);
++  CFDictionaryRef copy = CFDictionaryCreateCopy(kCFAllocatorDefault, mutableDict);
++  CFRelease(mutableDict);
++  return copy;
++}
++
++// Shows the app the access group it expects in a returned item.
++static void fixResult(CFTypeRef *result) {
++  if (!result || !*result || CFGetTypeID(*result) != CFDictionaryGetTypeID()) return;
++  CFDictionaryRef fixed = copyWithAccessGroup(*result, originalKeychainAccessGroup);
++  if (!fixed) return;
++  CFRelease(*result);
++  *result = fixed;
++}
++
+ static OSStatus (*orig_SecItemAdd)(CFDictionaryRef, CFTypeRef *);
+ static OSStatus hook_SecItemAdd(CFDictionaryRef attributes, CFTypeRef *result) {
+-  if (CFDictionaryContainsKey(attributes, kSecAttrAccessGroup)) {
+-    CFMutableDictionaryRef mutableAttributes =
+-        CFDictionaryCreateMutableCopy(kCFAllocatorDefault, 0, attributes);
+-    CFDictionarySetValue(mutableAttributes, kSecAttrAccessGroup,
+-                         (__bridge void *)keychainAccessGroup);
+-    attributes = CFDictionaryCreateCopy(kCFAllocatorDefault, mutableAttributes);
+-    CFRelease(mutableAttributes);
+-  }
+-  OSStatus status = orig_SecItemAdd(attributes, result);
+-  if (result && *result && CFGetTypeID(*result) == CFDictionaryGetTypeID() &&
+-      CFDictionaryContainsKey(*result, kSecAttrAccessGroup)) {
+-    CFMutableDictionaryRef mutableResult =
+-        CFDictionaryCreateMutableCopy(kCFAllocatorDefault, 0, *result);
+-    CFDictionarySetValue(mutableResult, kSecAttrAccessGroup,
+-                         (__bridge void *)originalKeychainAccessGroup);
+-    *result = CFDictionaryCreateCopy(kCFAllocatorDefault, mutableResult);
+-    CFRelease(mutableResult);
+-  }
++  CFDictionaryRef fixed = copyWithAccessGroup(attributes, keychainAccessGroup);
++  OSStatus status = orig_SecItemAdd(fixed ?: attributes, result);
++  if (fixed) CFRelease(fixed);
++  if (status == errSecSuccess) fixResult(result);
+   return status;
+ }
+ 
+ static OSStatus (*orig_SecItemCopyMatching)(CFDictionaryRef, CFTypeRef *);
+ static OSStatus hook_SecItemCopyMatching(CFDictionaryRef query, CFTypeRef *result) {
+-  if (CFDictionaryContainsKey(query, kSecAttrAccessGroup)) {
+-    CFMutableDictionaryRef mutableQuery =
+-        CFDictionaryCreateMutableCopy(kCFAllocatorDefault, 0, query);
+-    CFDictionarySetValue(mutableQuery, kSecAttrAccessGroup, (__bridge void *)keychainAccessGroup);
+-    query = CFDictionaryCreateCopy(kCFAllocatorDefault, mutableQuery);
+-    CFRelease(mutableQuery);
+-  }
+-  OSStatus status = orig_SecItemCopyMatching(query, result);
+-  if (result && *result && CFGetTypeID(*result) == CFDictionaryGetTypeID() &&
+-      CFDictionaryContainsKey(*result, kSecAttrAccessGroup)) {
+-    CFMutableDictionaryRef mutableResult =
+-        CFDictionaryCreateMutableCopy(kCFAllocatorDefault, 0, *result);
+-    CFDictionarySetValue(mutableResult, kSecAttrAccessGroup,
+-                         (__bridge void *)originalKeychainAccessGroup);
+-    *result = CFDictionaryCreateCopy(kCFAllocatorDefault, mutableResult);
+-    CFRelease(mutableResult);
+-  }
++  CFDictionaryRef fixed = copyWithAccessGroup(query, keychainAccessGroup);
++  OSStatus status = orig_SecItemCopyMatching(fixed ?: query, result);
++  if (fixed) CFRelease(fixed);
++  if (status == errSecSuccess) fixResult(result);
+   return status;
+ }
+ 
+ static OSStatus (*orig_SecItemDelete)(CFDictionaryRef);
+ static OSStatus hook_SecItemDelete(CFDictionaryRef query) {
+-  if (CFDictionaryContainsKey(query, kSecAttrAccessGroup)) {
+-    CFMutableDictionaryRef mutableQuery =
+-        CFDictionaryCreateMutableCopy(kCFAllocatorDefault, 0, query);
+-    CFDictionarySetValue(mutableQuery, kSecAttrAccessGroup, (__bridge void *)keychainAccessGroup);
+-    query = CFDictionaryCreateCopy(kCFAllocatorDefault, mutableQuery);
+-    CFRelease(mutableQuery);
+-  }
+-  return orig_SecItemDelete(query);
++  CFDictionaryRef fixed = copyWithAccessGroup(query, keychainAccessGroup);
++  OSStatus status = orig_SecItemDelete(fixed ?: query);
++  if (fixed) CFRelease(fixed);
++  return status;
+ }
+ 
+ static OSStatus (*orig_SecItemUpdate)(CFDictionaryRef, CFDictionaryRef);
+ static OSStatus hook_SecItemUpdate(CFDictionaryRef query, CFDictionaryRef attributesToUpdate) {
+-  if (CFDictionaryContainsKey(query, kSecAttrAccessGroup)) {
+-    CFMutableDictionaryRef mutableQuery =
+-        CFDictionaryCreateMutableCopy(kCFAllocatorDefault, 0, query);
+-    CFDictionarySetValue(mutableQuery, kSecAttrAccessGroup, (__bridge void *)keychainAccessGroup);
+-    query = CFDictionaryCreateCopy(kCFAllocatorDefault, mutableQuery);
+-    CFRelease(mutableQuery);
+-  }
+-  return orig_SecItemUpdate(query, attributesToUpdate);
++  CFDictionaryRef fixed = copyWithAccessGroup(query, keychainAccessGroup);
++  OSStatus status = orig_SecItemUpdate(fixed ?: query, attributesToUpdate);
++  if (fixed) CFRelease(fixed);
++  return status;
+ }
+ 
+ static void initSideloadedFixes() {

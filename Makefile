@@ -40,3 +40,11 @@ endif
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 
+
+ifeq ($(SIDELOADED),1)
+# Fixes for RedditSideloadFix that aren't upstream yet: a crash when the keychain can't be read at
+# launch, and leaks in its keychain hooks. Applied once, before anything is built.
+before-all::
+	@git -C RedditSideloadFix apply --reverse --check ../patches/RedditSideloadFix.patch 2>/dev/null || \
+		git -C RedditSideloadFix apply ../patches/RedditSideloadFix.patch
+endif
