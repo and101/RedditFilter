@@ -169,6 +169,14 @@ int main(void) {
     Check([previewEdges[1][@"node"][@"__typename"] isEqual:@"PostPreviewComponent"], @"Keep whole-post cards without keywords");
     NSDictionary *noMatch = @{@"data": @{@"postsInfoByIds": @[@{@"id": @"t3_a", @"content": @{@"markdown": @"Fine"}}]}};
     Check(RFFeedHidingFullTextMatches(Data(bodyFeed), Data(noMatch), keywords) == nil, @"Leave the page alone when nothing matches");
+    NSDictionary *linked = @{@"data": @{@"postsInfoByIds": @[
+      @{@"id": @"t3_a", @"content": @{@"markdown": @"Have a look [here](https://example.com/tesla \"Tesla\")."}},
+      @{@"id": @"t3_b", @"content": @{@"markdown": @"See [my tesla](https://example.com/car)."}},
+    ]}};
+    NSArray *linkedEdges = [NSJSONSerialization JSONObjectWithData:RFFeedHidingFullTextMatches(Data(bodyFeed), Data(linked), keywords)
+                                                           options:0 error:NULL][@"data"][@"homeV3"][@"elements"][@"edges"];
+    Check([linkedEdges[0][@"node"][@"cells"] count] == 1, @"Ignore where links go");
+    Check([linkedEdges[1][@"node"][@"cells"] count] == 0, @"Match link labels");
     Check(RFFeedHidingFullTextMatches(Data(bodyFeed), Data(@{@"data": NSNull.null}), keywords) == nil, @"Ignore a failed full-text check");
 
     // Comments

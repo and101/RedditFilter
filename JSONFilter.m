@@ -121,6 +121,21 @@ static BOOL RFMatchesKeywords(NSArray *cells, NSRegularExpression *regex) {
   return RFTextsMatchKeywords(texts, regex);
 }
 
+// Markdown links show their label, not where they go: "[here](https://example.com/cat)" -> "[here]".
+static NSString *RFWithoutLinkTargets(NSString *markdown) {
+  if (![markdown containsString:@"]("]) return markdown;
+  static NSRegularExpression *regex;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    // "](url)" or "](url "title")"
+    regex = [NSRegularExpression regularExpressionWithPattern:@"\\]\\([^)\\s]*(?:\\s+\"[^\"]*\")?\\)" options:0 error:NULL];
+  });
+  return [regex stringByReplacingMatchesInString:markdown
+                                         options:0
+                                           range:NSMakeRange(0, markdown.length)
+                                    withTemplate:@"]"];
+}
+
 // The full text of a post or comment: its title (posts only) and its whole body.
 static BOOL RFContentMatchesKeywords(NSDictionary *node, NSRegularExpression *regex) {
   NSMutableArray<NSString *> *texts = [NSMutableArray array];
@@ -128,7 +143,7 @@ static BOOL RFContentMatchesKeywords(NSDictionary *node, NSRegularExpression *re
   if (title) [texts addObject:title];
   NSDictionary *content = RFDict(node[@"content"]);
   NSString *body = RFString(content[@"markdown"]) ?: RFString(content[@"preview"]);
-  if (body) [texts addObject:body];
+  if (body) [texts addObject:RFWithoutLinkTargets(body)];
   return RFTextsMatchKeywords(texts, regex);
 }
 
@@ -634,15 +649,22 @@ static NSDictionary *RFDefaultPostDetailsRequest(void) {
   };
 }
 
-// { body: <request body without ids>, headers: <Apollo headers> }
+// { body: <request body without ids>, headers: <Apollo headers>, appBuild: <Reddit build it came from> }
 static NSDictionary *gPostDetailsRequest;
+
+// The installed Reddit build. A saved request from another build may no longer be accepted.
+static NSString *RFAppBuild(void) {
+  NSDictionary *info = NSBundle.mainBundle.infoDictionary;
+  return [NSString stringWithFormat:@"%@ (%@)", info[@"CFBundleShortVersionString"], info[@"CFBundleVersion"]];
+}
 
 static NSDictionary *RFPostDetailsTemplate(void) {
   @synchronized(kRFPostDetailsRequestKey) {
     if (!gPostDetailsRequest) {
       NSData *data = [NSUserDefaults.standardUserDefaults dataForKey:kRFPostDetailsRequestKey];
       NSDictionary *saved = data ? RFDict([NSJSONSerialization JSONObjectWithData:data options:0 error:NULL]) : nil;
-      gPostDetailsRequest = RFDict(saved[@"body"]) ? saved : RFDefaultPostDetailsRequest();
+      BOOL current = [RFString(saved[@"appBuild"]) isEqualToString:RFAppBuild()];
+      gPostDetailsRequest = current && RFDict(saved[@"body"]) ? saved : RFDefaultPostDetailsRequest();
     }
     return gPostDetailsRequest;
   }
@@ -661,7 +683,7 @@ void RFRememberPostDetailsRequest(NSURLRequest *request) {
   [request.allHTTPHeaderFields enumerateKeysAndObjectsUsingBlock:^(NSString *name, NSString *value, BOOL *stop) {
     if ([name.uppercaseString hasPrefix:@"X-APOLLO-"]) headers[name] = value;
   }];
-  NSDictionary *template = @{@"body" : body, @"headers" : headers};
+  NSDictionary *template = @{@"body" : body, @"headers" : headers, @"appBuild" : RFAppBuild()};
   @synchronized(kRFPostDetailsRequestKey) {
     if ([gPostDetailsRequest isEqual:template]) return;
     gPostDetailsRequest = template;
