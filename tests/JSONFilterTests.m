@@ -55,6 +55,11 @@ int main(void) {
       Check([edges[2][@"node"][@"cells"] count] == 1 && [edges[3][@"node"][@"cells"] count] == 1, @"Keep ordinary cards and tolerate malformed indicators");
       Check([Filter(feed, op, off) isEqual:feed], @"Disabled NSFW filter preserves cards");
     }
+    NSDictionary *forYou = Feed(@[@{@"__typename": @"CellGroup", @"cells": @[@{@"__typename": @"TitleCell"}],
+                                     @"recommendationContext": @{@"typeName": @"DefaultRecommendationContext",
+                                                                 @"typeIdentifier": @"user_to_post"}}]);
+    Check([Filter(forYou, @"HomeFeedSdui", recommended) isEqual:forYou], @"Keep recommended posts in For You");
+
     NSDictionary *extras = Post(@{@"detailComponents": @{@"components": @{@"edges": @[
       @{@"node": @{@"__typename": @"RelatedAnswersFeedUnit"}},
       @{@"node": @{@"__typename": @"PostContent"}}

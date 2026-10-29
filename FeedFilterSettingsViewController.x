@@ -125,10 +125,7 @@ typedef struct {
 static const RFAboutRow kAboutRows[] = {
     {@"RedditFilter", nil, @"https://github.com/and101/RedditFilter/releases",
      @"line.3.horizontal.decrease.circle"},
-    {@"and101", @"Developer", @"https://github.com/and101/RedditFilter", @"person.crop.circle"},
-    {@"Nicholas Bly", @"Based on his fork", @"https://github.com/NicholasBly/RedditFilter", nil},
-    {@"level3tjg", @"Original creator",
-     @"https://github.com/level3tjg/RedditFilter", @"person.crop.circle"},
+    {@"and101", @"Developer", @"https://github.com/and101", @"person.crop.circle"},
 };
 static const NSInteger kAboutRowCount = sizeof(kAboutRows) / sizeof(kAboutRows[0]);
 static const CGFloat kAboutIconSize = 36.0;
@@ -316,7 +313,8 @@ static UITableViewCell *RFAboutCell(UITableView *tableView, NSInteger index) {
              @"Tap Copy on a ✗ row to grab the auto-discovered replacement path.";
       break;
     case RFSectionAbout:
-      break; // no footer, just some space at the bottom
+      text = @"Based on original work from level3tjg and NicholasBly";
+      break;
   }
   return RFSectionView(tableView, text, [self tableView:tableView heightForFooterInSection:section]);
 }

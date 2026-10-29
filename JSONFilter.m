@@ -40,20 +40,7 @@ BOOL RFPrefsAnyEnabled(RFPrefs p) {
 
 typedef struct {
   RFPrefs prefs;
-  BOOL homeFeed; // YES only while filtering a Home feed response
 } RFContext;
-
-// A Home feed post that Reddit injected as a recommendation. Popular posts
-// used to pad out a thin Home feed are kept, same as before.
-static BOOL RFIsHomeRecommendation(id context) {
-  NSDictionary *rec = RFDict(context);
-  NSString *typeName = RFString(rec[@"typeName"]);
-  NSString *typeId = RFString(rec[@"typeIdentifier"]);
-  if (!typeName || !typeId) return NO;
-  BOOL popularFiller = [typeName isEqualToString:@"PopularRecommendationContext"] ||
-                       [typeId hasPrefix:@"global_popular"];
-  return !popularFiller;
-}
 
 // New feed cards keep their NSFW marker in an IndicatorsCell, sometimes nested
 // inside a title, thumbnail, or video cell.
@@ -113,12 +100,9 @@ static BOOL RFFilterNode(id object, const RFContext *ctx) {
     return YES;
   }
 
-  // Recommended: Home feed only. Popular (and other discovery feeds) are made
-  // entirely of recommendations, so doing this there wipes the whole feed.
-  if (p.recommended && ctx->homeFeed && RFIsHomeRecommendation(node[@"recommendationContext"])) {
-    node[@"cells"] = @[];
-    return YES;
-  }
+  // Feed posts aren't checked for recommendations. Since 2026.43 the For You feed is
+  // almost all recommendations (subscriptions moved to Following), so hiding them
+  // emptied the feed and stopped it loading more pages.
 
   if (p.nsfw) {
     for (id cell in RFArray(node[@"cells"])) {
@@ -319,13 +303,6 @@ static BOOL RFFilterResponse(NSMutableDictionary *json, NSDictionary *payload, N
   return RFFilterGeneric(payload, ctx); // e.g. ProfileFeedSdui, HomeFeedSduiBg
 }
 
-static BOOL RFIsHomeFeed(NSString *op, NSDictionary *payload) {
-  if ([op hasPrefix:@"HomeFeed"]) return YES; // HomeFeedSdui, HomeFeedSduiBg, HomeFeedWithDefer
-  for (id key in payload) // backup in case the operation name wasn't found
-    if ([RFString(key) hasPrefix:@"home"]) return YES;
-  return NO;
-}
-
 // Telemetry and config calls that never contain posts: skip them before parsing.
 static NSSet<NSString *> *RFIgnoredOperations(void) {
   static NSSet *set;
@@ -357,7 +334,7 @@ NSData *RFFilteredResponseData(NSData *data, NSString *operationName, RFPrefs pr
   NSDictionary *payload = RFDict(json[@"data"]);
   if (!payload) return nil; // not GraphQL, or an error response like {"data": null}
 
-  RFContext ctx = {prefs, RFIsHomeFeed(operationName, payload)};
+  RFContext ctx = {prefs};
   if (!RFFilterResponse(json, payload, operationName, &ctx)) return nil; // unchanged: skip re-encoding
   return [NSJSONSerialization dataWithJSONObject:json options:0 error:NULL];
 }

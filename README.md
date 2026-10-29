@@ -1,12 +1,12 @@
 # RedditFilter
 
-Filters unwanted content from the Reddit app: promoted posts, recommendations, NSFW posts, awards and scores. Originally by [level3tjg](https://github.com/level3tjg/RedditFilter), based on [NicholasBly's fork](https://github.com/NicholasBly/RedditFilter).
+Filters unwanted content from the Reddit app: promoted posts, recommendations, NSFW posts, awards and scores. Based on original work from [level3tjg](https://github.com/level3tjg/RedditFilter) and [NicholasBly](https://github.com/NicholasBly/RedditFilter).
 
 ## Fixes for Reddit 2026.43.0
 
 - **Comment ads** are hidden again.
 - **NSFW filter** now hides NSFW posts in the new feed cards and in community highlights.
-- **Recommended filter** also removes the "Related answers" section on post pages.
+- **Recommended filter** no longer empties the For You feed, which is now mostly recommendations (your subscriptions are in Following). It still removes the "Related answers" section on post pages.
 - **Videos for you**: new option to hide the "Videos for you" carousel in your feed.
 - **RedditFilter settings** are back: Profile → Settings, button at the top right.
 - **Logging in** now works on sideloaded installs (see below).
