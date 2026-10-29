@@ -14,6 +14,7 @@ typedef struct {
   BOOL scores;
   BOOL automod;
   BOOL videosForYou;
+  BOOL keywords; // YES when RFSetFilterKeywords was given at least one keyword
 } RFPrefs;
 
 #ifdef __cplusplus
@@ -22,6 +23,10 @@ extern "C" {
 
 // YES if at least one filter is switched on.
 BOOL RFPrefsAnyEnabled(RFPrefs prefs);
+
+// Posts whose title or preview text contains one of these words or phrases are
+// hidden. Matching is whole-word and ignores case and accents. Thread-safe.
+void RFSetFilterKeywords(NSArray<NSString *> *keywords);
 
 // Best-effort GraphQL operation name for a request: the Apollo
 // X-APOLLO-OPERATION-NAME header, then "operationName" in the JSON body, then

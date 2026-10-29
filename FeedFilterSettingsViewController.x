@@ -1,5 +1,6 @@
 #import <objc/runtime.h>
 #import "FeedFilterSettingsViewController.h"
+#import "KeywordsViewController.h"
 #import "DebugMenu.h"
 #import "RFLogo.h"
 
@@ -102,14 +103,15 @@ static UIView *RFSectionView(UITableView *tableView, NSString *text, CGFloat hei
 
 #pragma mark - Sections
 
-typedef NS_ENUM(NSInteger, RFSection) { RFSectionFilters, RFSectionDebug, RFSectionAbout };
+typedef NS_ENUM(NSInteger, RFSection) { RFSectionFilters, RFSectionKeywords, RFSectionDebug, RFSectionAbout };
 
-// Filters, [Schema Paths (debug builds only)], About
-static const NSInteger kSectionCount = REDDITFILTER_DEBUG ? 3 : 2;
+// Filters, Keywords, [Schema Paths (debug builds only)], About
+static const NSInteger kSectionCount = REDDITFILTER_DEBUG ? 4 : 3;
 
 static RFSection RFSectionAt(NSInteger section) {
   if (section == 0) return RFSectionFilters;
-  if (REDDITFILTER_DEBUG && section == 1) return RFSectionDebug;
+  if (section == 1) return RFSectionKeywords;
+  if (REDDITFILTER_DEBUG && section == 2) return RFSectionDebug;
   return RFSectionAbout;
 }
 
@@ -159,7 +161,8 @@ static NSString *RFVersionText(void) {
   return [@"Version " @RF_VERSION stringByAppendingString:REDDITFILTER_DEBUG ? @" (debug build)" : @""];
 }
 
-static UITableViewCell *RFAboutCell(UITableView *tableView, NSInteger index) {
+// A plain row with an icon, title and subtitle that opens something when tapped.
+static UITableViewCell *RFLinkCell(UITableView *tableView, NSString *title, NSString *subtitle, UIImage *image) {
   static NSString *const kAboutCellID = @"RFAboutCell";
   UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:kAboutCellID];
   if (!cell) {
@@ -176,13 +179,27 @@ static UITableViewCell *RFAboutCell(UITableView *tableView, NSInteger index) {
     RFApplyTheme(cell.imageView, @selector(setTintColor:), @selector(metaTextColor));
     RFApplyTheme(cell, @selector(setBackgroundColor:), @selector(bodyColor));
   }
-  if (index < 0 || index >= kAboutRowCount) return cell;
-  const RFAboutRow *row = &kAboutRows[index];
-  cell.textLabel.text = row->title;
-  cell.detailTextLabel.text = row->subtitle ?: RFVersionText();
-  cell.imageView.image = row->symbol ? RFBoxedImage([UIImage systemImageNamed:row->symbol], 7.0) : RFLogo();
+  cell.textLabel.text = title;
+  cell.detailTextLabel.text = subtitle;
+  cell.imageView.image = image;
   cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
   return cell;
+}
+
+static UITableViewCell *RFAboutCell(UITableView *tableView, NSInteger index) {
+  if (index < 0 || index >= kAboutRowCount) return RFLinkCell(tableView, nil, nil, nil);
+  const RFAboutRow *row = &kAboutRows[index];
+  UIImage *image = row->symbol ? RFBoxedImage([UIImage systemImageNamed:row->symbol], 7.0) : RFLogo();
+  return RFLinkCell(tableView, row->title, row->subtitle ?: RFVersionText(), image);
+}
+
+static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
+  NSUInteger count = RFSavedKeywords().count;
+  NSString *subtitle = count == 0   ? @"Hide posts that mention a word or phrase"
+                       : count == 1 ? @"1 keyword"
+                                    : [NSString stringWithFormat:@"%lu keywords", (unsigned long)count];
+  return RFLinkCell(tableView, @"Keywords", subtitle,
+                    RFBoxedImage([UIImage systemImageNamed:@"text.magnifyingglass"], 7.0));
 }
 
 #if REDDITFILTER_DEBUG
@@ -212,10 +229,9 @@ static UITableViewCell *RFAboutCell(UITableView *tableView, NSInteger index) {
 
 - (void)viewWillAppear:(BOOL)animated {
   %orig;
-#if REDDITFILTER_DEBUG
-  // Stats accrue while the app runs; refresh them each time the screen opens.
+  // Refresh the keyword count after coming back from the Keywords screen
+  // (and, in debug builds, the stats that accrue while the app runs).
   [self.tableView reloadData];
-#endif
 }
 
 %new
@@ -227,6 +243,8 @@ static UITableViewCell *RFAboutCell(UITableView *tableView, NSInteger index) {
   switch (RFSectionAt(section)) {
     case RFSectionFilters:
       return kToggleRowCount;
+    case RFSectionKeywords:
+      return 1;
     case RFSectionDebug:
 #if REDDITFILTER_DEBUG
       // One row per tracked schema path, plus a trailing "reset" row.
@@ -242,6 +260,7 @@ static UITableViewCell *RFAboutCell(UITableView *tableView, NSInteger index) {
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
   RFSection section = RFSectionAt(indexPath.section);
   if (section == RFSectionAbout) return RFAboutCell(tableView, indexPath.row);
+  if (section == RFSectionKeywords) return RFKeywordsCell(tableView);
 #if REDDITFILTER_DEBUG
   if (section == RFSectionDebug) return [self debugCellForRow:indexPath.row inTableView:tableView];
 #endif
@@ -280,6 +299,10 @@ static UITableViewCell *RFAboutCell(UITableView *tableView, NSInteger index) {
 %new
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
   [tableView deselectRowAtIndexPath:indexPath animated:YES];
+  if (RFSectionAt(indexPath.section) == RFSectionKeywords) {
+    [self.navigationController pushViewController:[RFKeywordsViewController new] animated:YES];
+    return;
+  }
   if (RFSectionAt(indexPath.section) != RFSectionAbout || indexPath.row >= kAboutRowCount) return;
   NSURL *url = [NSURL URLWithString:kAboutRows[indexPath.row].link];
   if (url) [UIApplication.sharedApplication openURL:url options:@{} completionHandler:nil];
@@ -290,6 +313,7 @@ static UITableViewCell *RFAboutCell(UITableView *tableView, NSInteger index) {
   NSString *text = nil;
   switch (RFSectionAt(section)) {
     case RFSectionFilters: text = @"FILTERS"; break;
+    case RFSectionKeywords: text = @"KEYWORDS"; break;
     case RFSectionDebug: text = @"SCHEMA PATHS · DEBUG"; break;
     case RFSectionAbout: text = @"ABOUT"; break;
   }
@@ -307,6 +331,8 @@ static UITableViewCell *RFAboutCell(UITableView *tableView, NSInteger index) {
   switch (RFSectionAt(section)) {
     case RFSectionFilters:
       text = @"Filter specific types of posts from your feed";
+      break;
+    case RFSectionKeywords:
       break;
     case RFSectionDebug:
       text = @"✓ resolved · ✗ broke (structural fallback is now filtering). "

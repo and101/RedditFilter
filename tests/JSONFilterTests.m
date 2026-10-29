@@ -60,6 +60,23 @@ int main(void) {
                                                                  @"typeIdentifier": @"user_to_post"}}]);
     Check([Filter(forYou, @"HomeFeedSdui", recommended) isEqual:forYou], @"Keep recommended posts in For You");
 
+    RFPrefs keywords = {.keywords = YES};
+    RFSetFilterKeywords(@[@" Cafe ", @"new  york", @"", @"c++"]);
+    NSArray *keywordCards = @[
+      Card(@{@"__typename": @"TitleCell", @"title": @"Best CAFÉ in town"}),
+      Card(@{@"__typename": @"TitleWithThumbnailCell", @"titleCell": @{@"title": @"Moving to New\nYork soon"}}),
+      Card(@{@"__typename": @"PreviewTextCell", @"text": @"Learning C++ today"}),
+      Card(@{@"__typename": @"TitleCell", @"title": @"Cafeteria food and newyork"}),
+      Card(@{@"__typename": @"TitleCell", @"title": @"Nothing to see"})
+    ];
+    NSArray *kept = Filter(Feed(keywordCards), @"HomeFeedSdui", keywords)[@"data"][@"homeV3"][@"elements"][@"edges"];
+    for (NSUInteger i = 0; i < 3; i++) Check([kept[i][@"node"][@"cells"] count] == 0, @"Hide titles, nested titles and previews with a keyword");
+    Check([kept[3][@"node"][@"cells"] count] == 1, @"Match whole words only");
+    Check([kept[4][@"node"][@"cells"] count] == 1, @"Keep posts without keywords");
+    Check([Filter(Feed(keywordCards), @"HomeFeedSdui", off) isEqual:Feed(keywordCards)], @"Keyword filter off leaves posts");
+    RFSetFilterKeywords(@[]);
+    Check([Filter(Feed(keywordCards), @"HomeFeedSdui", keywords) isEqual:Feed(keywordCards)], @"Cleared keywords hide nothing");
+
     NSDictionary *extras = Post(@{@"detailComponents": @{@"components": @{@"edges": @[
       @{@"node": @{@"__typename": @"RelatedAnswersFeedUnit"}},
       @{@"node": @{@"__typename": @"PostContent"}}

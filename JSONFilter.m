@@ -33,14 +33,81 @@ static id RFValueAtPath(id root, NSString *path) {
 }
 
 BOOL RFPrefsAnyEnabled(RFPrefs p) {
-  return p.promoted || p.recommended || p.nsfw || p.awards || p.scores || p.automod || p.videosForYou;
+  return p.promoted || p.recommended || p.nsfw || p.awards || p.scores || p.automod || p.videosForYou || p.keywords;
 }
 
 #pragma mark - Filtering single objects
 
 typedef struct {
   RFPrefs prefs;
+  NSRegularExpression *keywords; // nil when there are no keywords
 } RFContext;
+
+#pragma mark - Keywords
+
+static NSString *RFFolded(NSString *text) {
+  NSString *folded = [text stringByFoldingWithOptions:NSCaseInsensitiveSearch | NSDiacriticInsensitiveSearch
+                                               locale:nil];
+  return [folded stringByReplacingOccurrencesOfString:@"\u2019" withString:@"'"]; // curly apostrophe
+}
+
+static NSRegularExpression *gKeywordRegex;
+static NSObject *RFKeywordLock(void) {
+  static NSObject *lock;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{ lock = [NSObject new]; });
+  return lock;
+}
+
+void RFSetFilterKeywords(NSArray<NSString *> *keywords) {
+  NSMutableArray *patterns = [NSMutableArray array];
+  for (id keyword in keywords) {
+    NSString *trimmed = [RFString(keyword) stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (!trimmed.length) continue;
+    // Any run of spaces in a phrase matches any whitespace in the post.
+    NSArray *words = [RFFolded(trimmed) componentsSeparatedByCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+    NSMutableArray *escaped = [NSMutableArray array];
+    for (NSString *word in words)
+      if (word.length) [escaped addObject:[NSRegularExpression escapedPatternForString:word]];
+    [patterns addObject:[escaped componentsJoinedByString:@"\\s+"]];
+  }
+  NSRegularExpression *regex = nil;
+  if (patterns.count) {
+    // Whole words: no letter or digit right before or after the keyword.
+    NSString *pattern = [NSString stringWithFormat:@"(?<![\\p{L}\\p{N}])(?:%@)(?![\\p{L}\\p{N}])",
+                                                   [patterns componentsJoinedByString:@"|"]];
+    regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:NULL];
+  }
+  @synchronized(RFKeywordLock()) {
+    gKeywordRegex = regex;
+  }
+}
+
+// Post text shown in a feed card: titles (also nested in thumbnail and ad cells)
+// and the body preview.
+static void RFCollectPostText(id object, NSMutableArray<NSString *> *texts) {
+  if (RFArray(object)) {
+    for (id item in object) RFCollectPostText(item, texts);
+    return;
+  }
+  NSDictionary *dict = RFDict(object);
+  if (!dict) return;
+  NSString *title = RFString(dict[@"title"]);
+  if (title) [texts addObject:title];
+  if ([RFString(dict[@"__typename"]) isEqualToString:@"PreviewTextCell"] && RFString(dict[@"text"]))
+    [texts addObject:dict[@"text"]];
+  for (NSString *key in @[ @"titleCell", @"previewTextCell" ]) RFCollectPostText(dict[key], texts);
+}
+
+static BOOL RFMatchesKeywords(NSArray *cells, NSRegularExpression *regex) {
+  NSMutableArray<NSString *> *texts = [NSMutableArray array];
+  RFCollectPostText(cells, texts);
+  for (NSString *text in texts) {
+    NSString *folded = RFFolded(text);
+    if ([regex firstMatchInString:folded options:0 range:NSMakeRange(0, folded.length)]) return YES;
+  }
+  return NO;
+}
 
 // New feed cards keep their NSFW marker in an IndicatorsCell, sometimes nested
 // inside a title, thumbnail, or video cell.
@@ -96,6 +163,11 @@ static BOOL RFFilterNode(id object, const RFContext *ctx) {
 
   // Promoted: ads carry an adPayload. Emptying the cells hides the whole post.
   if (p.promoted && RFDict(node[@"adPayload"])) {
+    node[@"cells"] = @[];
+    return YES;
+  }
+
+  if (ctx->keywords && RFMatchesKeywords(RFArray(node[@"cells"]), ctx->keywords)) {
     node[@"cells"] = @[];
     return YES;
   }
@@ -334,7 +406,12 @@ NSData *RFFilteredResponseData(NSData *data, NSString *operationName, RFPrefs pr
   NSDictionary *payload = RFDict(json[@"data"]);
   if (!payload) return nil; // not GraphQL, or an error response like {"data": null}
 
-  RFContext ctx = {prefs};
+  RFContext ctx = {prefs, nil};
+  if (prefs.keywords) {
+    @synchronized(RFKeywordLock()) {
+      ctx.keywords = gKeywordRegex;
+    }
+  }
   if (!RFFilterResponse(json, payload, operationName, &ctx)) return nil; // unchanged: skip re-encoding
   return [NSJSONSerialization dataWithJSONObject:json options:0 error:NULL];
 }

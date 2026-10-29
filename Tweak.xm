@@ -20,6 +20,9 @@ extern "C" void RFReloadPreferences(void) {
   prefs.scores = [defaults boolForKey:kRedditFilterScores];
   prefs.automod = [defaults boolForKey:kRedditFilterAutoCollapseAutoMod];
   prefs.videosForYou = [defaults boolForKey:kRedditFilterVideosForYou];
+  NSArray *keywords = [defaults arrayForKey:kRedditFilterKeywords];
+  RFSetFilterKeywords(keywords);
+  prefs.keywords = keywords.count > 0;
   globalPrefs = prefs;
 }
 
