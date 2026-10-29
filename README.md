@@ -1,6 +1,13 @@
 # RedditFilter
 
-Filters unwanted content from the Reddit app: promoted posts, recommendations, NSFW posts, awards and scores. Based on original work from [level3tjg](https://github.com/level3tjg/RedditFilter) and [NicholasBly](https://github.com/NicholasBly/RedditFilter).
+Filters unwanted content from the Reddit app: promoted posts, recommendations, NSFW posts, awards, scores, and posts or comments that mention your keywords. It can also play RedGIFs videos with sound. Based on original work from [level3tjg](https://github.com/level3tjg/RedditFilter) and [NicholasBly](https://github.com/NicholasBly/RedditFilter).
+
+## New in 1.3.0
+
+- **Keywords check the whole post**: posts are hidden when a keyword appears anywhere in their text, not just in the title or the preview shown in the feed. Feed cards that show the whole post are now checked too. With keywords set, checking full text adds one batch request per feed page before it appears. If that request fails, title and preview filtering still apply.
+- **Filter comments too**: new option under Keywords to hide comments that mention a keyword. Their replies are hidden as well, unless you turn off **Hide replies too**: then the comment is replaced by a "Hidden by keyword filter" placeholder and its replies stay.
+- **Direct-play RedGIFs**: new option to play RedGIFs videos with sound. Reddit's copies of RedGIFs videos have no audio, so RedditFilter plays the original from RedGIFs instead, in posts and in the feed. It may use more data, and your device connects to RedGIFs directly. If RedGIFs can't be reached, Reddit's silent version plays as before.
+- **Clearer settings**: every switch now says what it does. The **Promoted**, **Recommended** and **NSFW** switches show that content when on; turn **Promoted** off to hide ads. Icons are aligned and follow your light or dark theme.
 
 ## Fixes for Reddit 2026.43.0
 
@@ -8,8 +15,8 @@ Filters unwanted content from the Reddit app: promoted posts, recommendations, N
 - **NSFW filter** now hides NSFW posts in the new feed cards and in community highlights.
 - **Recommended filter** no longer empties the For You feed, which is now mostly recommendations (your subscriptions are in Following). It still removes the "Related answers" section on post pages.
 - **Videos for you**: new option to hide the "Videos for you" carousel in your feed.
-- **Keywords**: new option to hide posts that mention a word or phrase. In RedditFilter settings, tap **Keywords** to add them (separate several with commas). Swipe a keyword to remove it, or use **Clear All Keywords**. Matching is whole-word and ignores capitals, and checks a post's full text, not just the preview in the feed. Turn on **Filter comments too** to also hide comments that mention a keyword. Their replies are hidden too unless you turn off **Hide replies too**, which leaves a placeholder in the comment's place and keeps the replies.
-- **Direct-play RedGIFs**: new option to play RedGIFs videos with sound. Reddit's copies of RedGIFs videos have no audio, so with this on RedditFilter plays the original from RedGIFs instead (it may use more data, and your device connects to RedGIFs directly). If RedGIFs can't be reached, Reddit's silent version plays as before.
+- **For You** no longer stops after a few posts when hidden posts leave the first page too short to scroll.
+- **Keywords**: new option to hide posts that mention a word or phrase. In RedditFilter settings, tap **Keywords** to add them (separate several with commas). Swipe a keyword to remove it, or use **Clear All Keywords**. Matching is whole-word and ignores capitals.
 - **RedditFilter settings** are back: Profile → Settings, button at the top right.
 - **Logging in** now works on sideloaded installs (see below).
 
