@@ -141,6 +141,10 @@ static BOOL RFIsOK(NSURLResponse *response, NSError *error) {
          ((NSHTTPURLResponse *)response).statusCode == 200;
 }
 
+// How long a page waits for RedditFilter's extra steps (RedGIFs videos, full post text, the next
+// page) before it's shown without the ones that haven't finished.
+static const double kRFExtraStepsDeadline = 5.0;
+
 extern "C" NSString *RFPendingWebSession(void);
 extern "C" void RFClearPendingWebSession(void);
 
@@ -153,7 +157,7 @@ extern "C" void RFClearPendingWebSession(void);
   // Browser login (LoginHelper.x): answer the app's password login with the session from the
   // browser instead of sending it to Reddit, then let the app exchange it for its token as usual.
   NSString *webSession = RFPendingWebSession();
-  if (webSession && completionHandler && [host hasSuffix:@"reddit.com"]) {
+  if (webSession && completionHandler && ([host isEqualToString:@"reddit.com"] || [host hasSuffix:@".reddit.com"])) {
     if ([request.URL.path isEqualToString:@"/auth/v2/login/password"]) {
       NSHTTPURLResponse *response = [[NSHTTPURLResponse alloc]
            initWithURL:request.URL
@@ -179,7 +183,9 @@ extern "C" void RFClearPendingWebSession(void);
       });
   }
 
-  if (!completionHandler || !RFPrefsAnyEnabled(globalPrefs) ||
+  // One copy of the settings for this request, so a switch flipped halfway through doesn't mix them.
+  RFPrefs prefs = globalPrefs;
+  if (!completionHandler || !RFPrefsAnyEnabled(prefs) ||
       !([host hasPrefix:@"gql"] || [host hasPrefix:@"oauth"]))
     return %orig;
 
@@ -190,33 +196,63 @@ extern "C" void RFClearPendingWebSession(void);
   void (^filteringHandler)(NSData *, NSURLResponse *, NSError *) =
       ^(NSData *data, NSURLResponse *response, NSError *error) {
         if (!error && data.length) {
-          NSData *filtered = RFFilteredResponseData(data, operation, globalPrefs);
+          NSData *filtered = RFFilteredResponseData(data, operation, prefs);
           if (filtered) data = filtered;
         }
         if (error) return completionHandler(data, response, error);
+
+        // The extra steps below are optional, so the page never waits long for them: once the
+        // deadline passes it's shown as far as it got, and whatever finishes later is dropped.
+        NSObject *lock = [NSObject new];
+        __block NSData *latest = data; // the page as far as it's got
+        __block BOOL delivered = NO, deadlineSet = NO;
+        void (^deliver)(NSData *) = ^(NSData *page) {
+          @synchronized(lock) {
+            if (delivered) return;
+            delivered = YES;
+          }
+          completionHandler(page, response, nil);
+        };
+        void (^progress)(NSData *) = ^(NSData *page) {
+          @synchronized(lock) {
+            latest = page;
+            if (deadlineSet) return;
+            deadlineSet = YES;
+          }
+          dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kRFExtraStepsDeadline * NSEC_PER_SEC)),
+                         dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+                           NSData *page;
+                           @synchronized(lock) {
+                             page = latest;
+                           }
+                           deliver(page);
+                         });
+        };
 
         // A first Home page that's mostly hidden posts can be too short to scroll, and the app only
         // loads more when you scroll. Fetch the next page now and hand both over together.
         void (^topUpAndFinish)(NSData *) = ^(NSData *firstPage) {
           NSURLRequest *topUp = RFFeedTopUpRequest(request, firstPage);
-          if (!topUp) return completionHandler(firstPage, response, nil);
+          if (!topUp) return deliver(firstPage);
+          progress(firstPage);
           // Goes through this hook too, so the extra page is filtered as well.
           [[session dataTaskWithRequest:topUp
                       completionHandler:^(NSData *nextData, NSURLResponse *nextResponse, NSError *nextError) {
                         NSData *merged = RFIsOK(nextResponse, nextError) ? RFMergedFeedPages(firstPage, nextData) : nil;
-                        completionHandler(merged ?: firstPage, response, nil);
+                        deliver(merged ?: firstPage);
                       }] resume];
         };
 
         // Feed cards only have the start of each post, so fetch the full posts and check those too
         // before the page is shown.
         void (^checkFullTextAndFinish)(NSData *) = ^(NSData *page) {
-          NSURLRequest *details = RFPostDetailsRequest(request, page, globalPrefs);
+          NSURLRequest *details = RFPostDetailsRequest(request, page, prefs);
           if (!details) return topUpAndFinish(page);
+          progress(page);
           [[session dataTaskWithRequest:RFOwnRequest(details)
                       completionHandler:^(NSData *detailsData, NSURLResponse *detailsResponse, NSError *detailsError) {
                         NSData *checked = RFIsOK(detailsResponse, detailsError)
-                                              ? RFFeedHidingFullTextMatches(page, detailsData, globalPrefs)
+                                              ? RFFeedHidingFullTextMatches(page, detailsData, prefs)
                                               : nil;
                         topUpAndFinish(checked ?: page);
                       }] resume];
@@ -224,10 +260,11 @@ extern "C" void RFClearPendingWebSession(void);
 
         // Reddit's copies of RedGIFs videos have no sound: swap in RedGIFs' own files before the app
         // sees the posts. Skipped for RedditFilter's own full-text checks, which never play anything.
-        NSArray *redgifs = globalPrefs.redgifsDirect && ![NSURLProtocol propertyForKey:kRFOwnRequest inRequest:request]
+        NSArray *redgifs = prefs.redgifsDirect && ![NSURLProtocol propertyForKey:kRFOwnRequest inRequest:request]
                                ? RFRedgifsIds(data)
                                : nil;
         if (!redgifs) return checkFullTextAndFinish(data);
+        progress(data);
         NSData *page = data;
         RFFetchRedgifsVideos(redgifs, ^(NSDictionary *videoURLs) {
           checkFullTextAndFinish(RFRedgifsResponse(page, videoURLs) ?: page);
