@@ -213,20 +213,28 @@ static BOOL RFIsVideosForYou(id node) {
          [RFString(carousel[@"type"]) isEqualToString:@"VIDEO_RECOMMENDATIONS"];
 }
 
+// Empties the carousel rather than removing it from the feed: taking the element out stops the
+// feed loading more posts on some devices.
+static BOOL RFHideVideosForYou(id node) {
+  NSMutableDictionary *carousel = RFMutableDict(node);
+  if (!RFIsVideosForYou(carousel)) return NO;
+  BOOL changed = NO;
+  for (NSString *key in @[ @"carouselPosts", @"videoCarouselPosts" ]) {
+    if (![RFArray(carousel[key]) count]) continue;
+    carousel[key] = @[];
+    changed = YES;
+  }
+  return changed;
+}
+
 // An array of { node: ... } wrappers: feed edges and comment trees.
 static BOOL RFFilterEdges(NSArray *edges, const RFContext *ctx) {
   BOOL changed = NO;
-  NSMutableArray *mutableEdges = [edges isKindOfClass:NSMutableArray.class] ? (NSMutableArray *)edges : nil;
-  if (ctx->prefs.videosForYou && mutableEdges) {
-    NSIndexSet *carousels = [mutableEdges indexesOfObjectsPassingTest:^BOOL(id edge, NSUInteger i, BOOL *stop) {
-      return RFIsVideosForYou(RFDict(edge)[@"node"]);
-    }];
-    if (carousels.count) {
-      [mutableEdges removeObjectsAtIndexes:carousels];
-      changed = YES;
-    }
+  for (id edge in edges) {
+    id node = RFDict(edge)[@"node"];
+    if (ctx->prefs.videosForYou) changed |= RFHideVideosForYou(node);
+    changed |= RFFilterNode(node, ctx);
   }
-  for (id edge in edges) changed |= RFFilterNode(RFDict(edge)[@"node"], ctx);
   return changed;
 }
 

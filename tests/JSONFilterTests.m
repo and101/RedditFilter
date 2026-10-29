@@ -94,12 +94,13 @@ int main(void) {
     RFPrefs videos = {.videosForYou = YES};
     NSDictionary *videoCarousel = @{@"__typename": @"PostCarousel", @"type": @"VIDEO_RECOMMENDATIONS",
                                     @"carouselTitle": @"Videos for you", @"videoCarouselPosts": @[@{@"id": @"v"}]};
-    NSDictionary *otherCarousel = @{@"__typename": @"PostCarousel", @"type": @"OTHER", @"carouselPosts": @[]};
+    NSDictionary *otherCarousel = @{@"__typename": @"PostCarousel", @"type": @"OTHER", @"carouselPosts": @[@{@"id": @"o"}]};
     NSDictionary *withCarousels = Feed(@[Card(@{@"__typename": @"TitleCell"}), videoCarousel, otherCarousel]);
     for (NSString *op in @[@"HomeFeedSdui", @"PopularFeedSdui", @"Unknown"]) {
       NSArray *edges = Filter(withCarousels, op, videos)[@"data"][@"homeV3"][@"elements"][@"edges"];
-      Check(edges.count == 2, @"Remove only the Videos for you carousel");
-      Check(![edges[1][@"node"][@"type"] isEqual:@"VIDEO_RECOMMENDATIONS"], @"Keep other carousels");
+      Check(edges.count == 3, @"Keep every feed element so the feed keeps loading");
+      Check([edges[1][@"node"][@"videoCarouselPosts"] count] == 0, @"Empty the Videos for you carousel");
+      Check([edges[2][@"node"][@"carouselPosts"] count] == 1, @"Keep other carousels");
       Check([Filter(withCarousels, op, ads) isEqual:withCarousels], @"Other filters keep Videos for you");
       Check([Filter(withCarousels, op, off) isEqual:withCarousels], @"Disabled filter keeps Videos for you");
     }
