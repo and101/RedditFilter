@@ -131,18 +131,20 @@ void RFClearPendingWebSession(void) {
 
 #pragma mark - Login form
 
-static NSArray *subviewsOfClass(UIView *root, Class cls) {
+static NSArray *subviewsOfClassIncludingHidden(UIView *root, Class cls, BOOL includeHidden) {
   NSMutableArray *found = [NSMutableArray array];
   NSMutableArray *queue = [NSMutableArray arrayWithObject:root];
   while (queue.count) {
     UIView *view = queue.firstObject;
     [queue removeObjectAtIndex:0];
-    if (view.hidden) continue;
+    if (view.hidden && !includeHidden) continue;
     if ([view isKindOfClass:cls]) [found addObject:view];
     [queue addObjectsFromArray:view.subviews];
   }
   return found;
 }
+
+static NSArray *subviewsOfClass(UIView *root, Class cls) { return subviewsOfClassIncludingHidden(root, cls, NO); }
 
 static void fillTextField(UITextField *textField, NSString *text) {
   [textField becomeFirstResponder];
@@ -151,18 +153,62 @@ static void fillTextField(UITextField *textField, NSString *text) {
   [textField sendActionsForControlEvents:UIControlEventEditingChanged];
 }
 
-static UIControl *controlLabeled(UIView *root, NSString *label) {
-  for (UIControl *control in subviewsOfClass(root, UIControl.class)) {
-    NSString *title = [control isKindOfClass:UIButton.class] ? [(UIButton *)control currentTitle] : nil;
-    if ([control.accessibilityLabel isEqualToString:label] || [title isEqualToString:label])
-      return control;
+static UIControl *controlLabeled(UIView *root, NSString *label, BOOL includeHidden) {
+  for (UIControl *control in subviewsOfClassIncludingHidden(root, UIControl.class, includeHidden)) {
+    NSMutableArray *titles = [NSMutableArray array];
+    if (control.accessibilityLabel) [titles addObject:control.accessibilityLabel];
+    if ([control isKindOfClass:UIButton.class]) {
+      UIButton *button = (UIButton *)control;
+      if (button.currentTitle) [titles addObject:button.currentTitle];
+      if (button.currentAttributedTitle.string) [titles addObject:button.currentAttributedTitle.string];
+      if (button.titleLabel.text) [titles addObject:button.titleLabel.text];
+    }
+    for (UILabel *text in subviewsOfClassIncludingHidden(control, UILabel.class, YES))
+      if (text.text) [titles addObject:text.text];
+    if ([titles containsObject:label]) return control;
   }
   return nil;
 }
 
+static void showAlert(UIViewController *viewController, NSString *title, NSString *message);
+
+// The form enables its button a moment after the fields change, so keep checking for a few seconds.
+// The add-account Log in screen doesn't mark its button enabled for filled-in text, but still accepts the tap.
+static void tapWhenEnabled(UIViewController *viewController, NSInteger attemptsLeft) {
+  __weak UIViewController *weakController = viewController;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    UIViewController *controller = weakController;
+    if (!controller.view.window) return;
+    // The add-account screen puts its button above the keyboard, as an input accessory view.
+    NSMutableArray<UIView *> *roots = [NSMutableArray arrayWithObject:controller.view];
+    if (controller.inputAccessoryView) [roots addObject:controller.inputAccessoryView];
+    for (UITextField *field in subviewsOfClass(controller.view, UITextField.class))
+      if (field.inputAccessoryView) [roots addObject:field.inputAccessoryView];
+    UIControl *button = nil;
+    for (NSNumber *includeHidden in @[ @NO, @YES ]) {
+      for (UIView *root in roots) {
+        button = controlLabeled(root, @"Continue", includeHidden.boolValue)
+                     ?: controlLabeled(root, @"Log in", includeHidden.boolValue);
+        if (button) break;
+      }
+      if (button) break;
+    }
+    if (button && (button.enabled || attemptsLeft == 0)) {
+      [button sendActionsForControlEvents:UIControlEventTouchUpInside];
+    } else if (attemptsLeft > 0) {
+      tapWhenEnabled(controller, attemptsLeft - 1);
+    } else {
+      showAlert(controller, @"Log in with browser", @"Your browser login is ready. Tap Continue to finish logging in.");
+    }
+  });
+}
+
+// The username and password form: its own screen on first login ("Use email or username"),
+// or part of the main Log in screen when adding another account.
 static BOOL isPasswordLoginController(UIViewController *viewController) {
   const char *name = class_getName(object_getClass(viewController));
-  return strstr(name, "AuthenticationKit") && strstr(name, "LoginWithPasswordViewModel");
+  if (!strstr(name, "AuthenticationKit")) return NO;
+  return strstr(name, "LoginWithPasswordViewModel") || !strcmp(name, "AuthenticationKit.LoginViewController");
 }
 
 static void showAlert(UIViewController *viewController, NSString *title, NSString *message) {
@@ -185,16 +231,7 @@ static void submitLoginForm(UIViewController *viewController, NSString *username
   fillTextField(textFields[0], username);
   fillTextField(textFields[1], kPlaceholderPassword);
   [viewController.view endEditing:YES];
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
-                 dispatch_get_main_queue(), ^{
-                   UIControl *button = controlLabeled(viewController.view, @"Continue")
-                                           ?: controlLabeled(viewController.view, @"Log in");
-                   if (button.enabled)
-                     [button sendActionsForControlEvents:UIControlEventTouchUpInside];
-                   else
-                     showAlert(viewController, @"Log in with browser",
-                               @"Your browser login is ready. Tap Continue to finish logging in.");
-                 });
+  tapWhenEnabled(viewController, 10);
 }
 
 #pragma mark - Login links

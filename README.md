@@ -16,7 +16,7 @@ Filters unwanted content from the Reddit app: promoted posts, recommendations, N
 
 Reddit rejects the app's normal username and password login when the app is sideloaded. Use one of these instead:
 
-1. Open the login screen: **I already have an account** (or **Log in**) → **Use email or username**.
+1. Open the login screen: **I already have an account** (or **Log in**) → **Use email or username**. To add another account, open the account switcher → **Add account** → **Log in**.
 2. Tap **Other options** at the top right, then choose:
    - **Log in with browser**: log in on the reddit.com page that opens, including any 2FA code. The app finishes logging in by itself.
    - **Open login link**: first tap **Email me a login link instead**, then copy the link from Reddit's email and paste it here.
