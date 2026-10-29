@@ -244,30 +244,55 @@ extern "C" void RFClearPendingWebSession(void);
         };
 
         // Feed cards only have the start of each post, so fetch the full posts and check those too
-        // before the page is shown.
-        void (^checkFullTextAndFinish)(NSData *) = ^(NSData *page) {
-          NSURLRequest *details = RFPostDetailsRequest(request, page, prefs);
-          if (!details) return topUpAndFinish(page);
-          progress(page);
-          [[session dataTaskWithRequest:RFOwnRequest(details)
-                      completionHandler:^(NSData *detailsData, NSURLResponse *detailsResponse, NSError *detailsError) {
-                        NSData *checked = RFIsOK(detailsResponse, detailsError)
-                                              ? RFFeedHidingFullTextMatches(page, detailsData, prefs)
-                                              : nil;
-                        topUpAndFinish(checked ?: page);
-                      }] resume];
-        };
-
-        // Reddit's copies of RedGIFs videos have no sound: swap in RedGIFs' own files before the app
-        // sees the posts. Skipped for RedditFilter's own full-text checks, which never play anything.
+        // before the page is shown. Reddit's copies of RedGIFs videos have no sound, so swap in
+        // RedGIFs' own files (skipped for RedditFilter's own full-text checks, which never play
+        // anything). The two are fetched side by side, so slow RedGIFs lookups can't use up the
+        // keyword check's time, then applied to the page together.
+        NSURLRequest *details = RFPostDetailsRequest(request, data, prefs);
         NSArray *redgifs = prefs.redgifsDirect && ![NSURLProtocol propertyForKey:kRFOwnRequest inRequest:request]
                                ? RFRedgifsIds(data)
                                : nil;
-        if (!redgifs) return checkFullTextAndFinish(data);
-        progress(data);
+        if (!details && !redgifs) return topUpAndFinish(data);
         NSData *page = data;
-        RFFetchRedgifsVideos(redgifs, ^(NSDictionary *videoURLs) {
-          checkFullTextAndFinish(RFRedgifsResponse(page, videoURLs) ?: page);
+        __block NSData *detailsData = nil;
+        __block NSDictionary *videoURLs = nil;
+        // The page with whatever has come back so far. Call with lock held (it's reentrant, so
+        // progress can be called under it too, which keeps the latest page from going backwards).
+        NSData *(^pageSoFar)(void) = ^NSData *{
+          NSData *result = page;
+          if (detailsData) result = RFFeedHidingFullTextMatches(result, detailsData, prefs) ?: result;
+          if (videoURLs.count) result = RFRedgifsResponse(result, videoURLs) ?: result;
+          return result;
+        };
+        dispatch_group_t group = dispatch_group_create();
+        progress(page);
+        if (details) {
+          dispatch_group_enter(group);
+          [[session dataTaskWithRequest:RFOwnRequest(details)
+                      completionHandler:^(NSData *fetched, NSURLResponse *detailsResponse, NSError *detailsError) {
+                        @synchronized(lock) {
+                          if (RFIsOK(detailsResponse, detailsError)) detailsData = fetched;
+                          progress(pageSoFar());
+                        }
+                        dispatch_group_leave(group);
+                      }] resume];
+        }
+        if (redgifs) {
+          dispatch_group_enter(group);
+          RFFetchRedgifsVideos(redgifs, ^(NSDictionary *found) {
+            @synchronized(lock) {
+              videoURLs = found;
+              progress(pageSoFar());
+            }
+            dispatch_group_leave(group);
+          });
+        }
+        dispatch_group_notify(group, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+          NSData *updated;
+          @synchronized(lock) {
+            updated = pageSoFar();
+          }
+          topUpAndFinish(updated);
         });
       };
   return %orig(request, filteringHandler);

@@ -3,6 +3,7 @@
 // Drives the real NSURLSession hook from Tweak.xm against stubbed Reddit responses, to check that a
 // feed page is handed to the app once, and never held back long by RedditFilter's extra requests.
 #import <Foundation/Foundation.h>
+#import <objc/runtime.h>
 #import "Preferences.h"
 
 // Browser login lives in LoginHelper.x, which isn't part of this test.
@@ -15,8 +16,8 @@ static void Check(BOOL condition, NSString *message) {
 
 #pragma mark - Stubbed server
 
-// operation, request body -> @[status, delay in seconds, JSON]
-static NSArray *(^gRoute)(NSString *operation, NSDictionary *body);
+// operation, request body, URL -> @[status, delay in seconds, JSON]
+static NSArray *(^gRoute)(NSString *operation, NSDictionary *body, NSURL *url);
 
 @interface RFStubProtocol : NSURLProtocol
 @end
@@ -38,7 +39,7 @@ static NSArray *(^gRoute)(NSString *operation, NSDictionary *body);
     bodyData = read;
   }
   NSDictionary *body = bodyData.length ? [NSJSONSerialization JSONObjectWithData:bodyData options:0 error:NULL] : nil;
-  NSArray *reply = gRoute([self.request valueForHTTPHeaderField:@"X-APOLLO-OPERATION-NAME"], body);
+  NSArray *reply = gRoute([self.request valueForHTTPHeaderField:@"X-APOLLO-OPERATION-NAME"], body, self.request.URL);
   NSData *data = [NSJSONSerialization dataWithJSONObject:reply[2] options:0 error:NULL];
   NSHTTPURLResponse *response = [[NSHTTPURLResponse alloc] initWithURL:self.request.URL
                                                             statusCode:[reply[0] integerValue]
@@ -59,6 +60,20 @@ static NSArray *(^gRoute)(NSString *operation, NSDictionary *body);
 }
 - (void)stopLoading {
   _stopped = YES;
+}
+@end
+
+// RedGIFs has a session of its own, which doesn't ask registered protocols, so give every new
+// ephemeral configuration the stub too.
+@implementation NSURLSessionConfiguration (RFStub)
++ (NSURLSessionConfiguration *)rf_ephemeralSessionConfiguration {
+  NSURLSessionConfiguration *config = [self rf_ephemeralSessionConfiguration]; // the original
+  config.protocolClasses = [@[ RFStubProtocol.class ] arrayByAddingObjectsFromArray:config.protocolClasses];
+  return config;
+}
++ (void)load {
+  method_exchangeImplementations(class_getClassMethod(self, @selector(ephemeralSessionConfiguration)),
+                                 class_getClassMethod(self, @selector(rf_ephemeralSessionConfiguration)));
 }
 @end
 
@@ -84,9 +99,10 @@ static NSDictionary *Details(NSString *postId, NSString *text) {
 
 static NSArray *Edges(NSDictionary *json) { return json[@"data"][@"homeV3"][@"elements"][@"edges"]; }
 
-static void SetPrefs(NSArray *keywords) {
+static void SetPrefs(NSArray *keywords, BOOL redgifs) {
   NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
   [defaults setBool:YES forKey:kRedditFilterPromoted];
+  [defaults setBool:redgifs forKey:kRedditFilterRedgifsDirect];
   [defaults setObject:keywords forKey:kRedditFilterKeywords];
   RFReloadPreferences();
 }
@@ -134,16 +150,15 @@ static NSDictionary *LoadHome(NSURLSession *session, NSTimeInterval settle, RFTi
 int main(void) {
   @autoreleasepool {
     NSURLSessionConfiguration *config = NSURLSessionConfiguration.ephemeralSessionConfiguration;
-    config.protocolClasses = @[ RFStubProtocol.class ];
     NSURLSession *session = [NSURLSession sessionWithConfiguration:config];
     RFTiming timing;
     NSArray *full = @[ @"t3_a", @"t3_b" ]; // no next page, so no top-up
 
     // Full post text
-    SetPrefs(@[ @"tesla" ]);
+    SetPrefs(@[ @"tesla" ], NO);
     __block NSTimeInterval detailsDelay = 0.1;
     __block NSInteger detailsStatus = 200;
-    gRoute = ^NSArray *(NSString *operation, NSDictionary *body) {
+    gRoute = ^NSArray *(NSString *operation, NSDictionary *body, NSURL *url) {
       if ([operation isEqualToString:@"FeedPostDetailsByIds"])
         return @[ @(detailsStatus), @(detailsDelay), Details(@"t3_a", @"...ended up buying a Tesla.") ];
       return @[ @200, @0.05, Page(full, nil) ];
@@ -169,9 +184,9 @@ int main(void) {
           @"Show the page unchecked right away when the check fails");
 
     // Topping up a short first page
-    SetPrefs(@[]);
+    SetPrefs(@[], NO);
     __block NSTimeInterval topUpDelay = 0.1;
-    gRoute = ^NSArray *(NSString *operation, NSDictionary *body) {
+    gRoute = ^NSArray *(NSString *operation, NSDictionary *body, NSURL *url) {
       if (body[@"variables"][@"after"]) return @[ @200, @(topUpDelay), Page(@[ @"t3_c", @"t3_d", @"t3_e" ], nil) ];
       return @[ @200, @0.05, Page(full, @"c1") ];
     };
@@ -184,6 +199,31 @@ int main(void) {
     NSLog(@"top-up, slow: %.2fs, %lu call(s)", timing.seconds, (unsigned long)timing.calls);
     Check(timing.seconds > 4.5 && timing.seconds < 6, @"Stop waiting for a slow next page after 5s");
     Check(Edges(json).count == 2 && timing.calls == 1, @"Show just the first page, once");
+
+    // RedGIFs videos and the full text together: fetched side by side, so slow RedGIFs lookups
+    // don't use up the keyword check's time.
+    SetPrefs(@[ @"tesla" ], YES);
+    NSString *sound = @"https://media.redgifs.com/Lark.mp4";
+    gRoute = ^NSArray *(NSString *operation, NSDictionary *body, NSURL *url) {
+      if ([url.path hasSuffix:@"/auth/temporary"]) return @[ @200, @0.05, @{@"token" : @"t"} ];
+      if ([url.path hasPrefix:@"/v2/gifs/"])
+        return @[ @200, @3.5, @{@"gif" : @{@"hasAudio" : @YES, @"urls" : @{@"hd" : sound}}} ];
+      if ([operation isEqualToString:@"FeedPostDetailsByIds"])
+        return @[ @200, @3, Details(@"t3_a", @"...ended up buying a Tesla.") ];
+      NSMutableDictionary *video = [@{@"__typename" : @"CellGroup", @"id" : CardId(@"t3_v"), @"cells" : @[
+        @{@"__typename" : @"MetadataCell", @"mediaDomain" : @"redgifs", @"mediaPath" : @"https://www.redgifs.com/watch/lark"},
+        @{@"__typename" : @"LegacyVideoCell", @"isGif" : @YES, @"media" : @{@"path" : @"https://v.redd.it/x/HLSPlaylist.m3u8"}},
+      ]} mutableCopy];
+      NSMutableDictionary *home = [Page(@[ @"t3_a" ], nil) mutableCopy];
+      NSArray *edges = [Edges(home) arrayByAddingObject:@{@"node" : video}];
+      return @[ @200, @0.05, @{@"data" : @{@"homeV3" : @{@"elements" : @{@"edges" : edges,
+                                                                       @"pageInfo" : @{@"hasNextPage" : @NO}}}}} ];
+    };
+    json = LoadHome(session, 0.5, &timing);
+    NSLog(@"RedGIFs and full text, both slow: %.2fs, %lu call(s)", timing.seconds, (unsigned long)timing.calls);
+    Check([Edges(json)[0][@"node"][@"cells"] count] == 0, @"Still hide keyword posts when RedGIFs is slow");
+    Check([Edges(json)[1][@"node"][@"cells"][1][@"media"][@"path"] isEqual:sound], @"Swap in the RedGIFs video too");
+    Check(timing.seconds < 4.5 && timing.calls == 1, @"Wait for the slower of the two, not both in turn");
 
     NSLog(@"All network pipeline tests passed.");
   }
