@@ -18,9 +18,9 @@ typedef struct {
 } RFToggleRow;
 
 static const RFToggleRow kToggleRows[] = {
-    {kRedditFilterPromoted, @"Promoted", nil, @"rpl3/tag,icon_tag", YES},
-    {kRedditFilterRecommended, @"Recommended", nil, @"rpl3/spam,icon_spam", YES},
-    {kRedditFilterNSFW, @"NSFW", nil, @"rpl3/nsfw,icon_nsfw_outline,icon_nsfw", YES},
+    {kRedditFilterPromoted, @"Promoted", @"Show ads in your feed and comments", @"rpl3/tag,icon_tag", YES},
+    {kRedditFilterRecommended, @"Recommended", @"Show recommendations on post pages", @"rpl3/spam,icon_spam", YES},
+    {kRedditFilterNSFW, @"NSFW", @"Show NSFW posts", @"rpl3/nsfw,icon_nsfw_outline,icon_nsfw", YES},
     {kRedditFilterVideosForYou, @"Videos for you", @"Show the video carousel in your feed",
      @"rpl3/video,icon_video,icon_play", YES},
     {kRedditFilterAwards, @"Awards", @"Show awards on posts and comments",
