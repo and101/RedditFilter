@@ -10,6 +10,7 @@
 #define kRedditFilterKeywords @"kRedditFilterKeywords" // array of strings
 #define kRedditFilterKeywordComments @"kRedditFilterKeywordComments"
 #define kRedditFilterKeywordCommentReplies @"kRedditFilterKeywordCommentReplies"
+#define kRedditFilterRedgifsDirect @"kRedditFilterRedgifsDirect"
 
 #define kToggleCellID @"kToggleCellID"
 

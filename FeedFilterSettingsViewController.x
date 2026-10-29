@@ -27,6 +27,8 @@ static const RFToggleRow kToggleRows[] = {
      @"rpl3/award,icon_gift_fill,icon_award,icon-award-outline", YES},
     {kRedditFilterScores, @"Scores", @"Show vote count on posts and comments", @"rpl3/upvote,icon_upvote", YES},
     {kRedditFilterAutoCollapseAutoMod, @"AutoMod", @"Auto collapse AutoMod comments", @"rpl3/mod,icon_mod", NO},
+    {kRedditFilterRedgifsDirect, @"Direct-play RedGIFs", @"Plays with sound, but may use more data",
+     @"rpl3/volumeOn,rpl3/play", NO},
 };
 static const NSInteger kToggleRowCount = sizeof(kToggleRows) / sizeof(kToggleRows[0]);
 

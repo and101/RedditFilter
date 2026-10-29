@@ -33,7 +33,8 @@ static id RFValueAtPath(id root, NSString *path) {
 }
 
 BOOL RFPrefsAnyEnabled(RFPrefs p) {
-  return p.promoted || p.recommended || p.nsfw || p.awards || p.scores || p.automod || p.videosForYou || p.keywords;
+  return p.promoted || p.recommended || p.nsfw || p.awards || p.scores || p.automod || p.videosForYou || p.keywords ||
+         p.redgifsDirect;
 }
 
 #pragma mark - Filtering single objects
@@ -741,6 +742,101 @@ NSData *RFFeedHidingFullTextMatches(NSData *feedData, NSData *detailsData, RFPre
     for (NSMutableDictionary *card in matching) card[@"cells"] = @[];
     changed = YES;
   }
+  return changed ? [NSJSONSerialization dataWithJSONObject:json options:0 error:NULL] : nil;
+}
+
+#pragma mark - RedGIFs
+
+// "https://www.redgifs.com/watch/<id>" (or /ifr/<id>) -> "<id>"
+static NSString *RFRedgifsId(NSString *link) {
+  NSURL *url = link ? [NSURL URLWithString:link] : nil;
+  if (![url.host.lowercaseString hasSuffix:@"redgifs.com"]) return nil;
+  NSArray *parts = url.pathComponents;
+  NSUInteger index = [parts indexOfObjectPassingTest:^BOOL(NSString *part, NSUInteger i, BOOL *stop) {
+    return [part isEqualToString:@"watch"] || [part isEqualToString:@"ifr"];
+  }];
+  if (index == NSNotFound || index + 1 >= parts.count) return nil;
+  NSString *identifier = [parts[index + 1] lowercaseString];
+  NSCharacterSet *invalid = [NSCharacterSet.alphanumericCharacterSet invertedSet];
+  return identifier.length && [identifier rangeOfCharacterFromSet:invalid].location == NSNotFound ? identifier : nil;
+}
+
+typedef void (^RFVideoSwap)(NSString *videoURL);
+
+// Calls block for every video in the response that Reddit plays from its copy of a RedGIFs video,
+// with a way to point it at another file. Posts keep it in media.streaming; feed cards in card view
+// keep it in a LegacyVideoCell, with the RedGIFs link in the card's MetadataCell.
+static void RFForEachRedgifsVideo(id object, void (^block)(NSString *identifier, RFVideoSwap swap)) {
+  if (RFArray(object)) {
+    for (id item in object) RFForEachRedgifsVideo(item, block);
+    return;
+  }
+  NSDictionary *dict = RFDict(object);
+  if (!dict) return;
+
+  NSMutableDictionary *media = RFMutableDict(dict[@"media"]);
+  NSMutableDictionary *streaming = RFMutableDict(media[@"streaming"]);
+  if (streaming) {
+    NSString *identifier = RFRedgifsId(RFString(dict[@"url"])) ?: RFRedgifsId(RFString(RFDict(media[@"video"])[@"url"]));
+    if (identifier)
+      block(identifier, ^(NSString *videoURL) {
+        // The player takes a plain MP4 here as well as a playlist. It stays marked as a GIF so it
+        // keeps looping; the player still offers sound because the file has an audio track.
+        streaming[@"hlsUrl"] = videoURL;
+        if ([streaming objectForKey:@"hasAudio"]) streaming[@"hasAudio"] = @YES;
+        // Saving the video saves the version with sound too.
+        [RFMutableDict(media[@"download"]) setObject:videoURL forKey:@"url"];
+      });
+  }
+
+  if ([RFString(dict[@"__typename"]) isEqualToString:@"CellGroup"]) {
+    NSString *identifier = nil;
+    NSMutableDictionary *videoCell = nil;
+    for (id item in RFArray(dict[@"cells"])) {
+      NSMutableDictionary *cell = RFMutableDict(item);
+      NSString *type = RFString(cell[@"__typename"]);
+      if ([type isEqualToString:@"MetadataCell"]) identifier = RFRedgifsId(RFString(cell[@"mediaPath"]));
+      if ([type isEqualToString:@"LegacyVideoCell"] && RFMutableDict(cell[@"media"])) videoCell = cell;
+    }
+    if (identifier && videoCell)
+      block(identifier, ^(NSString *videoURL) {
+        videoCell[@"media"][@"path"] = videoURL;
+      });
+  }
+
+  for (id value in dict.allValues)
+    if (RFArray(value) || RFDict(value)) RFForEachRedgifsVideo(value, block);
+}
+
+static BOOL RFMightHaveRedgifs(NSData *data) {
+  static NSData *needle;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{ needle = [@"redgifs.com" dataUsingEncoding:NSUTF8StringEncoding]; });
+  return data.length && [data rangeOfData:needle options:0 range:NSMakeRange(0, data.length)].location != NSNotFound;
+}
+
+NSArray<NSString *> *RFRedgifsIds(NSData *data) {
+  if (!RFMightHaveRedgifs(data)) return nil;
+  id json = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingMutableContainers error:NULL];
+  NSMutableOrderedSet *ids = [NSMutableOrderedSet orderedSet];
+  RFForEachRedgifsVideo(RFDict(json)[@"data"], ^(NSString *identifier, RFVideoSwap swap) {
+    [ids addObject:identifier];
+  });
+  return ids.count ? ids.array : nil;
+}
+
+NSData *RFRedgifsResponse(NSData *data, NSDictionary<NSString *, NSString *> *videoURLs) {
+  if (!videoURLs.count || !RFMightHaveRedgifs(data)) return nil;
+  NSMutableDictionary *json = RFMutableDict([NSJSONSerialization JSONObjectWithData:data
+                                                                            options:NSJSONReadingMutableContainers
+                                                                              error:NULL]);
+  __block BOOL changed = NO;
+  RFForEachRedgifsVideo(json[@"data"], ^(NSString *identifier, RFVideoSwap swap) {
+    NSString *videoURL = RFString(videoURLs[identifier]);
+    if (!videoURL) return;
+    swap(videoURL);
+    changed = YES;
+  });
   return changed ? [NSJSONSerialization dataWithJSONObject:json options:0 error:NULL] : nil;
 }
 

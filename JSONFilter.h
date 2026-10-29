@@ -17,6 +17,7 @@ typedef struct {
   BOOL keywords; // YES when RFSetFilterKeywords was given at least one keyword
   BOOL keywordComments; // also hide comments that mention a keyword
   BOOL keywordCommentReplies; // ...and their replies. NO: leave a placeholder and keep the replies
+  BOOL redgifsDirect; // play RedGIFs videos from RedGIFs, with sound, instead of Reddit's silent copy
 } RFPrefs;
 
 #ifdef __cplusplus
@@ -53,6 +54,14 @@ NSData *RFFeedHidingFullTextMatches(NSData *feedData, NSData *detailsData, RFPre
 // Keeps the app's own request for full posts as the model for RFPostDetailsRequest, so it stays
 // right when Reddit changes it.
 void RFRememberPostDetailsRequest(NSURLRequest *request);
+
+// Reddit plays RedGIFs posts from its own copy of the video, which has no sound. Returns the
+// RedGIFs IDs of those videos in a response (lowercase, no duplicates), or nil if there are none.
+NSArray<NSString *> *RFRedgifsIds(NSData *data);
+
+// Points those videos at RedGIFs' own files instead ({RedGIFs ID: video URL}). Returns nil if
+// nothing changed.
+NSData *RFRedgifsResponse(NSData *data, NSDictionary<NSString *, NSString *> *videoURLs);
 
 // Hidden posts take no space, so a first Home page that's mostly hidden can be too short to scroll,
 // and the app only loads more when you scroll. Returns the request for the next page when the

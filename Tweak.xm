@@ -4,6 +4,7 @@
 #import <objc/runtime.h>
 #import "JSONFilter.h"
 #import "Preferences.h"
+#import "Redgifs.h"
 
 #pragma mark - Preferences
 
@@ -25,6 +26,7 @@ extern "C" void RFReloadPreferences(void) {
   prefs.keywords = keywords.count > 0;
   prefs.keywordComments = [defaults boolForKey:kRedditFilterKeywordComments];
   prefs.keywordCommentReplies = [defaults boolForKey:kRedditFilterKeywordCommentReplies];
+  prefs.redgifsDirect = [defaults boolForKey:kRedditFilterRedgifsDirect];
   globalPrefs = prefs;
 }
 
@@ -125,6 +127,15 @@ extern "C" UIImage *iconWithName(NSString *iconName) {
 
 #pragma mark - Network filtering
 
+// Marks the requests RedditFilter makes itself. Kept on the device, never sent.
+static NSString *const kRFOwnRequest = @"RedditFilterOwnRequest";
+
+static NSURLRequest *RFOwnRequest(NSURLRequest *request) {
+  NSMutableURLRequest *own = [request mutableCopy];
+  [NSURLProtocol setProperty:@YES forKey:kRFOwnRequest inRequest:own];
+  return own;
+}
+
 static BOOL RFIsOK(NSURLResponse *response, NSError *error) {
   return !error && [response isKindOfClass:NSHTTPURLResponse.class] &&
          ((NSHTTPURLResponse *)response).statusCode == 200;
@@ -199,15 +210,28 @@ extern "C" void RFClearPendingWebSession(void);
 
         // Feed cards only have the start of each post, so fetch the full posts and check those too
         // before the page is shown.
-        NSURLRequest *details = RFPostDetailsRequest(request, data, globalPrefs);
-        if (!details) return topUpAndFinish(data);
-        [[session dataTaskWithRequest:details
-                    completionHandler:^(NSData *detailsData, NSURLResponse *detailsResponse, NSError *detailsError) {
-                      NSData *checked = RFIsOK(detailsResponse, detailsError)
-                                            ? RFFeedHidingFullTextMatches(data, detailsData, globalPrefs)
-                                            : nil;
-                      topUpAndFinish(checked ?: data);
-                    }] resume];
+        void (^checkFullTextAndFinish)(NSData *) = ^(NSData *page) {
+          NSURLRequest *details = RFPostDetailsRequest(request, page, globalPrefs);
+          if (!details) return topUpAndFinish(page);
+          [[session dataTaskWithRequest:RFOwnRequest(details)
+                      completionHandler:^(NSData *detailsData, NSURLResponse *detailsResponse, NSError *detailsError) {
+                        NSData *checked = RFIsOK(detailsResponse, detailsError)
+                                              ? RFFeedHidingFullTextMatches(page, detailsData, globalPrefs)
+                                              : nil;
+                        topUpAndFinish(checked ?: page);
+                      }] resume];
+        };
+
+        // Reddit's copies of RedGIFs videos have no sound: swap in RedGIFs' own files before the app
+        // sees the posts. Skipped for RedditFilter's own full-text checks, which never play anything.
+        NSArray *redgifs = globalPrefs.redgifsDirect && ![NSURLProtocol propertyForKey:kRFOwnRequest inRequest:request]
+                               ? RFRedgifsIds(data)
+                               : nil;
+        if (!redgifs) return checkFullTextAndFinish(data);
+        NSData *page = data;
+        RFFetchRedgifsVideos(redgifs, ^(NSDictionary *videoURLs) {
+          checkFullTextAndFinish(RFRedgifsResponse(page, videoURLs) ?: page);
+        });
       };
   return %orig(request, filteringHandler);
 }
@@ -295,6 +319,7 @@ extern "C" void RFClearPendingWebSession(void);
     kRedditFilterVideosForYou : @NO,
     kRedditFilterKeywordComments : @NO,
     kRedditFilterKeywordCommentReplies : @YES,
+    kRedditFilterRedgifsDirect : @NO,
   }];
   RFReloadPreferences();
 

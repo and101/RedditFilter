@@ -207,6 +207,46 @@ int main(void) {
     RFSetFilterKeywords(@[]);
     Check([Filter(comments, @"PostInfoByIdComments", keywordComments) isEqual:comments], @"No keywords, no hidden comments");
 
+    // RedGIFs: swap Reddit's silent copy for RedGIFs' own video.
+    NSDictionary *(^RedgifsPost)(NSString *, NSString *) = ^NSDictionary *(NSString *postId, NSString *link) {
+      return @{@"id": postId, @"domain": @"redgifs.com", @"url": link, @"media": @{
+        @"typeHint": @"EMBED",
+        @"video": @{@"url": link},
+        @"download": @{@"url": @"https://packaged-media.redd.it/x/dl.mp4"},
+        @"streaming": @{@"hlsUrl": @"https://v.redd.it/x/HLSPlaylist.m3u8", @"isGif": @YES, @"scrubberMediaUrl": @"https://v.redd.it/x/CMAF_96.mp4"}}};
+    };
+    NSDictionary *redgifsDetails = @{@"data": @{@"postsInfoByIds": @[
+      RedgifsPost(@"t3_r1", @"https://www.redgifs.com/watch/JovialRewardingEnglishsetter"),
+      RedgifsPost(@"t3_r2", @"https://www.redgifs.com/watch/scientificsupportivelark?utm=x"),
+      RedgifsPost(@"t3_r3", @"https://www.redgifs.com/watch/jovialrewardingenglishsetter"),
+      @{@"id": @"t3_v", @"domain": @"v.redd.it", @"url": @"https://v.redd.it/abc", @"media": @{@"streaming": @{@"hlsUrl": @"keep", @"isGif": @NO}}},
+      @{@"id": @"t3_l", @"domain": @"redgifs.com", @"url": @"https://www.redgifs.com/watch/nostream", @"media": NSNull.null},
+    ]}};
+    NSArray *redgifsIds = RFRedgifsIds(Data(redgifsDetails));
+    Check([redgifsIds isEqual:(@[@"jovialrewardingenglishsetter", @"scientificsupportivelark"])],
+          @"Find each RedGIFs video Reddit streams, once");
+    Check(RFRedgifsIds(Data(Feed(keywordCards))) == nil, @"No RedGIFs, nothing to look up");
+    NSString *sound = @"https://media.redgifs.com/JovialRewardingEnglishsetter.mp4";
+    NSDictionary *swapped = [NSJSONSerialization JSONObjectWithData:RFRedgifsResponse(Data(redgifsDetails), @{@"jovialrewardingenglishsetter": sound}) options:0 error:NULL];
+    NSArray *swappedPosts = swapped[@"data"][@"postsInfoByIds"];
+    for (NSUInteger i = 0; i < 3; i += 2) {
+      NSDictionary *media = swappedPosts[i][@"media"];
+      Check([media[@"streaming"][@"hlsUrl"] isEqual:sound] && [media[@"streaming"][@"isGif"] isEqual:@YES],
+            @"Play RedGIFs' own video, still looping like a GIF");
+      Check([media[@"download"][@"url"] isEqual:sound], @"Save the version with sound");
+      Check([media[@"streaming"][@"scrubberMediaUrl"] hasPrefix:@"https://v.redd.it"], @"Keep Reddit's scrubbing previews");
+    }
+    Check([swappedPosts[1][@"media"][@"streaming"][@"hlsUrl"] hasPrefix:@"https://v.redd.it"], @"Keep Reddit's version when RedGIFs had nothing");
+    Check([swappedPosts[3][@"media"][@"streaming"][@"hlsUrl"] isEqual:@"keep"], @"Leave other videos alone");
+    Check(RFRedgifsResponse(Data(redgifsDetails), @{}) == nil, @"Nothing found, nothing changed");
+    NSDictionary *cardFeed = Feed(@[@{@"__typename": @"CellGroup", @"cells": @[
+      @{@"__typename": @"MetadataCell", @"mediaDomain": @"redgifs", @"mediaPath": @"https://www.redgifs.com/watch/jovialrewardingenglishsetter"},
+      @{@"__typename": @"LegacyVideoCell", @"isGif": @YES, @"type": @"HLS", @"media": @{@"path": @"https://v.redd.it/x/HLSPlaylist.m3u8"}},
+    ]}]);
+    Check([RFRedgifsIds(Data(cardFeed)) isEqual:@[@"jovialrewardingenglishsetter"]], @"Find RedGIFs videos in card view");
+    NSDictionary *cardCell = [NSJSONSerialization JSONObjectWithData:RFRedgifsResponse(Data(cardFeed), @{@"jovialrewardingenglishsetter": sound}) options:0 error:NULL][@"data"][@"homeV3"][@"elements"][@"edges"][0][@"node"][@"cells"][1];
+    Check([cardCell[@"media"][@"path"] isEqual:sound] && [cardCell[@"isGif"] isEqual:@YES], @"Play RedGIFs' own video in card view");
+
     puts("All JSON filtering regression tests passed.");
   }
   return 0;
