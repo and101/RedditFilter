@@ -129,6 +129,84 @@ int main(void) {
     Check([merged[@"data"][@"homeV3"][@"elements"][@"pageInfo"][@"endCursor"] isEqual:@"c2"], @"Continue from the second page");
     Check(RFMergedFeedPages(Data(Page(6, 3, @"c1")), [@"oops" dataUsingEncoding:NSUTF8StringEncoding]) == nil, @"Ignore a bad second page");
 
+    // Full post text: cards only carry the start, so the full posts are fetched and checked.
+    RFSetFilterKeywords(@[@"tesla"]);
+    NSString *(^CardId)(NSString *) = ^NSString *(NSString *postId) {
+      return [[postId dataUsingEncoding:NSUTF8StringEncoding] base64EncodedStringWithOptions:0];
+    };
+    NSDictionary *bodyFeed = Feed(@[
+      @{@"__typename": @"CellGroup", @"id": CardId(@"t3_a"), @"cells": @[@{@"__typename": @"TitleCell", @"title": @"Car advice"}]},
+      @{@"__typename": @"CellGroup", @"id": CardId(@"t3_b-1234"), @"cells": @[@{@"__typename": @"TitleCell", @"title": @"Other"}]},
+      @{@"__typename": @"CellGroup", @"id": CardId(@"t3_c"), @"cells": @[], @"adPayload": NSNull.null},
+      @{@"__typename": @"CellGroup", @"id": CardId(@"t3_d"), @"cells": @[@1], @"adPayload": @{@"x": @1}},
+    ]);
+    NSURLRequest *detailsRequest = RFPostDetailsRequest(feedRequest, Data(bodyFeed), keywords);
+    NSDictionary *detailsBody = [NSJSONSerialization JSONObjectWithData:detailsRequest.HTTPBody options:0 error:NULL];
+    NSSet *askedIds = [NSSet setWithArray:detailsBody[@"variables"][@"ids"]];
+    Check([askedIds isEqual:[NSSet setWithArray:@[@"t3_a", @"t3_b"]]], @"Ask for the full text of visible posts only");
+    Check([detailsBody[@"operationName"] isEqual:@"FeedPostDetailsByIds"] && detailsBody[@"extensions"][@"persistedQuery"][@"sha256Hash"],
+          @"Ask the way the app does");
+    Check([[detailsRequest valueForHTTPHeaderField:@"X-APOLLO-OPERATION-NAME"] isEqual:@"FeedPostDetailsByIds"], @"Label the request");
+    Check([detailsRequest.URL isEqual:feedRequest.URL], @"Use the feed's server");
+    Check(RFPostDetailsRequest(feedRequest, Data(bodyFeed), off) == nil, @"No full-text check without keywords");
+    Check(RFPostDetailsRequest(topUp, Data(bodyFeed), keywords) != nil, @"Check later pages too");
+
+    NSDictionary *details = @{@"data": @{@"postsInfoByIds": @[
+      @{@"id": @"t3_a", @"title": @"Car advice", @"content": @{@"markdown": @"Long story... I ended up buying a Tesla."}},
+      @{@"id": @"t3_b", @"title": @"Other", @"content": NSNull.null},
+    ]}};
+    NSDictionary *checked = [NSJSONSerialization JSONObjectWithData:RFFeedHidingFullTextMatches(Data(bodyFeed), Data(details), keywords) options:0 error:NULL];
+    NSArray *checkedEdges = checked[@"data"][@"homeV3"][@"elements"][@"edges"];
+    Check([checkedEdges[0][@"node"][@"cells"] count] == 0, @"Hide posts with a keyword further down their text");
+    Check([checkedEdges[1][@"node"][@"cells"] count] == 1, @"Keep posts without keywords in their full text");
+    NSDictionary *previews = Feed(@[
+      @{@"__typename": @"PostPreviewComponent", @"id": @"t3_e", @"post": @{@"title": @"Hi", @"content": @{@"markdown": @"...a tesla"}}},
+      @{@"__typename": @"PostPreviewComponent", @"id": @"t3_f", @"post": @{@"title": @"Hi", @"content": NSNull.null}},
+    ]);
+    NSArray *previewEdges = Filter(previews, @"HomeFeedSdui", keywords)[@"data"][@"homeV3"][@"elements"][@"edges"];
+    Check([previewEdges[0][@"node"][@"__typename"] isEqual:@"CellGroup"] && [previewEdges[0][@"node"][@"cells"] count] == 0,
+          @"Swap whole-post cards with a keyword for an empty card");
+    Check([previewEdges[1][@"node"][@"__typename"] isEqual:@"PostPreviewComponent"], @"Keep whole-post cards without keywords");
+    NSDictionary *noMatch = @{@"data": @{@"postsInfoByIds": @[@{@"id": @"t3_a", @"content": @{@"markdown": @"Fine"}}]}};
+    Check(RFFeedHidingFullTextMatches(Data(bodyFeed), Data(noMatch), keywords) == nil, @"Leave the page alone when nothing matches");
+    Check(RFFeedHidingFullTextMatches(Data(bodyFeed), Data(@{@"data": NSNull.null}), keywords) == nil, @"Ignore a failed full-text check");
+
+    // Comments
+    RFPrefs keywordComments = {.keywords = YES, .keywordComments = YES, .keywordCommentReplies = YES};
+    RFPrefs keepReplies = {.keywords = YES, .keywordComments = YES};
+    NSDictionary *(^Tree)(NSInteger, NSInteger, NSString *) = ^NSDictionary *(NSInteger depth, NSInteger children, NSString *text) {
+      return @{@"__typename": @"CommentTree", @"depth": @(depth), @"childCount": @(children),
+               @"node": text ? @{@"__typename": @"Comment", @"content": @{@"markdown": text}} : NSNull.null};
+    };
+    NSDictionary *comments = Post(@{@"commentForest": @{@"trees": @[
+      Tree(0, 4, @"Top"),
+      Tree(1, 2, @"My TESLA broke"),
+      Tree(2, 0, @"Sorry to hear"),
+      Tree(2, 0, nil), // "more replies"
+      Tree(1, 0, @"Unrelated reply"),
+      Tree(0, 0, @"Tesla again"),
+      Tree(0, 0, @"Teslas are different"),
+    ]}});
+    for (NSString *op in @[@"PostInfoByIdComments", @"Unknown"]) {
+      NSArray *trees = Filter(comments, op, keywordComments)[@"data"][@"postInfoById"][@"commentForest"][@"trees"];
+      Check(trees.count == 3, @"Hide comments with a keyword along with their replies");
+      Check([trees[0][@"node"][@"content"][@"markdown"] isEqual:@"Top"] && [trees[0][@"childCount"] isEqual:@1],
+            @"Lower the reply count of the comments above");
+      Check([trees[1][@"node"][@"content"][@"markdown"] isEqual:@"Unrelated reply"], @"Keep other replies");
+      Check([trees[2][@"node"][@"content"][@"markdown"] isEqual:@"Teslas are different"], @"Comments match whole words only");
+      Check([Filter(comments, op, keywords) isEqual:comments], @"Comments are kept unless the comments switch is on");
+      NSArray *placeheld = Filter(comments, op, keepReplies)[@"data"][@"postInfoById"][@"commentForest"][@"trees"];
+      Check(placeheld.count == 7 && [placeheld[0][@"childCount"] isEqual:@4], @"Keep every reply when replies aren't hidden");
+      Check([placeheld[1][@"node"][@"content"][@"markdown"] isEqual:@"Hidden by keyword filter"] &&
+            placeheld[1][@"node"][@"authorInfo"] == NSNull.null &&
+            [placeheld[1][@"node"][@"content"][@"richtext"] containsString:@"Hidden by keyword filter"],
+            @"Swap a matching comment's text and author for a placeholder");
+      Check([placeheld[2][@"node"][@"content"][@"markdown"] isEqual:@"Sorry to hear"], @"Keep its replies");
+      Check([placeheld[5][@"node"][@"content"][@"markdown"] isEqual:@"Hidden by keyword filter"], @"Placehold every match");
+    }
+    RFSetFilterKeywords(@[]);
+    Check([Filter(comments, @"PostInfoByIdComments", keywordComments) isEqual:comments], @"No keywords, no hidden comments");
+
     puts("All JSON filtering regression tests passed.");
   }
   return 0;

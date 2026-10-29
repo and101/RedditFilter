@@ -195,8 +195,9 @@ typedef NS_ENUM(NSInteger, RFKeywordSection) { RFKeywordSectionAdd, RFKeywordSec
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
   if (section != RFKeywordSectionAdd) return nil;
-  return @"Posts with a keyword in their title or text are hidden from your feeds. Whole words only, and "
-         @"capitals don't matter: \"cat\" hides \"Cat pics\" but not \"category\". Separate several with commas.";
+  return @"Posts with a keyword in their title or text are hidden from your feeds, and comments too if "
+         @"Filter comments too is on (with their replies, if Hide replies too is on). Whole words only, and capitals don't matter: \"cat\" hides \"Cat pics\" "
+         @"but not \"category\". Separate several with commas.";
 }
 
 - (UITableViewCell *)styledCell:(UITableViewCell *)cell {

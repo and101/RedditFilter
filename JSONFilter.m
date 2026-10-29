@@ -59,6 +59,13 @@ static NSObject *RFKeywordLock(void) {
   return lock;
 }
 
+static NSRegularExpression *RFCurrentKeywords(RFPrefs prefs) {
+  if (!prefs.keywords) return nil;
+  @synchronized(RFKeywordLock()) {
+    return gKeywordRegex;
+  }
+}
+
 void RFSetFilterKeywords(NSArray<NSString *> *keywords) {
   NSMutableArray *patterns = [NSMutableArray array];
   for (id keyword in keywords) {
@@ -99,14 +106,29 @@ static void RFCollectPostText(id object, NSMutableArray<NSString *> *texts) {
   for (NSString *key in @[ @"titleCell", @"previewTextCell" ]) RFCollectPostText(dict[key], texts);
 }
 
-static BOOL RFMatchesKeywords(NSArray *cells, NSRegularExpression *regex) {
-  NSMutableArray<NSString *> *texts = [NSMutableArray array];
-  RFCollectPostText(cells, texts);
+static BOOL RFTextsMatchKeywords(NSArray<NSString *> *texts, NSRegularExpression *regex) {
   for (NSString *text in texts) {
     NSString *folded = RFFolded(text);
     if ([regex firstMatchInString:folded options:0 range:NSMakeRange(0, folded.length)]) return YES;
   }
   return NO;
+}
+
+static BOOL RFMatchesKeywords(NSArray *cells, NSRegularExpression *regex) {
+  NSMutableArray<NSString *> *texts = [NSMutableArray array];
+  RFCollectPostText(cells, texts);
+  return RFTextsMatchKeywords(texts, regex);
+}
+
+// The full text of a post or comment: its title (posts only) and its whole body.
+static BOOL RFContentMatchesKeywords(NSDictionary *node, NSRegularExpression *regex) {
+  NSMutableArray<NSString *> *texts = [NSMutableArray array];
+  NSString *title = RFString(node[@"title"]);
+  if (title) [texts addObject:title];
+  NSDictionary *content = RFDict(node[@"content"]);
+  NSString *body = RFString(content[@"markdown"]) ?: RFString(content[@"preview"]);
+  if (body) [texts addObject:body];
+  return RFTextsMatchKeywords(texts, regex);
 }
 
 // New feed cards keep their NSFW marker in an IndicatorsCell, sometimes nested
@@ -213,10 +235,17 @@ static BOOL RFIsVideosForYou(id node) {
          [RFString(carousel[@"type"]) isEqualToString:@"VIDEO_RECOMMENDATIONS"];
 }
 
-// Swaps the carousel for an empty post card, the same thing the other filters leave behind for a
-// hidden post. Removing the carousel, or emptying it in place, can stop the feed loading more posts.
-static NSDictionary *RFEmptyCard(NSDictionary *carousel) {
-  NSString *identifier = [@"redditfilter-" stringByAppendingString:RFString(carousel[@"id"]) ?: @"video_in_feed_unit"];
+// Some feed cards hold the whole post, title and full text included.
+static BOOL RFIsKeywordPostPreview(id node, const RFContext *ctx) {
+  NSDictionary *preview = RFDict(node);
+  return ctx->keywords && [RFString(preview[@"__typename"]) isEqualToString:@"PostPreviewComponent"] &&
+         RFContentMatchesKeywords(RFDict(preview[@"post"]), ctx->keywords);
+}
+
+// Swaps a feed element for an empty post card, the same thing the other filters leave behind for a
+// hidden post. Removing the element, or emptying it in place, can stop the feed loading more posts.
+static NSDictionary *RFEmptyCard(NSDictionary *element) {
+  NSString *identifier = [@"redditfilter-" stringByAppendingString:RFString(element[@"id"]) ?: @"video_in_feed_unit"];
   return [@{
     @"__typename" : @"CellGroup",
     @"id" : identifier,
@@ -232,7 +261,8 @@ static BOOL RFFilterEdges(NSArray *edges, const RFContext *ctx) {
   BOOL changed = NO;
   for (id edge in edges) {
     NSMutableDictionary *wrapper = RFMutableDict(edge);
-    if (ctx->prefs.videosForYou && wrapper && RFIsVideosForYou(wrapper[@"node"])) {
+    if (wrapper && ((ctx->prefs.videosForYou && RFIsVideosForYou(wrapper[@"node"])) ||
+                    RFIsKeywordPostPreview(wrapper[@"node"], ctx))) {
       wrapper[@"node"] = RFEmptyCard(wrapper[@"node"]);
       changed = YES;
       continue;
@@ -240,6 +270,80 @@ static BOOL RFFilterEdges(NSArray *edges, const RFContext *ctx) {
     changed |= RFFilterNode(RFDict(edge)[@"node"], ctx);
   }
   return changed;
+}
+
+static NSString *const kRFHiddenCommentText = @"Hidden by keyword filter";
+
+// Keeps the comment's place in the thread so its replies still show, but without its text or author.
+static void RFMakePlaceholderComment(NSMutableDictionary *comment) {
+  NSString *richtext = [NSString stringWithFormat:@"{\"document\":[{\"c\":[{\"e\":\"text\",\"t\":\"%@\"}],\"e\":\"par\"}]}",
+                                                  kRFHiddenCommentText];
+  NSMutableDictionary *content = [RFDict(comment[@"content"]) mutableCopy] ?: [NSMutableDictionary dictionary];
+  [content addEntriesFromDictionary:@{
+    @"markdown" : kRFHiddenCommentText,
+    @"preview" : kRFHiddenCommentText,
+    @"richtext" : richtext,
+    @"richtextMedia" : @[],
+  }];
+  comment[@"content"] = content;
+  comment[@"authorInfo"] = NSNull.null;
+  comment[@"authorFlair"] = NSNull.null;
+  comment[@"authorCommunityBadge"] = NSNull.null;
+}
+
+// Comments come as a flat list in display order, each with its depth. A hidden comment takes its
+// replies with it, and the reply counts of the comments above it go down to match. With
+// keywordCommentReplies off, it's swapped for a placeholder instead and its replies stay.
+static BOOL RFHideKeywordComments(NSMutableDictionary *forest, const RFContext *ctx) {
+  NSArray *trees = RFArray(forest[@"trees"]);
+  if (!ctx->prefs.keywordComments || !ctx->keywords || !trees) return NO;
+  NSMutableArray *kept = [NSMutableArray arrayWithCapacity:trees.count];
+  NSMutableArray<NSMutableDictionary *> *parents = [NSMutableArray array]; // kept comments above this one
+  NSInteger hiddenDepth = -1; // depth of the hidden comment whose replies are being skipped
+  BOOL replaced = NO;
+  for (id edge in trees) {
+    NSMutableDictionary *tree = RFMutableDict(edge);
+    id depthValue = tree[@"depth"];
+    if (![depthValue isKindOfClass:NSNumber.class]) { // can't tell where it belongs: keep it
+      [kept addObject:edge];
+      hiddenDepth = -1;
+      continue;
+    }
+    NSInteger depth = [depthValue integerValue];
+    while (parents.count && [parents.lastObject[@"depth"] integerValue] >= depth) [parents removeLastObject];
+
+    BOOL hide = hiddenDepth >= 0 && depth > hiddenDepth;
+    if (!hide) {
+      hiddenDepth = -1;
+      NSDictionary *node = RFDict(tree[@"node"]);
+      if ([RFString(node[@"__typename"]) isEqualToString:@"Comment"] &&
+          RFContentMatchesKeywords(node, ctx->keywords)) {
+        NSMutableDictionary *comment = RFMutableDict(node);
+        if (!ctx->prefs.keywordCommentReplies && comment) {
+          RFMakePlaceholderComment(comment);
+          replaced = YES;
+          [kept addObject:edge];
+          [parents addObject:tree];
+          continue;
+        }
+        hide = YES;
+        hiddenDepth = depth;
+      }
+    }
+    if (hide) {
+      for (NSMutableDictionary *parent in parents) {
+        id count = parent[@"childCount"];
+        if ([count isKindOfClass:NSNumber.class] && [count integerValue] > 0)
+          parent[@"childCount"] = @([count integerValue] - 1);
+      }
+      continue;
+    }
+    [kept addObject:edge];
+    if (tree) [parents addObject:tree];
+  }
+  if (kept.count == trees.count) return replaced;
+  forest[@"trees"] = kept;
+  return YES;
 }
 
 static BOOL RFClearKeys(NSMutableDictionary *dict, NSArray *keys) {
@@ -315,6 +419,7 @@ static BOOL RFFilterGeneric(NSDictionary *payload, const RFContext *ctx) {
 
     // Comments: <root>.commentForest.trees
     changed |= RFFilterEdges(RFArray(RFValueAtPath(dict, @"commentForest.trees")), ctx);
+    changed |= RFHideKeywordComments(RFMutableDict(dict[@"commentForest"]), ctx);
 
     if (ctx->prefs.promoted)
       changed |= RFClearAdKeys(dict, @[ @"commentsPageAds", @"commentTreeAds", @"pdpCommentsAds" ]);
@@ -350,6 +455,7 @@ static BOOL RFFilterPostInfo(NSMutableDictionary *json, NSDictionary *payload, c
   RF_RECORD_SCHEMA(@"PostInfoById", @"data.postInfoById.commentForest.trees", resolved, json, RFSchemaSigTrees);
 
   BOOL changed = resolved ? RFFilterEdges(trees, ctx) : RFFilterGeneric(payload, ctx);
+  if (resolved) changed |= RFHideKeywordComments(RFMutableDict(forest), ctx);
   changed |= RFFilterNode(post, ctx);
   if (ctx->prefs.promoted)
     changed |= RFClearAdKeys(post, @[ @"commentsPageAds", @"commentTreeAds", @"pdpCommentsAds" ]);
@@ -418,12 +524,7 @@ NSData *RFFilteredResponseData(NSData *data, NSString *operationName, RFPrefs pr
   NSDictionary *payload = RFDict(json[@"data"]);
   if (!payload) return nil; // not GraphQL, or an error response like {"data": null}
 
-  RFContext ctx = {prefs, nil};
-  if (prefs.keywords) {
-    @synchronized(RFKeywordLock()) {
-      ctx.keywords = gKeywordRegex;
-    }
-  }
+  RFContext ctx = {prefs, RFCurrentKeywords(prefs)};
   if (!RFFilterResponse(json, payload, operationName, &ctx)) return nil; // unchanged: skip re-encoding
   return [NSJSONSerialization dataWithJSONObject:json options:0 error:NULL];
 }
@@ -495,6 +596,152 @@ NSData *RFMergedFeedPages(NSData *firstPage, NSData *nextPage) {
   firstElements[@"edges"] = edges;
   firstElements[@"pageInfo"] = pageInfo;
   return [NSJSONSerialization dataWithJSONObject:first options:0 error:NULL];
+}
+
+#pragma mark - Checking the full text of feed posts
+
+static NSString *const kRFPostDetailsRequestKey = @"kRedditFilterPostDetailsRequest";
+
+// The app's request for full posts, minus the post IDs, as seen in Reddit 2026.43. Replaced by the
+// app's own request as soon as it makes one.
+static NSDictionary *RFDefaultPostDetailsRequest(void) {
+  NSMutableDictionary *variables = [NSMutableDictionary dictionary];
+  for (NSString *flag in @[
+         @"includeAuthorProfileExemptedExperiments", @"includeCommunityPermissions", @"includeCurrentUserAwards",
+         @"includeDeletedPostInfo", @"includeDeletedPostSharePermalink", @"includeDownloadCount",
+         @"includeFeatureVariants", @"includeIsTextEditable", @"includeLinkedCommentInfo", @"includePlaybackMp4s",
+         @"includeRepostCount", @"includeSubredditChannelsState"
+       ])
+    variables[flag] = @YES;
+  for (NSString *flag in @[
+         @"includeCommentPostUnits", @"includeFeedTrend", @"includeLinkTitle", @"includeMediaAuth",
+         @"includeProfileFlair", @"includePublisherAttribution", @"includeSubredditBackgroundColor"
+       ])
+    variables[flag] = @NO;
+  variables[@"featureVariantNames"] =
+      @[ @"mod_guide_subreddit_rollout", @"mediaf_video_in_comments_subreddit_allowlist" ];
+  return @{
+    @"body" : @{
+      @"extensions" : @{
+        @"persistedQuery" :
+            @{@"sha256Hash" : @"d1229531c4120d3252591cc1e51ea3928cc068721f6c8b264a95183459f2fbd2", @"version" : @1}
+      },
+      @"operationName" : @"FeedPostDetailsByIds",
+      @"variables" : variables,
+    },
+    @"headers" : @{@"X-APOLLO-OPERATION-NAME" : @"FeedPostDetailsByIds"},
+  };
+}
+
+// { body: <request body without ids>, headers: <Apollo headers> }
+static NSDictionary *gPostDetailsRequest;
+
+static NSDictionary *RFPostDetailsTemplate(void) {
+  @synchronized(kRFPostDetailsRequestKey) {
+    if (!gPostDetailsRequest) {
+      NSData *data = [NSUserDefaults.standardUserDefaults dataForKey:kRFPostDetailsRequestKey];
+      NSDictionary *saved = data ? RFDict([NSJSONSerialization JSONObjectWithData:data options:0 error:NULL]) : nil;
+      gPostDetailsRequest = RFDict(saved[@"body"]) ? saved : RFDefaultPostDetailsRequest();
+    }
+    return gPostDetailsRequest;
+  }
+}
+
+void RFRememberPostDetailsRequest(NSURLRequest *request) {
+  if (!request.HTTPBody.length) return;
+  NSMutableDictionary *body = RFMutableDict([NSJSONSerialization JSONObjectWithData:request.HTTPBody
+                                                                            options:NSJSONReadingMutableContainers
+                                                                              error:NULL]);
+  NSMutableDictionary *variables = RFMutableDict(body[@"variables"]);
+  if (!variables || !RFArray(variables[@"ids"])) return;
+  [variables removeObjectForKey:@"ids"];
+  // Only the Apollo labels: the login headers are taken fresh from each feed request.
+  NSMutableDictionary *headers = [NSMutableDictionary dictionary];
+  [request.allHTTPHeaderFields enumerateKeysAndObjectsUsingBlock:^(NSString *name, NSString *value, BOOL *stop) {
+    if ([name.uppercaseString hasPrefix:@"X-APOLLO-"]) headers[name] = value;
+  }];
+  NSDictionary *template = @{@"body" : body, @"headers" : headers};
+  @synchronized(kRFPostDetailsRequestKey) {
+    if ([gPostDetailsRequest isEqual:template]) return;
+    gPostDetailsRequest = template;
+  }
+  // Saved as JSON: the body can hold nulls, which defaults can't store.
+  NSData *data = [NSJSONSerialization dataWithJSONObject:template options:0 error:NULL];
+  if (data) [NSUserDefaults.standardUserDefaults setObject:data forKey:kRFPostDetailsRequestKey];
+}
+
+// Feed card IDs are base64 of the post ID, sometimes with "-<uuid>" after it.
+static NSString *RFCardPostId(NSDictionary *card) {
+  NSString *identifier = RFString(card[@"id"]);
+  if (!identifier) return nil;
+  NSData *decoded = [[NSData alloc] initWithBase64EncodedString:identifier options:0];
+  NSString *text = decoded ? [[NSString alloc] initWithData:decoded encoding:NSUTF8StringEncoding] : identifier;
+  NSString *postId = [text componentsSeparatedByString:@"-"].firstObject;
+  return [postId hasPrefix:@"t3_"] ? postId : nil;
+}
+
+// Visible post cards on a feed page, by post ID.
+static NSDictionary<NSString *, NSArray<NSMutableDictionary *> *> *RFVisibleFeedPosts(NSDictionary *json) {
+  NSMutableDictionary *posts = [NSMutableDictionary dictionary];
+  for (id edge in RFArray(RFFeedElements(json)[@"edges"])) {
+    NSMutableDictionary *card = RFMutableDict(RFDict(edge)[@"node"]);
+    if (![RFString(card[@"__typename"]) isEqualToString:@"CellGroup"] || RFIsHiddenFeedElement(card) ||
+        RFDict(card[@"adPayload"]))
+      continue;
+    NSString *postId = RFCardPostId(card);
+    if (!postId) continue;
+    posts[postId] = [(posts[postId] ?: @[]) arrayByAddingObject:card];
+  }
+  return posts;
+}
+
+NSURLRequest *RFPostDetailsRequest(NSURLRequest *feedRequest, NSData *feedData, RFPrefs prefs) {
+  if (!RFCurrentKeywords(prefs) || ![RFOperationName(feedRequest) hasSuffix:@"FeedSdui"] || !feedData.length)
+    return nil;
+  NSDictionary *json = RFDict([NSJSONSerialization JSONObjectWithData:feedData
+                                                             options:NSJSONReadingMutableContainers
+                                                               error:NULL]);
+  NSArray *ids = RFVisibleFeedPosts(json).allKeys;
+  if (!ids.count) return nil;
+
+  NSDictionary *template = RFPostDetailsTemplate();
+  NSMutableDictionary *body = [RFDict(template[@"body"]) mutableCopy];
+  NSMutableDictionary *variables = [RFDict(body[@"variables"]) mutableCopy] ?: [NSMutableDictionary dictionary];
+  variables[@"ids"] = ids;
+  body[@"variables"] = variables;
+  NSData *newBody = [NSJSONSerialization dataWithJSONObject:body options:0 error:NULL];
+  if (!newBody) return nil;
+
+  NSMutableURLRequest *request = [feedRequest mutableCopy];
+  request.HTTPBody = newBody;
+  NSMutableDictionary *headers = [request.allHTTPHeaderFields mutableCopy];
+  for (NSString *name in request.allHTTPHeaderFields)
+    if ([name.uppercaseString hasPrefix:@"X-APOLLO-"]) [headers removeObjectForKey:name];
+  [headers addEntriesFromDictionary:RFDict(template[@"headers"])];
+  headers[@"Content-Length"] = [NSString stringWithFormat:@"%lu", (unsigned long)newBody.length];
+  request.allHTTPHeaderFields = headers;
+  return request;
+}
+
+NSData *RFFeedHidingFullTextMatches(NSData *feedData, NSData *detailsData, RFPrefs prefs) {
+  NSRegularExpression *keywords = RFCurrentKeywords(prefs);
+  if (!keywords || !feedData.length || !detailsData.length) return nil;
+  NSDictionary *details = RFDict([NSJSONSerialization JSONObjectWithData:detailsData options:0 error:NULL]);
+  NSArray *posts = RFArray(RFValueAtPath(details, @"data.postsInfoByIds"));
+  if (!posts) return nil;
+  NSMutableDictionary *json = RFMutableDict([NSJSONSerialization JSONObjectWithData:feedData
+                                                                            options:NSJSONReadingMutableContainers
+                                                                              error:NULL]);
+  NSDictionary *cards = RFVisibleFeedPosts(json);
+  BOOL changed = NO;
+  for (id item in posts) {
+    NSDictionary *post = RFDict(item);
+    NSArray *matching = cards[RFString(post[@"id"]) ?: @""];
+    if (!matching || !RFContentMatchesKeywords(post, keywords)) continue;
+    for (NSMutableDictionary *card in matching) card[@"cells"] = @[];
+    changed = YES;
+  }
+  return changed ? [NSJSONSerialization dataWithJSONObject:json options:0 error:NULL] : nil;
 }
 
 #pragma mark - Operation name

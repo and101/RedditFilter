@@ -8,6 +8,8 @@
 #define kRedditFilterAutoCollapseAutoMod @"kRedditFilterAutoCollapseAutoMod"
 #define kRedditFilterVideosForYou @"kRedditFilterVideosForYou"
 #define kRedditFilterKeywords @"kRedditFilterKeywords" // array of strings
+#define kRedditFilterKeywordComments @"kRedditFilterKeywordComments"
+#define kRedditFilterKeywordCommentReplies @"kRedditFilterKeywordCommentReplies"
 
 #define kToggleCellID @"kToggleCellID"
 

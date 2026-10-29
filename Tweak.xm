@@ -23,6 +23,8 @@ extern "C" void RFReloadPreferences(void) {
   NSArray *keywords = [defaults arrayForKey:kRedditFilterKeywords];
   RFSetFilterKeywords(keywords);
   prefs.keywords = keywords.count > 0;
+  prefs.keywordComments = [defaults boolForKey:kRedditFilterKeywordComments];
+  prefs.keywordCommentReplies = [defaults boolForKey:kRedditFilterKeywordCommentReplies];
   globalPrefs = prefs;
 }
 
@@ -123,6 +125,11 @@ extern "C" UIImage *iconWithName(NSString *iconName) {
 
 #pragma mark - Network filtering
 
+static BOOL RFIsOK(NSURLResponse *response, NSError *error) {
+  return !error && [response isKindOfClass:NSHTTPURLResponse.class] &&
+         ((NSHTTPURLResponse *)response).statusCode == 200;
+}
+
 extern "C" NSString *RFPendingWebSession(void);
 extern "C" void RFClearPendingWebSession(void);
 
@@ -165,25 +172,41 @@ extern "C" void RFClearPendingWebSession(void);
       !([host hasPrefix:@"gql"] || [host hasPrefix:@"oauth"]))
     return %orig;
 
+  NSString *operation = RFOperationName(request);
+  if ([operation isEqualToString:@"FeedPostDetailsByIds"]) RFRememberPostDetailsRequest(request);
+
   NSURLSession *session = self;
   void (^filteringHandler)(NSData *, NSURLResponse *, NSError *) =
       ^(NSData *data, NSURLResponse *response, NSError *error) {
         if (!error && data.length) {
-          NSData *filtered = RFFilteredResponseData(data, RFOperationName(request), globalPrefs);
+          NSData *filtered = RFFilteredResponseData(data, operation, globalPrefs);
           if (filtered) data = filtered;
         }
+        if (error) return completionHandler(data, response, error);
+
         // A first Home page that's mostly hidden posts can be too short to scroll, and the app only
         // loads more when you scroll. Fetch the next page now and hand both over together.
-        NSURLRequest *topUp = error ? nil : RFFeedTopUpRequest(request, data);
-        if (!topUp) return completionHandler(data, response, error);
-        NSData *firstPage = data;
-        // Goes through this hook too, so the extra page is filtered as well.
-        [[session dataTaskWithRequest:topUp
-                    completionHandler:^(NSData *nextData, NSURLResponse *nextResponse, NSError *nextError) {
-                      BOOL ok = !nextError && [nextResponse isKindOfClass:NSHTTPURLResponse.class] &&
-                                ((NSHTTPURLResponse *)nextResponse).statusCode == 200;
-                      NSData *merged = ok ? RFMergedFeedPages(firstPage, nextData) : nil;
-                      completionHandler(merged ?: firstPage, response, nil);
+        void (^topUpAndFinish)(NSData *) = ^(NSData *firstPage) {
+          NSURLRequest *topUp = RFFeedTopUpRequest(request, firstPage);
+          if (!topUp) return completionHandler(firstPage, response, nil);
+          // Goes through this hook too, so the extra page is filtered as well.
+          [[session dataTaskWithRequest:topUp
+                      completionHandler:^(NSData *nextData, NSURLResponse *nextResponse, NSError *nextError) {
+                        NSData *merged = RFIsOK(nextResponse, nextError) ? RFMergedFeedPages(firstPage, nextData) : nil;
+                        completionHandler(merged ?: firstPage, response, nil);
+                      }] resume];
+        };
+
+        // Feed cards only have the start of each post, so fetch the full posts and check those too
+        // before the page is shown.
+        NSURLRequest *details = RFPostDetailsRequest(request, data, globalPrefs);
+        if (!details) return topUpAndFinish(data);
+        [[session dataTaskWithRequest:details
+                    completionHandler:^(NSData *detailsData, NSURLResponse *detailsResponse, NSError *detailsError) {
+                      NSData *checked = RFIsOK(detailsResponse, detailsError)
+                                            ? RFFeedHidingFullTextMatches(data, detailsData, globalPrefs)
+                                            : nil;
+                      topUpAndFinish(checked ?: data);
                     }] resume];
       };
   return %orig(request, filteringHandler);
@@ -270,6 +293,8 @@ extern "C" void RFClearPendingWebSession(void);
     kRedditFilterScores : @NO,
     kRedditFilterAutoCollapseAutoMod : @NO,
     kRedditFilterVideosForYou : @NO,
+    kRedditFilterKeywordComments : @NO,
+    kRedditFilterKeywordCommentReplies : @YES,
   }];
   RFReloadPreferences();
 

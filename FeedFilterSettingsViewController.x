@@ -2,7 +2,6 @@
 #import "FeedFilterSettingsViewController.h"
 #import "KeywordsViewController.h"
 #import "DebugMenu.h"
-#import "RFLogo.h"
 
 #ifndef RF_VERSION
 #define RF_VERSION "dev" // the Makefile passes the real version
@@ -31,6 +30,33 @@ static const RFToggleRow kToggleRows[] = {
 };
 static const NSInteger kToggleRowCount = sizeof(kToggleRows) / sizeof(kToggleRows[0]);
 
+// In the Keywords section, under the keyword list. Their switch tags follow kToggleRows'.
+static const RFToggleRow kKeywordRows[] = {
+    {kRedditFilterKeywordComments, @"Filter comments too", @"Hide comments that mention a keyword",
+     @"rpl3/comment,icon_comment", NO},
+    // Only switchable while the row above is on.
+    {kRedditFilterKeywordCommentReplies, @"Hide replies too", @"Also hide the replies below them",
+     @"rpl3/reply,icon_reply", NO},
+};
+
+static const RFToggleRow *RFToggleRowForTag(NSInteger tag) {
+  if (tag >= 0 && tag < kToggleRowCount) return &kToggleRows[tag];
+  NSInteger keywordRow = tag - kToggleRowCount;
+  return keywordRow >= 0 && keywordRow < 2 ? &kKeywordRows[keywordRow] : NULL;
+}
+
+static const RFToggleRow *const kHideRepliesRow = &kKeywordRows[1];
+
+static BOOL RFFilteringComments(void) {
+  return [NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterKeywordComments];
+}
+
+// Greys out "Hide replies too" while comments aren't filtered.
+static void RFSetToggleCellEnabled(ToggleImageTableViewCell *cell, BOOL enabled) {
+  cell.contentView.alpha = enabled ? 1.0 : 0.4;
+  cell.userInteractionEnabled = enabled;
+}
+
 #pragma mark - Cell helpers (fall back to plain UIKit if Reddit renames its classes)
 
 static UILabel *RFMainLabel(ImageLabelTableViewCell *cell) {
@@ -53,13 +79,29 @@ static UISwitch *RFSwitch(ToggleImageTableViewCell *cell) {
   return toggle;
 }
 
-static void RFSetIcon(ImageLabelTableViewCell *cell, NSString *iconNames) {
+// The first of Reddit's icons that's found, else the SF Symbol, drawn in a 20pt square and tinted
+// like Reddit's own settings icons.
+static UIImage *RFIcon(NSString *iconNames, NSString *fallbackSymbol) {
   UIImage *icon = nil;
   for (NSString *name in [iconNames componentsSeparatedByString:@","])
     if ((icon = iconWithName(name))) break;
+  if (!icon && fallbackSymbol) icon = [UIImage systemImageNamed:fallbackSymbol];
+  if (!icon) return nil;
+  CGFloat side = 20.0;
+  CGFloat scale = MIN(side / icon.size.width, side / icon.size.height);
+  CGSize size = CGSizeMake(icon.size.width * scale, icon.size.height * scale);
+  UIImage *template = [icon imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+  UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(side, side)];
+  UIImage *boxed = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
+    [template drawInRect:CGRectMake((side - size.width) / 2, (side - size.height) / 2, size.width, size.height)];
+  }];
+  // Drawing loses the template flag, so set it again: the cell tints it like its other icons.
+  return [boxed imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+}
+
+static void RFSetIcon(ImageLabelTableViewCell *cell, NSString *iconNames, NSString *fallbackSymbol) {
+  UIImage *icon = RFIcon(iconNames, fallbackSymbol);
   if (!icon) return;
-  if ([icon respondsToSelector:@selector(imageScaledToSize:)]) icon = [icon imageScaledToSize:CGSizeMake(20, 20)];
-  icon = [icon imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
   if ([cell respondsToSelector:@selector(setDisplayImage:)]) cell.displayImage = icon;
   else if ([cell respondsToSelector:@selector(imageLabelView)]) cell.imageLabelView.imageView.image = icon;
   else cell.imageView.image = icon;
@@ -121,76 +163,45 @@ typedef struct {
   __unsafe_unretained NSString *title;
   __unsafe_unretained NSString *subtitle; // nil = show the version
   __unsafe_unretained NSString *link;     // opened when the row is tapped
-  __unsafe_unretained NSString *symbol;   // SF Symbol name, or nil to show the logo
+  __unsafe_unretained NSString *icons;    // Reddit icons, as in RFToggleRow
+  __unsafe_unretained NSString *symbol;   // SF Symbol if none of them is found
 } RFAboutRow;
 
 static const RFAboutRow kAboutRows[] = {
-    {@"RedditFilter", nil, @"https://github.com/and101/RedditFilter/releases",
+    {@"RedditFilter", nil, @"https://github.com/and101/RedditFilter/releases", @"rpl3/filter",
      @"line.3.horizontal.decrease.circle"},
-    {@"and101", @"Developer", @"https://github.com/and101", @"person.crop.circle"},
+    {@"and101", @"Developer", @"https://github.com/and101", @"rpl3/user,rpl3/profile", @"person.crop.circle"},
 };
 static const NSInteger kAboutRowCount = sizeof(kAboutRows) / sizeof(kAboutRows[0]);
-static const CGFloat kAboutIconSize = 36.0;
-
-// Draws an image centered in a fixed-size square so every row's text lines up.
-static UIImage *RFBoxedImage(UIImage *image, CGFloat inset) {
-  if (!image) return nil;
-  CGSize box = CGSizeMake(kAboutIconSize, kAboutIconSize);
-  CGFloat side = kAboutIconSize - inset * 2;
-  CGFloat scale = MIN(side / image.size.width, side / image.size.height);
-  CGSize size = CGSizeMake(image.size.width * scale, image.size.height * scale);
-  UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:box];
-  UIImage *boxed = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
-    [image drawInRect:CGRectMake((box.width - size.width) / 2, (box.height - size.height) / 2, size.width,
-                                 size.height)];
-  }];
-  return [boxed imageWithRenderingMode:image.renderingMode];
-}
-
-static UIImage *RFLogo(void) {
-  static UIImage *logo;
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    NSData *data = [NSData dataWithBytesNoCopy:(void *)kRFLogoPNG length:sizeof(kRFLogoPNG) freeWhenDone:NO];
-    logo = RFBoxedImage([UIImage imageWithData:data], 0);
-  });
-  return logo;
-}
 
 static NSString *RFVersionText(void) {
   return [@"Version " @RF_VERSION stringByAppendingString:REDDITFILTER_DEBUG ? @" (debug build)" : @""];
 }
 
-// A plain row with an icon, title and subtitle that opens something when tapped.
-static UITableViewCell *RFLinkCell(UITableView *tableView, NSString *title, NSString *subtitle, UIImage *image) {
-  static NSString *const kAboutCellID = @"RFAboutCell";
-  UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:kAboutCellID];
-  if (!cell) {
-    // A plain UIKit cell, colored with Reddit's theme when it's available.
-    cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:kAboutCellID];
-    cell.textLabel.font = [UIFont systemFontOfSize:16.0 weight:UIFontWeightSemibold];
-    cell.detailTextLabel.font = [UIFont systemFontOfSize:13.0];
-    cell.detailTextLabel.numberOfLines = 0;
-    cell.textLabel.textColor = UIColor.labelColor;
-    cell.detailTextLabel.textColor = UIColor.secondaryLabelColor;
-    cell.imageView.tintColor = UIColor.secondaryLabelColor;
-    RFApplyTheme(cell.textLabel, @selector(setTextColor:), @selector(bodyTextColor));
-    RFApplyTheme(cell.detailTextLabel, @selector(setTextColor:), @selector(metaTextColor));
-    RFApplyTheme(cell.imageView, @selector(setTintColor:), @selector(metaTextColor));
-    RFApplyTheme(cell, @selector(setBackgroundColor:), @selector(bodyColor));
-  }
-  cell.textLabel.text = title;
-  cell.detailTextLabel.text = subtitle;
-  cell.imageView.image = image;
+static NSString *const kLinkCellID = @"RFLinkCellID";
+
+// A row that opens something when tapped. It's the same cell as the switch rows, with the switch
+// swapped for a disclosure arrow, so the icons and text line up with them.
+static UITableViewCell *RFLinkCell(UITableView *tableView, NSString *title, NSString *subtitle, NSString *icons,
+                                   NSString *symbol) {
+  ToggleImageTableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:kLinkCellID];
+  RFMainLabel(cell).text = title;
+  RFDetailLabel(cell).text = subtitle;
+  RFSetIcon(cell, icons, symbol);
+  UISwitch *toggle = RFSwitch(cell);
+  toggle.hidden = YES;
+  if (cell.accessoryView == toggle) cell.accessoryView = nil;
   cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+  cell.selectionStyle = UITableViewCellSelectionStyleDefault;
+  objc_setAssociatedObject(cell, @selector(rfOwnedCell), @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  [cell setNeedsUpdateConstraints];
   return cell;
 }
 
 static UITableViewCell *RFAboutCell(UITableView *tableView, NSInteger index) {
-  if (index < 0 || index >= kAboutRowCount) return RFLinkCell(tableView, nil, nil, nil);
+  if (index < 0 || index >= kAboutRowCount) return RFLinkCell(tableView, nil, nil, nil, nil);
   const RFAboutRow *row = &kAboutRows[index];
-  UIImage *image = row->symbol ? RFBoxedImage([UIImage systemImageNamed:row->symbol], 7.0) : RFLogo();
-  return RFLinkCell(tableView, row->title, row->subtitle ?: RFVersionText(), image);
+  return RFLinkCell(tableView, row->title, row->subtitle ?: RFVersionText(), row->icons, row->symbol);
 }
 
 static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
@@ -198,8 +209,7 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
   NSString *subtitle = count == 0   ? @"Hide posts that mention a word or phrase"
                        : count == 1 ? @"1 keyword"
                                     : [NSString stringWithFormat:@"%lu keywords", (unsigned long)count];
-  return RFLinkCell(tableView, @"Keywords", subtitle,
-                    RFBoxedImage([UIImage systemImageNamed:@"text.magnifyingglass"], 7.0));
+  return RFLinkCell(tableView, @"Keywords", subtitle, @"rpl3/search", @"text.magnifyingglass");
 }
 
 #if REDDITFILTER_DEBUG
@@ -220,6 +230,7 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
   self.title = @"RedditFilter";
   Class toggleCellClass = CoreClass(@"ToggleImageTableViewCell") ?: UITableViewCell.class;
   [self.tableView registerClass:toggleCellClass forCellReuseIdentifier:kToggleCellID];
+  [self.tableView registerClass:toggleCellClass forCellReuseIdentifier:kLinkCellID];
 #if REDDITFILTER_DEBUG
   // Debug rows carry multi-line detail text, so let them self-size.
   self.tableView.estimatedRowHeight = 60.0;
@@ -244,7 +255,7 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
     case RFSectionFilters:
       return kToggleRowCount;
     case RFSectionKeywords:
-      return 1;
+      return 3; // Keywords, Filter comments too, Hide replies too
     case RFSectionDebug:
 #if REDDITFILTER_DEBUG
       // One row per tracked schema path, plus a trailing "reset" row.
@@ -260,23 +271,25 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
   RFSection section = RFSectionAt(indexPath.section);
   if (section == RFSectionAbout) return RFAboutCell(tableView, indexPath.row);
-  if (section == RFSectionKeywords) return RFKeywordsCell(tableView);
+  if (section == RFSectionKeywords && indexPath.row == 0) return RFKeywordsCell(tableView);
 #if REDDITFILTER_DEBUG
   if (section == RFSectionDebug) return [self debugCellForRow:indexPath.row inTableView:tableView];
 #endif
   ToggleImageTableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:kToggleCellID
                                                                    forIndexPath:indexPath];
-  if (indexPath.row >= kToggleRowCount) return cell;
-  const RFToggleRow *row = &kToggleRows[indexPath.row];
+  NSInteger tag = section == RFSectionKeywords ? kToggleRowCount + indexPath.row - 1 : indexPath.row;
+  const RFToggleRow *row = RFToggleRowForTag(tag);
+  if (!row) return cell;
 
   RFMainLabel(cell).text = row->title;
   RFDetailLabel(cell).text = row->subtitle;
-  RFSetIcon(cell, row->icons);
+  RFSetIcon(cell, row->icons, nil);
+  RFSetToggleCellEnabled(cell, row != kHideRepliesRow || RFFilteringComments());
 
   UISwitch *toggle = RFSwitch(cell);
   BOOL saved = [NSUserDefaults.standardUserDefaults boolForKey:row->key];
   toggle.on = row->switchOnMeansShow ? !saved : saved;
-  toggle.tag = indexPath.row;
+  toggle.tag = tag;
   // Only remove our own action (cells get reused), never Reddit's.
   [toggle removeTarget:self action:NULL forControlEvents:UIControlEventAllEvents];
   [toggle addTarget:self action:@selector(rfToggleChanged:) forControlEvents:UIControlEventValueChanged];
@@ -289,17 +302,23 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
 
 %new
 - (void)rfToggleChanged:(UISwitch *)sender {
-  if (sender.tag < 0 || sender.tag >= kToggleRowCount) return;
-  const RFToggleRow *row = &kToggleRows[sender.tag];
+  const RFToggleRow *row = RFToggleRowForTag(sender.tag);
+  if (!row) return;
   BOOL filterOn = row->switchOnMeansShow ? !sender.on : sender.on;
   [NSUserDefaults.standardUserDefaults setBool:filterOn forKey:row->key];
   RFReloadPreferences();
+
+  // "Hide replies too" only applies while comments are filtered.
+  if (row == &kKeywordRows[0]) {
+    UITableViewCell *replies = [self.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:2 inSection:1]];
+    if (replies) RFSetToggleCellEnabled((ToggleImageTableViewCell *)replies, filterOn);
+  }
 }
 
 %new
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
   [tableView deselectRowAtIndexPath:indexPath animated:YES];
-  if (RFSectionAt(indexPath.section) == RFSectionKeywords) {
+  if (RFSectionAt(indexPath.section) == RFSectionKeywords && indexPath.row == 0) {
     [self.navigationController pushViewController:[RFKeywordsViewController new] animated:YES];
     return;
   }

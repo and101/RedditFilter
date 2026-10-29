@@ -8,7 +8,7 @@ Filters unwanted content from the Reddit app: promoted posts, recommendations, N
 - **NSFW filter** now hides NSFW posts in the new feed cards and in community highlights.
 - **Recommended filter** no longer empties the For You feed, which is now mostly recommendations (your subscriptions are in Following). It still removes the "Related answers" section on post pages.
 - **Videos for you**: new option to hide the "Videos for you" carousel in your feed.
-- **Keywords**: new option to hide posts that mention a word or phrase. In RedditFilter settings, tap **Keywords** to add them (separate several with commas). Swipe a keyword to remove it, or use **Clear All Keywords**. Matching is whole-word and ignores capitals.
+- **Keywords**: new option to hide posts that mention a word or phrase. In RedditFilter settings, tap **Keywords** to add them (separate several with commas). Swipe a keyword to remove it, or use **Clear All Keywords**. Matching is whole-word and ignores capitals, and checks a post's full text, not just the preview in the feed. Turn on **Filter comments too** to also hide comments that mention a keyword. Their replies are hidden too unless you turn off **Hide replies too**, which leaves a placeholder in the comment's place and keeps the replies.
 - **RedditFilter settings** are back: Profile → Settings, button at the top right.
 - **Logging in** now works on sideloaded installs (see below).
 
