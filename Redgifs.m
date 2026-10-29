@@ -30,6 +30,7 @@ static NSCache *RFRedgifsCache(void) {
 }
 
 static NSString *gToken;
+static NSMutableArray *gTokenWaiters; // non-nil while a token is being fetched
 static NSObject *RFTokenLock(void) {
   static NSObject *lock;
   static dispatch_once_t once;
@@ -37,30 +38,42 @@ static NSObject *RFTokenLock(void) {
   return lock;
 }
 
-static void RFWithToken(BOOL fresh, void (^completion)(NSString *token)) {
+// Calls completion with a token, or nil if none could be had. Pass the token RedGIFs just turned down
+// to get a new one. Lookups that need a token at the same time share one request for it.
+static void RFWithToken(NSString *rejected, void (^completion)(NSString *token)) {
   NSString *token;
+  BOOL fetch = NO;
   @synchronized(RFTokenLock()) {
-    if (fresh) gToken = nil;
+    if (rejected && [gToken isEqualToString:rejected]) gToken = nil;
     token = gToken;
+    if (!token) {
+      fetch = !gTokenWaiters;
+      if (fetch) gTokenWaiters = [NSMutableArray array];
+      [gTokenWaiters addObject:[completion copy]];
+    }
   }
   if (token) return completion(token);
+  if (!fetch) return;
   NSURL *url = [NSURL URLWithString:[kRFRedgifsAPI stringByAppendingString:@"/auth/temporary"]];
   [[RFRedgifsSession() dataTaskWithURL:url
                      completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
                        NSDictionary *json = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL] : nil;
                        NSString *token = [json isKindOfClass:NSDictionary.class] ? json[@"token"] : nil;
-                       if (![token isKindOfClass:NSString.class] || !token.length) return completion(nil);
+                       if (![token isKindOfClass:NSString.class] || !token.length) token = nil;
+                       NSArray *waiters;
                        @synchronized(RFTokenLock()) {
-                         gToken = token;
+                         if (token) gToken = token;
+                         waiters = gTokenWaiters;
+                         gTokenWaiters = nil;
                        }
-                       completion(token);
+                       for (void (^waiter)(NSString *) in waiters) waiter(token);
                      }] resume];
 }
 
 // Calls completion with the video URL, NSNull if it has no sound, or nil if the lookup failed.
 // Retries once with a new token if the current one is rejected.
-static void RFLookUp(NSString *identifier, BOOL retried, void (^completion)(id result)) {
-  RFWithToken(retried, ^(NSString *token) {
+static void RFLookUp(NSString *identifier, NSString *rejected, void (^completion)(id result)) {
+  RFWithToken(rejected, ^(NSString *token) {
     if (!token) return completion(nil);
     NSString *path = [NSString stringWithFormat:@"%@/gifs/%@", kRFRedgifsAPI,
                                                 [identifier stringByAddingPercentEncodingWithAllowedCharacters:
@@ -72,7 +85,7 @@ static void RFLookUp(NSString *identifier, BOOL retried, void (^completion)(id r
                              NSInteger status = [response isKindOfClass:NSHTTPURLResponse.class]
                                                     ? ((NSHTTPURLResponse *)response).statusCode
                                                     : 0;
-                             if ((status == 401 || status == 403) && !retried) return RFLookUp(identifier, YES, completion);
+                             if ((status == 401 || status == 403) && !rejected) return RFLookUp(identifier, token, completion);
                              NSDictionary *json = status == 200 && data
                                                       ? [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL]
                                                       : nil;
@@ -111,7 +124,7 @@ void RFFetchRedgifsVideos(NSArray<NSString *> *ids, void (^completion)(NSDiction
       continue;
     }
     dispatch_group_enter(group);
-    RFLookUp(identifier, NO, ^(id result) {
+    RFLookUp(identifier, nil, ^(id result) {
       if (result) [RFRedgifsCache() setObject:result forKey:identifier]; // failures are tried again next time
       if ([result isKindOfClass:NSString.class]) {
         @synchronized(found) {
