@@ -30,12 +30,21 @@
   self.navigationItem.rightBarButtonItems = items;
 }
 
+// Opens RedditFilter in its own page sheet with a close button, over Settings.
 %new
 - (void)openRedditFilterFromNav {
   FeedFilterSettingsViewController *settings =
       [(FeedFilterSettingsViewController *)[objc_getClass("FeedFilterSettingsViewController") alloc]
           initWithStyle:UITableViewStyleGrouped];
-  [self.navigationController pushViewController:settings animated:YES];
+  UINavigationController *navigation = [[UINavigationController alloc] initWithRootViewController:settings];
+  __weak UINavigationController *weakNavigation = navigation;
+  settings.navigationItem.leftBarButtonItem =
+      [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemClose
+                                             primaryAction:[UIAction actionWithHandler:^(UIAction *action) {
+                                               [weakNavigation dismissViewControllerAnimated:YES completion:nil];
+                                             }]];
+  navigation.modalPresentationStyle = UIModalPresentationPageSheet;
+  [self presentViewController:navigation animated:YES completion:nil];
 }
 
 %end
