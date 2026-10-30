@@ -1,3 +1,4 @@
+#import <objc/message.h>
 #import <objc/runtime.h>
 #import "FeedFilterSettingsViewController.h"
 #import "KeywordsViewController.h"
@@ -103,8 +104,14 @@ static UIImage *RFIcon(NSString *iconNames, NSString *fallbackSymbol) {
 static void RFSetIcon(ImageLabelTableViewCell *cell, NSString *iconNames, NSString *fallbackSymbol) {
   UIImage *icon = RFIcon(iconNames, fallbackSymbol);
   if (!icon) return;
-  if ([cell respondsToSelector:@selector(setDisplayImage:)]) cell.displayImage = icon;
-  else if ([cell respondsToSelector:@selector(imageLabelView)]) cell.imageLabelView.imageView.image = icon;
+  if ([cell respondsToSelector:@selector(setDisplayImage:)]) {
+    // The icon's size is a separate setting that Reddit sets on its own rows. Unset, a reused row keeps
+    // whatever size it had, sometimes none, and the icon and its space disappear.
+    NSMethodSignature *signature = [cell methodSignatureForSelector:@selector(setImageSize:)];
+    if (signature.numberOfArguments == 3 && !strcmp([signature getArgumentTypeAtIndex:2], @encode(CGSize)))
+      ((void (*)(id, SEL, CGSize))objc_msgSend)(cell, @selector(setImageSize:), icon.size);
+    cell.displayImage = icon;
+  } else if ([cell respondsToSelector:@selector(imageLabelView)]) cell.imageLabelView.imageView.image = icon;
   else cell.imageView.image = icon;
 }
 
