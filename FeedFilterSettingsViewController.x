@@ -354,7 +354,7 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
   NSString *text = nil;
   switch (RFSectionAt(section)) {
     case RFSectionFilters:
-      text = @"Filter specific types of posts from your feed";
+      text = @"Filter posts and adjust how Reddit looks";
       break;
     case RFSectionKeywords:
       break;
