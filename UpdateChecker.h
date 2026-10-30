@@ -3,7 +3,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-// The newer RedditFilter version found by the last update check, or nil if this one is the latest.
+// The update found by the last check, as "1.3.2 for Reddit 2026.43.0", or nil if there is none.
 NSString *RFAvailableUpdate(void);
 // Its release page, or the releases page if there's no update.
 NSURL *RFUpdateURL(void);

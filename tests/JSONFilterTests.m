@@ -269,6 +269,21 @@ int main(void) {
           @"Order betas before their release");
     Check(!RFVersionIsNewer(@"1.3.2", @"dev") && !RFVersionIsNewer(nil, @"1.3.1") && !RFVersionIsNewer(@"x", @"1.3.1"),
           @"Never offer an update to or from something that isn't a version");
+    Check([RFRedditVersionFromTag(@"v2026.45.0-1.3.2") isEqual:@"2026.45.0"] && RFRedditVersionFromTag(@"v2026.43.0") == nil,
+          @"Read Reddit's version from a release tag");
+    Check(RFReleaseIsNewer(@"v2026.43.0-1.3.3", @"1.3.2", @"2026.43.0") &&
+              RFReleaseIsNewer(@"v2026.41.0-1.3.3", @"1.3.2", @"2026.43.0"),
+          @"A later RedditFilter is an update, whatever Reddit it's built for");
+    Check(RFReleaseIsNewer(@"v2026.45.0-1.3.2", @"1.3.2", @"2026.43.0"),
+          @"The same RedditFilter built for a later Reddit is an update");
+    Check(!RFReleaseIsNewer(@"v2026.43.0-1.3.2", @"1.3.2", @"2026.43.0") &&
+              !RFReleaseIsNewer(@"v2026.43.0-1.3.2", @"1.3.2", @"2026.45.0") &&
+              !RFReleaseIsNewer(@"v2026.45.0-1.3.1", @"1.3.2", @"2026.43.0"),
+          @"Same or older release, or an older RedditFilter for a later Reddit, isn't an update");
+    Check(RFReleaseIsNewer(@"v2026.43.0-1.3.2", @"1.3.2-beta5", @"2026.43.0") &&
+              !RFReleaseIsNewer(@"v2026.45.0-1.3.2", @"dev", @"2026.43.0") &&
+              !RFReleaseIsNewer(@"v2026.45.0-1.3.2", @"1.3.2", nil) && !RFReleaseIsNewer(@"v2026.45.0", @"1.3.2", @"2026.43.0"),
+          @"Betas update to their release; development builds, unknown Reddit versions and untagged releases don't");
 
     puts("All JSON filtering regression tests passed.");
   }

@@ -8,6 +8,14 @@ NSString *RFTweakVersionFromTag(NSString *tag) {
   return [version rangeOfCharacterFromSet:NSCharacterSet.decimalDigitCharacterSet].location == 0 ? version : nil;
 }
 
+NSString *RFRedditVersionFromTag(NSString *tag) {
+  if ([tag hasPrefix:@"v"]) tag = [tag substringFromIndex:1];
+  NSRange dash = [tag rangeOfString:@"-"];
+  if (dash.location == NSNotFound) return nil;
+  NSString *version = [tag substringToIndex:dash.location];
+  return [version rangeOfCharacterFromSet:NSCharacterSet.decimalDigitCharacterSet].location == 0 ? version : nil;
+}
+
 // "1.3.2-beta2" -> @[1, 3, 2] and "beta2". Nil if it doesn't start with a number.
 static NSArray<NSNumber *> *RFVersionParts(NSString *version, NSString **suffix) {
   NSRange dash = [version rangeOfString:@"-"];
@@ -35,4 +43,13 @@ BOOL RFVersionIsNewer(NSString *candidate, NSString *current) {
   // Same numbers: a release is later than its betas, and beta2 later than beta1.
   if (!candidateSuffix || !currentSuffix) return !candidateSuffix && currentSuffix;
   return [candidateSuffix compare:currentSuffix options:NSNumericSearch] == NSOrderedDescending;
+}
+
+BOOL RFReleaseIsNewer(NSString *tag, NSString *tweak, NSString *reddit) {
+  NSString *releaseTweak = RFTweakVersionFromTag(tag);
+  if (!releaseTweak || !RFVersionIsNewer(tweak, @"0")) return NO;
+  if (RFVersionIsNewer(releaseTweak, tweak)) return YES;
+  if (RFVersionIsNewer(tweak, releaseTweak)) return NO;
+  // Same RedditFilter: an update only if it's built for a later Reddit.
+  return RFVersionIsNewer(RFRedditVersionFromTag(tag), reddit);
 }
