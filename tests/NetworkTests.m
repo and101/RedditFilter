@@ -171,10 +171,15 @@ int main(void) {
     Check([Edges(json)[1][@"node"][@"cells"] count] == 1, @"Keep other posts");
     Check(timing.seconds < 1.5 && timing.calls == 1, @"Hand over a quickly checked page once, right away");
 
-    // Some users are moved onto Reddit's Cloudflare host by the ios_graphql_uri_v2 experiment
-    gHost = @"cf.gql-fed.reddit.com";
-    json = LoadHome(session, 0.5, &timing);
-    Check([Edges(json)[0][@"node"][@"cells"] count] == 0, @"Filter responses from cf.gql-fed.reddit.com too");
+    // Every API address the app can use, e.g. cf.gql-fed, which the ios_graphql_uri_v2 experiment
+    // moves some users onto. tests/check-ipa.sh passes the ones it finds in a new Reddit build.
+    NSString *hosts = NSProcessInfo.processInfo.environment[@"RF_API_HOSTS"];
+    if (!hosts.length) hosts = @"gql-fed.reddit.com,cf.gql-fed.reddit.com,gql-realtime.reddit.com,oauth.reddit.com";
+    for (NSString *host in [hosts componentsSeparatedByString:@","]) {
+      gHost = host;
+      json = LoadHome(session, 0.5, &timing);
+      Check([Edges(json)[0][@"node"][@"cells"] count] == 0, [NSString stringWithFormat:@"Filter responses from %@", host]);
+    }
     gHost = @"gql-fed.reddit.com";
 
     detailsDelay = 8;

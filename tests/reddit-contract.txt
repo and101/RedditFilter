@@ -1,0 +1,42 @@
+# What RedditFilter relies on inside the Reddit app. tests/check-ipa.sh fails if a [required] name
+# is missing from a new Reddit build. [legacy] names are only used by older builds and are just reported.
+
+[required]
+# GraphQL operations
+HomeFeedSdui
+SubredditFeedSdui
+FeedPostDetailsByIds
+PostInfoById
+PostInfoByIdComments
+PdpCommentsAds
+# Response fields and types
+homeV3
+postsInfoByIds
+postInfoById
+commentForest
+detailComponents
+highlightedPosts
+adPosts
+PdpAds
+adPayload
+AdPost
+CellGroup
+RelatedAnswersFeedUnit
+isScoreHidden
+isAwardHidden
+isInitiallyCollapsed
+recommendationContext
+# Saved full-post request (JSONFilter.m)
+d1229531c4120d3252591cc1e51ea3928cc068721f6c8b264a95183459f2fbd2
+# Classes
+ToggleImageTableViewCell
+LayoutGuidance
+# Browser login (Tweak.xm)
+/auth/v2/login/password
+/auth/v2/oauth/access-token/session
+
+[legacy]
+PopularFeedSdui
+popularV3
+commentsPageAds
+commentTreeAds
