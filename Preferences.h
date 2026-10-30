@@ -13,6 +13,7 @@
 #define kRedditFilterRedgifsDirect @"kRedditFilterRedgifsDirect"
 #define kRedditFilterColoredComments @"kRedditFilterColoredComments"
 #define kRedditFilterColoredCommentsApollo @"kRedditFilterColoredCommentsApollo"
+#define kRedditFilterCheckUpdates @"kRedditFilterCheckUpdates"
 
 #define kToggleCellID @"kToggleCellID"
 

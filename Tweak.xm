@@ -398,6 +398,7 @@ static BOOL RFIsAPIHost(NSString *host) {
     kRedditFilterRedgifsDirect : @NO,
     kRedditFilterColoredComments : @NO,
     kRedditFilterColoredCommentsApollo : @NO,
+    kRedditFilterCheckUpdates : @YES,
   }];
   RFReloadPreferences();
 

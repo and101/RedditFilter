@@ -3,6 +3,7 @@
 #import "FeedFilterSettingsViewController.h"
 #import "KeywordsViewController.h"
 #import "DebugMenu.h"
+#import "UpdateChecker.h"
 
 #ifndef RF_VERSION
 #define RF_VERSION "dev" // the Makefile passes the real version
@@ -46,8 +47,17 @@ static const RFToggleRow kKeywordRows[] = {
      @"rpl3/reply,icon_reply", NO, kRedditFilterKeywordComments},
 };
 
+// In the About section, between the RedditFilter and developer rows. Its switch tag follows kKeywordRows'.
+static const RFToggleRow kUpdateRow = {kRedditFilterCheckUpdates, @"Check for updates",
+                                       @"Tell me when a new RedditFilter is out", @"rpl3/download,rpl3/notifications",
+                                       NO};
+static const NSInteger kUpdateRowTag = kToggleRowCount + 2;
+// Its position: row 1 of the About section. The other About rows are kAboutRows.
+static const NSInteger kAboutUpdateRow = 1;
+
 static const RFToggleRow *RFToggleRowForTag(NSInteger tag) {
   if (tag >= 0 && tag < kToggleRowCount) return &kToggleRows[tag];
+  if (tag == kUpdateRowTag) return &kUpdateRow;
   NSInteger keywordRow = tag - kToggleRowCount;
   return keywordRow >= 0 && keywordRow < 2 ? &kKeywordRows[keywordRow] : NULL;
 }
@@ -165,6 +175,17 @@ static RFSection RFSectionAt(NSInteger section) {
   return RFSectionAbout;
 }
 
+// The switch tag of the row at this position, or -1 for rows without a switch.
+static NSInteger RFToggleTagAt(NSIndexPath *indexPath) {
+  switch (RFSectionAt(indexPath.section)) {
+    case RFSectionFilters: return indexPath.row;
+    case RFSectionKeywords: return indexPath.row > 0 ? kToggleRowCount + indexPath.row - 1 : -1;
+    case RFSectionAbout: return indexPath.row == kAboutUpdateRow ? kUpdateRowTag : -1;
+    case RFSectionDebug: return -1;
+  }
+  return -1;
+}
+
 #pragma mark - About section
 
 typedef struct {
@@ -182,8 +203,14 @@ static const RFAboutRow kAboutRows[] = {
 };
 static const NSInteger kAboutRowCount = sizeof(kAboutRows) / sizeof(kAboutRows[0]);
 
+static NSInteger RFAboutLinkIndex(NSInteger row) {
+  return row < kAboutUpdateRow ? row : row == kAboutUpdateRow ? -1 : row - 1;
+}
+
 static NSString *RFVersionText(void) {
-  return [@"Version " @RF_VERSION stringByAppendingString:REDDITFILTER_DEBUG ? @" (debug build)" : @""];
+  NSString *text = [@"Version " @RF_VERSION stringByAppendingString:REDDITFILTER_DEBUG ? @" (debug build)" : @""];
+  NSString *update = RFAvailableUpdate();
+  return update ? [text stringByAppendingFormat:@" \u00b7 Update available: %@", update] : text;
 }
 
 static NSString *const kLinkCellID = @"RFLinkCellID";
@@ -271,21 +298,21 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
 #endif
       return 0;
     case RFSectionAbout:
-      return kAboutRowCount;
+      return kAboutRowCount + 1; // plus "Check for updates"
   }
   return 0;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
   RFSection section = RFSectionAt(indexPath.section);
-  if (section == RFSectionAbout) return RFAboutCell(tableView, indexPath.row);
+  NSInteger tag = RFToggleTagAt(indexPath);
+  if (section == RFSectionAbout && tag < 0) return RFAboutCell(tableView, RFAboutLinkIndex(indexPath.row));
   if (section == RFSectionKeywords && indexPath.row == 0) return RFKeywordsCell(tableView);
 #if REDDITFILTER_DEBUG
   if (section == RFSectionDebug) return [self debugCellForRow:indexPath.row inTableView:tableView];
 #endif
   ToggleImageTableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:kToggleCellID
                                                                    forIndexPath:indexPath];
-  NSInteger tag = section == RFSectionKeywords ? kToggleRowCount + indexPath.row - 1 : indexPath.row;
   const RFToggleRow *row = RFToggleRowForTag(tag);
   if (!row) return cell;
 
@@ -318,10 +345,7 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
 
   // Rows that depend on this one, like "Hide replies too", become switchable or not.
   for (NSIndexPath *indexPath in self.tableView.indexPathsForVisibleRows) {
-    RFSection section = RFSectionAt(indexPath.section);
-    if (section != RFSectionFilters && (section != RFSectionKeywords || indexPath.row == 0)) continue;
-    const RFToggleRow *other =
-        RFToggleRowForTag(section == RFSectionKeywords ? kToggleRowCount + indexPath.row - 1 : indexPath.row);
+    const RFToggleRow *other = RFToggleRowForTag(RFToggleTagAt(indexPath));
     if (other && [other->requires isEqualToString:row->key])
       RFSetToggleCellEnabled((ToggleImageTableViewCell *)[self.tableView cellForRowAtIndexPath:indexPath], other);
   }
@@ -334,8 +358,10 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
     [self.navigationController pushViewController:[RFKeywordsViewController new] animated:YES];
     return;
   }
-  if (RFSectionAt(indexPath.section) != RFSectionAbout || indexPath.row >= kAboutRowCount) return;
-  NSURL *url = [NSURL URLWithString:kAboutRows[indexPath.row].link];
+  NSInteger link = RFAboutLinkIndex(indexPath.row);
+  if (RFSectionAt(indexPath.section) != RFSectionAbout || link < 0 || link >= kAboutRowCount) return;
+  // The RedditFilter row opens the new version's page when there's an update.
+  NSURL *url = link == 0 ? RFUpdateURL() : [NSURL URLWithString:kAboutRows[link].link];
   if (url) [UIApplication.sharedApplication openURL:url options:@{} completionHandler:nil];
 }
 

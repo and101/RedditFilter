@@ -1,6 +1,7 @@
 // Run on macOS: ./tests/run.sh
 #import <Foundation/Foundation.h>
 #import "JSONFilter.h"
+#import "RFVersion.h"
 
 static void Check(BOOL condition, NSString *message) {
   if (!condition) { NSLog(@"FAIL: %@", message); exit(1); }
@@ -254,6 +255,20 @@ int main(void) {
     Check([RFRedgifsIds(Data(cardFeed)) isEqual:@[@"jovialrewardingenglishsetter"]], @"Find RedGIFs videos in card view");
     NSDictionary *cardCell = [NSJSONSerialization JSONObjectWithData:RFRedgifsResponse(Data(cardFeed), @{@"jovialrewardingenglishsetter": sound}) options:0 error:NULL][@"data"][@"homeV3"][@"elements"][@"edges"][0][@"node"][@"cells"][1];
     Check([cardCell[@"media"][@"path"] isEqual:sound] && [cardCell[@"isGif"] isEqual:@YES], @"Play RedGIFs' own video in card view");
+
+    // Update check: versions from release tags
+    Check([RFTweakVersionFromTag(@"v2026.43.0-1.3.1") isEqual:@"1.3.1"], @"Read RedditFilter's version from a release tag");
+    Check([RFTweakVersionFromTag(@"v2026.43.0-1.3.2-beta2") isEqual:@"1.3.2-beta2"], @"Keep a beta suffix");
+    Check(RFTweakVersionFromTag(@"v2026.43.0") == nil && RFTweakVersionFromTag(@"1.2.7") == nil,
+          @"Ignore tags without RedditFilter's version");
+    Check(RFVersionIsNewer(@"1.3.2", @"1.3.1") && RFVersionIsNewer(@"1.4", @"1.3.9") && RFVersionIsNewer(@"1.10.0", @"1.9.0"),
+          @"Compare versions by number");
+    Check(!RFVersionIsNewer(@"1.3.1", @"1.3.1") && !RFVersionIsNewer(@"1.3.0", @"1.3.1"), @"Same or older isn't an update");
+    Check(RFVersionIsNewer(@"1.3.2", @"1.3.2-beta2") && RFVersionIsNewer(@"1.3.2-beta2", @"1.3.1") &&
+              RFVersionIsNewer(@"1.3.2-beta10", @"1.3.2-beta2") && !RFVersionIsNewer(@"1.3.2-beta2", @"1.3.2"),
+          @"Order betas before their release");
+    Check(!RFVersionIsNewer(@"1.3.2", @"dev") && !RFVersionIsNewer(nil, @"1.3.1") && !RFVersionIsNewer(@"x", @"1.3.1"),
+          @"Never offer an update to or from something that isn't a version");
 
     puts("All JSON filtering regression tests passed.");
   }
