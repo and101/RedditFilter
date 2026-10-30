@@ -2,6 +2,7 @@
 #import <ToggleImageTableViewCell.h>
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
+#import "DebugMenu.h"
 #import "JSONFilter.h"
 #import "Preferences.h"
 #import "Redgifs.h"
@@ -191,6 +192,9 @@ static BOOL RFIsAPIHost(NSString *host) {
         completionHandler(data, response, error);
       });
   }
+
+  // Debug builds: note GraphQL requests that would skip the filter, e.g. to a new Reddit address.
+  if (!RFIsAPIHost(host) || !completionHandler) RF_RECORD_UNFILTERED(request, completionHandler != nil);
 
   // One copy of the settings for this request, so a switch flipped halfway through doesn't mix them.
   RFPrefs prefs = globalPrefs;

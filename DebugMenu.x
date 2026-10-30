@@ -15,6 +15,10 @@ NSString *const kRFDebugDiscovered = @"discovered";
 NSString *const kRFDebugLastResolved = @"lastResolved";
 NSString *const kRFDebugSeen = @"seen";
 NSString *const kRFDebugFailedJSON = @"failedJSON";
+NSString *const kRFDebugUnfiltered = @"unfiltered";
+
+// The row that lists GraphQL requests the filter let through. Always first.
+static NSString *const kRFUnfilteredRow = @"Unfiltered requests";
 
 // Bounds for discovery so a broken path can never turn into an expensive walk
 // on every response.
@@ -26,6 +30,8 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
   dispatch_queue_t _queue;             // serializes all access to the stores
   NSMutableArray<NSString *> *_order;  // operation names, in display order
   NSMutableDictionary<NSString *, NSMutableDictionary *> *_records;
+  // Address (plus why, if not the address) -> { count, last operation }
+  NSMutableDictionary<NSString *, NSMutableDictionary *> *_unfiltered;
 }
 
 + (instancetype)shared {
@@ -43,6 +49,8 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
     _queue = dispatch_queue_create("com.level3tjg.redditfilter.schemadebug", DISPATCH_QUEUE_SERIAL);
     _order = [NSMutableArray array];
     _records = [NSMutableDictionary dictionary];
+    _unfiltered = [NSMutableDictionary dictionary];
+    [self seedOperation:kRFUnfilteredRow expected:@"no GraphQL requests to other Reddit addresses"];
 
     // Seed the known operations so the menu lists every path up front, even
     // before any matching traffic has been observed. Keep these in sync with
@@ -123,6 +131,22 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
   });
 }
 
+- (void)recordUnfilteredRequest:(NSURLRequest *)request hasHandler:(BOOL)hasHandler {
+  NSString *op = [request valueForHTTPHeaderField:@"X-APOLLO-OPERATION-NAME"];
+  NSString *host = request.URL.host.lowercaseString;
+  if (!op.length || !([host isEqualToString:@"reddit.com"] || [host hasSuffix:@".reddit.com"])) return;
+  NSString *key = hasHandler ? host : [host stringByAppendingString:@" (no completion handler)"];
+  dispatch_sync(_queue, ^{
+    NSMutableDictionary *entry = _unfiltered[key];
+    if (!entry) entry = _unfiltered[key] = [@{@"count" : @0} mutableCopy];
+    entry[@"count"] = @([entry[@"count"] integerValue] + 1);
+    entry[@"op"] = op;
+    NSMutableDictionary *record = _records[kRFUnfilteredRow];
+    record[kRFDebugSeen] = @YES;
+    record[kRFDebugMisses] = @([record[kRFDebugMisses] integerValue] + 1);
+  });
+}
+
 - (NSArray<NSDictionary *> *)snapshot {
   __block NSArray *result;
   dispatch_sync(_queue, ^{
@@ -130,7 +154,18 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
     for (NSString *op in _order) {
       // Deep-ish copy: the values are immutable, so a shallow copy is a safe
       // immutable snapshot for the UI to read on the main thread.
-      [out addObject:[_records[op] copy]];
+      NSMutableDictionary *record = [_records[op] mutableCopy];
+      if ([op isEqualToString:kRFUnfilteredRow]) {
+        NSArray *keys = [_unfiltered keysSortedByValueUsingComparator:^NSComparisonResult(id a, id b) {
+          return [b[@"count"] compare:a[@"count"]];
+        }];
+        NSMutableArray *lines = [NSMutableArray array];
+        for (NSString *key in keys)
+          [lines addObject:[NSString stringWithFormat:@"%@ \u00b7 %@ \u00b7 last %@", key, _unfiltered[key][@"count"],
+                                                      _unfiltered[key][@"op"]]];
+        record[kRFDebugUnfiltered] = lines;
+      }
+      [out addObject:[record copy]];
     }
     result = out;
   });
@@ -148,6 +183,7 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
       [record removeObjectForKey:kRFDebugDiscovered];
 	  [record removeObjectForKey:kRFDebugFailedJSON];
     }
+    [_unfiltered removeAllObjects];
   });
 }
 

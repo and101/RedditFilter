@@ -50,6 +50,8 @@ extern NSString *const kRFDebugDiscovered;    // NSString  auto-found path (or a
 extern NSString *const kRFDebugLastResolved;  // NSNumber  BOOL, last probe outcome
 extern NSString *const kRFDebugSeen;          // NSNumber  BOOL, any traffic observed
 extern NSString *const kRFDebugFailedJSON;    // NSString  captured JSON on failure
+extern NSString *const kRFDebugUnfiltered;    // NSArray   on the unfiltered-requests row only:
+                                              //           one line per address, most requests first
 
 @interface RFSchemaDebug : NSObject
 
@@ -69,6 +71,12 @@ extern NSString *const kRFDebugFailedJSON;    // NSString  captured JSON on fail
 // then any operations discovered at runtime). Thread-safe.
 - (NSArray<NSDictionary *> *)snapshot;
 
+// Called from the network hook for requests it passes through unfiltered. Records GraphQL
+// requests (they carry Apollo's operation header) to a Reddit address: either one RFIsAPIHost in
+// Tweak.xm doesn't accept, like cf.gql-fed.reddit.com before 1.3.1, or one with no completion
+// handler. Thread-safe.
+- (void)recordUnfilteredRequest:(NSURLRequest *)request hasHandler:(BOOL)hasHandler;
+
 // Zero all counters and clear discovered paths (re-arm the probes).
 - (void)reset;
 
@@ -86,8 +94,12 @@ extern NSString *const kRFDebugFailedJSON;    // NSString  captured JSON on fail
                                      json:(_json)                              \
                                 signature:(_sig)]
 
+#define RF_RECORD_UNFILTERED(_request, _hasHandler)                           \
+  [[RFSchemaDebug shared] recordUnfilteredRequest:(_request) hasHandler:(_hasHandler)]
+
 #else // !REDDITFILTER_DEBUG
 
 #define RF_RECORD_SCHEMA(_op, _expected, _resolved, _json, _sig) ((void)0)
+#define RF_RECORD_UNFILTERED(_request, _hasHandler) ((void)0)
 
 #endif // REDDITFILTER_DEBUG

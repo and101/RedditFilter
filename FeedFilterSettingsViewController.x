@@ -419,6 +419,22 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
   }
 
   NSDictionary *record = snapshot[row];
+  NSArray<NSString *> *unfiltered = record[kRFDebugUnfiltered];
+  if (unfiltered) {
+    cell.textLabel.textColor = [UIColor labelColor];
+    cell.textLabel.text = record[kRFDebugOp];
+    if (unfiltered.count == 0) {
+      cell.detailTextLabel.text = @"\u2713 none seen";
+      cell.detailTextLabel.textColor = [UIColor systemGreenColor];
+    } else {
+      NSInteger total = [record[kRFDebugMisses] integerValue];
+      cell.detailTextLabel.text = [NSString
+          stringWithFormat:@"\u2717 %ld GraphQL request%@ not filtered (add the address to RFIsAPIHost)\n%@", (long)total,
+                           total == 1 ? @"" : @"s", [unfiltered componentsJoinedByString:@"\n"]];
+      cell.detailTextLabel.textColor = [UIColor systemRedColor];
+    }
+    return cell;
+  }
   NSString *op = record[kRFDebugOp];
   NSString *expected = record[kRFDebugExpected];
   NSString *discovered = record[kRFDebugDiscovered];

@@ -4,6 +4,7 @@
 // feed page is handed to the app once, and never held back long by RedditFilter's extra requests.
 #import <Foundation/Foundation.h>
 #import <objc/runtime.h>
+#import "DebugMenu.h"
 #import "Preferences.h"
 
 // Browser login lives in LoginHelper.x, which isn't part of this test.
@@ -180,6 +181,21 @@ int main(void) {
       json = LoadHome(session, 0.5, &timing);
       Check([Edges(json)[0][@"node"][@"cells"] count] == 0, [NSString stringWithFormat:@"Filter responses from %@", host]);
     }
+
+    // The debug menu lists GraphQL requests that skip the filter, so a new address shows up there
+    NSArray *(^unfiltered)(void) = ^NSArray * {
+      for (NSDictionary *row in [[RFSchemaDebug shared] snapshot])
+        if (row[kRFDebugUnfiltered]) return row[kRFDebugUnfiltered];
+      return nil;
+    };
+    Check(unfiltered().count == 0, @"Don't list addresses the filter handles as unfiltered");
+    gHost = @"gql-new.example.reddit.com.evil.net";
+    LoadHome(session, 0.2, &timing);
+    gHost = @"api-v9.reddit.com";
+    json = LoadHome(session, 0.2, &timing);
+    Check([Edges(json)[0][@"node"][@"cells"] count] == 1, @"Pass requests to other addresses through");
+    Check(unfiltered().count == 1 && [unfiltered()[0] hasPrefix:@"api-v9.reddit.com \u00b7 1 \u00b7 last HomeFeedSdui"],
+          @"List a GraphQL request to an unknown Reddit address in the debug menu");
     gHost = @"gql-fed.reddit.com";
 
     detailsDelay = 8;
