@@ -2,6 +2,7 @@
 #import <ToggleImageTableViewCell.h>
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
+#import "ColoredComments.h"
 #import "DebugMenu.h"
 #import "JSONFilter.h"
 #import "Preferences.h"
@@ -29,6 +30,7 @@ extern "C" void RFReloadPreferences(void) {
   prefs.keywordCommentReplies = [defaults boolForKey:kRedditFilterKeywordCommentReplies];
   prefs.redgifsDirect = [defaults boolForKey:kRedditFilterRedgifsDirect];
   globalPrefs = prefs;
+  RFSetColoredComments([defaults boolForKey:kRedditFilterColoredComments]);
 }
 
 #pragma mark - Helpers shared with the settings screen
@@ -393,6 +395,7 @@ static BOOL RFIsAPIHost(NSString *host) {
     kRedditFilterKeywordComments : @NO,
     kRedditFilterKeywordCommentReplies : @YES,
     kRedditFilterRedgifsDirect : @NO,
+    kRedditFilterColoredComments : @NO,
   }];
   RFReloadPreferences();
 

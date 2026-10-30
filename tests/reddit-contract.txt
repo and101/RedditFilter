@@ -31,6 +31,9 @@ d1229531c4120d3252591cc1e51ea3928cc068721f6c8b264a95183459f2fbd2
 # Classes
 ToggleImageTableViewCell
 LayoutGuidance
+# Comment thread lines (ColoredComments.x)
+_TtC21PDP_CommentSheet_Impl15VerticalDivider
+_TtC63Components_CommentTreeItem_CommentTreeItemPresentation_Internal30CommentTreeItemVerticalDivider
 # Browser login (Tweak.xm)
 /auth/v2/login/password
 /auth/v2/oauth/access-token/session

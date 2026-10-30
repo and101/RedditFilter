@@ -10,6 +10,7 @@
 // Browser login lives in LoginHelper.x, which isn't part of this test.
 NSString *RFPendingWebSession(void) { return nil; }
 void RFClearPendingWebSession(void) {}
+void RFSetColoredComments(BOOL enabled) {}
 
 static void Check(BOOL condition, NSString *message) {
   if (!condition) { NSLog(@"FAIL: %@", message); exit(1); }

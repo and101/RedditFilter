@@ -27,6 +27,8 @@ static const RFToggleRow kToggleRows[] = {
      @"rpl3/award,icon_gift_fill,icon_award,icon-award-outline", YES},
     {kRedditFilterScores, @"Scores", @"Show vote count on posts and comments", @"rpl3/upvote,icon_upvote", YES},
     {kRedditFilterAutoCollapseAutoMod, @"AutoMod", @"Auto collapse AutoMod comments", @"rpl3/mod,icon_mod", NO},
+    {kRedditFilterColoredComments, @"Colored comment threads", @"Give each reply level its own color",
+     @"rpl3/branch,rpl3/comment,icon_comment", NO},
     {kRedditFilterRedgifsDirect, @"Direct-play RedGIFs", @"Plays with sound, but may use more data",
      @"rpl3/volumeOn,rpl3/play", NO},
 };
