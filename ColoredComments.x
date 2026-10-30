@@ -5,7 +5,7 @@
 // Reddit draws a reply's thread lines as a row of thin views at its left edge, one per level: a
 // direct reply has one, a reply to that has two, and so on. The first line in that row is always
 // depth 1, the second depth 2, so a line's position gives its color and each level keeps the same
-// color all the way down a thread.
+// color all the way down a thread. A highlighted comment's gold line keeps its color and isn't counted.
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import "ColoredComments.h"
@@ -40,23 +40,49 @@ static BOOL RFIsPlainLine(UIColor *color) {
   return MAX(r, MAX(g, b)) - MIN(r, MIN(g, b)) < 0.05;
 }
 
+// The comment row a line sits in.
+static UIView *RFCommentRow(UIView *line) {
+  for (UIView *view = line.superview; view; view = view.superview)
+    if ([view isKindOfClass:UICollectionViewCell.class] || [view isKindOfClass:UITableViewCell.class]) return view;
+  return nil;
+}
+
+// A line's depth, 0 for a direct reply. Taken from where it sits in its row: each level is indented by the
+// same step, the gap between neighbouring lines (16 points in 2026.43). Lines outside the levels, like the
+// gold line a highlighted comment gets at the row's edge, don't shift the others. Before the row is laid
+// out, counts the plain lines before it instead.
+static NSInteger RFLineDepth(UIView *line, NSArray<UIView *> *lines) {
+  NSInteger plainBefore = 0;
+  for (UIView *other in lines) {
+    if (other == line) break;
+    if (RFIsPlainLine(objc_getAssociatedObject(other, kRedditColorKey))) plainBefore++;
+  }
+  UIView *row = RFCommentRow(line);
+  if (!row || !line.window) return plainBefore;
+  CGFloat x = [line convertPoint:CGPointZero toView:row].x, step = 16;
+  for (NSUInteger i = 1; i < lines.count; i++) {
+    CGFloat gap = [lines[i] convertPoint:CGPointZero toView:row].x - [lines[i - 1] convertPoint:CGPointZero toView:row].x;
+    if (gap > 4) {
+      step = gap;
+      break;
+    }
+  }
+  NSInteger level = lround(x / step);
+  return level >= 1 ? level - 1 : plainBefore;
+}
+
 // The color a line should have: Reddit's own, or the one for its depth.
 static UIColor *RFLineColor(UIView *line, UIColor *redditColor) {
   if (!gEnabled || !RFIsPlainLine(redditColor) || !line.superview) return redditColor;
-  NSUInteger depth = 0, after = 0;
-  BOOL seen = NO;
-  for (UIView *sibling in line.superview.subviews) {
-    if (sibling == line) {
-      seen = YES;
-    } else if (sibling.class == line.class && RFIsPlainLine(objc_getAssociatedObject(sibling, kRedditColorKey))) {
-      if (seen) after++;
-      else depth++;
-    }
-  }
-  if (after > 0 && gApolloStyle) return redditColor; // a line of a comment above this one
+  NSMutableArray<UIView *> *lines = [NSMutableArray array];
+  for (UIView *sibling in line.superview.subviews)
+    if (sibling.class == line.class) [lines addObject:sibling];
+  // The comment's own line is the last; every other line, whatever its color, is a comment above it.
+  BOOL own = lines.lastObject == line;
+  if (!own && gApolloStyle) return redditColor;
   NSArray *colors = RFThreadColors();
-  UIColor *color = colors[depth % colors.count];
-  return after > 0 ? [color colorWithAlphaComponent:0.35] : color;
+  UIColor *color = colors[RFLineDepth(line, lines) % colors.count];
+  return own ? color : [color colorWithAlphaComponent:0.35];
 }
 
 // Reapplies Reddit's last color through the setter below, which swaps in the depth color.

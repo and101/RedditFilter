@@ -12,11 +12,13 @@
 
 static NSString *const kLatestReleaseURL = @"https://api.github.com/repos/and101/RedditFilter/releases/latest";
 static NSString *const kReleasesPage = @"https://github.com/and101/RedditFilter/releases";
-static NSString *const kLastCheckKey = @"kRedditFilterUpdateLastCheck";   // NSDate
+static NSString *const kLastCheckKey = @"kRedditFilterUpdateLastCheck";   // NSDate of the last successful check
+static NSString *const kLastTryKey = @"kRedditFilterUpdateLastTry";       // NSDate of the last attempt
 static NSString *const kLatestKey = @"kRedditFilterUpdateLatest";         // version string
 static NSString *const kLatestPageKey = @"kRedditFilterUpdateLatestPage"; // release page URL string
 static NSString *const kAlertedKey = @"kRedditFilterUpdateAlerted";       // version last alerted about
 static const NSTimeInterval kCheckInterval = 24 * 60 * 60;
+static const NSTimeInterval kRetryInterval = 60 * 60; // after a failed check, e.g. offline
 static const NSTimeInterval kDelayAfterLaunch = 4;
 
 NSString *RFAvailableUpdate(void) {
@@ -42,10 +44,23 @@ static UIViewController *RFTopViewController(void) {
   return top;
 }
 
-static void RFShowUpdateAlert(NSString *version) {
+static BOOL RFChecksEnabled(void) {
+  return [NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterCheckUpdates];
+}
+
+// Waits while a screen is opening or closing, then gives up until the app next opens. The version only
+// counts as alerted once the alert is on screen.
+static void RFShowUpdateAlert(NSString *version, NSInteger attemptsLeft) {
   UIViewController *top = RFTopViewController();
-  if (!top || [top isKindOfClass:UIAlertController.class]) return; // try again next time the app opens
-  [NSUserDefaults.standardUserDefaults setObject:version forKey:kAlertedKey];
+  BOOL busy = !top || top.isBeingPresented || top.isBeingDismissed || top.transitionCoordinator ||
+              [top isKindOfClass:UIAlertController.class];
+  if (busy) {
+    if (attemptsLeft > 0)
+      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        if (RFChecksEnabled()) RFShowUpdateAlert(version, attemptsLeft - 1);
+      });
+    return;
+  }
   UIAlertController *alert = [UIAlertController
       alertControllerWithTitle:[NSString stringWithFormat:@"RedditFilter %@ is available", version]
                        message:[NSString stringWithFormat:@"You have %s. Download the new IPA from GitHub and "
@@ -61,25 +76,36 @@ static void RFShowUpdateAlert(NSString *version) {
                                                                              options:@{}
                                                                    completionHandler:nil];
                                           }]];
-  [top presentViewController:alert animated:YES completion:nil];
+  [top presentViewController:alert
+                    animated:YES
+                  completion:^{
+                    if (alert.presentingViewController)
+                      [NSUserDefaults.standardUserDefaults setObject:version forKey:kAlertedKey];
+                  }];
 }
 
 // Alerts once per version, including one found by an earlier check that couldn't show it.
+// Checks the setting again too: it may have been turned off while a check was running.
 static void RFAlertIfNeeded(void) {
   NSString *update = RFAvailableUpdate();
-  if (update && ![update isEqualToString:[NSUserDefaults.standardUserDefaults stringForKey:kAlertedKey]])
-    RFShowUpdateAlert(update);
+  if (RFChecksEnabled() && update &&
+      ![update isEqualToString:[NSUserDefaults.standardUserDefaults stringForKey:kAlertedKey]])
+    RFShowUpdateAlert(update, 5);
+}
+
+static BOOL RFRecently(NSString *key, NSTimeInterval interval) {
+  NSDate *date = [NSUserDefaults.standardUserDefaults objectForKey:key];
+  return [date isKindOfClass:NSDate.class] && -date.timeIntervalSinceNow < interval;
 }
 
 static void RFCheckForUpdate(void) {
   NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
-  if (![defaults boolForKey:kRedditFilterCheckUpdates] || !RFVersionIsNewer(@RF_VERSION, @"0")) return;
-  NSDate *lastCheck = [defaults objectForKey:kLastCheckKey];
-  if ([lastCheck isKindOfClass:NSDate.class] && -lastCheck.timeIntervalSinceNow < kCheckInterval) {
+  if (!RFChecksEnabled() || !RFVersionIsNewer(@RF_VERSION, @"0")) return;
+  if (RFRecently(kLastCheckKey, kCheckInterval) || RFRecently(kLastTryKey, kRetryInterval)) {
     RFAlertIfNeeded();
     return;
   }
-  [defaults setObject:[NSDate date] forKey:kLastCheckKey];
+  [defaults setObject:[NSDate date] forKey:kLastTryKey];
 
   NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:kLatestReleaseURL]];
   request.timeoutInterval = 15;
@@ -93,6 +119,7 @@ static void RFCheckForUpdate(void) {
                 NSString *page = [release isKindOfClass:NSDictionary.class] ? release[@"html_url"] : nil;
                 dispatch_async(dispatch_get_main_queue(), ^{
                   if (version) {
+                    [defaults setObject:[NSDate date] forKey:kLastCheckKey];
                     [defaults setObject:version forKey:kLatestKey];
                     if ([page isKindOfClass:NSString.class] && [page hasPrefix:@"https://github.com/"])
                       [defaults setObject:page forKey:kLatestPageKey];
