@@ -62,33 +62,126 @@ static const RFToggleRow *RFToggleRowForTag(NSInteger tag) {
   return keywordRow >= 0 && keywordRow < 2 ? &kKeywordRows[keywordRow] : NULL;
 }
 
-// Greys out a row whose `requires` setting is off, like "Hide replies too" while comments aren't filtered.
-static void RFSetToggleCellEnabled(ToggleImageTableViewCell *cell, const RFToggleRow *row) {
+// Use our own layout: Reddit's legacy toggle cells no longer match its SwiftUI Settings.
+// Modern Settings uses RPL tokens; the old body/meta colours belong to Reddit's legacy UI.
+// Resolve through each view's RUI so light/dark and Reddit's selected theme stay in sync.
+static id RFObjectProperty(id object, NSString *name) {
+  SEL selector = NSSelectorFromString(name);
+  NSMethodSignature *signature = [object methodSignatureForSelector:selector];
+  if (signature.numberOfArguments != 2 || signature.methodReturnType[0] != '@') return nil;
+  return ((id (*)(id, SEL))objc_msgSend)(object, selector);
+}
+
+static UIColor *RFPaletteColor(UIView *view, NSString *token) {
+  id object = view;
+  for (NSString *key in @[@"rui", @"color", @"rpl", @"neutral", token]) {
+    object = RFObjectProperty(object, key);
+    if (!object) return nil;
+  }
+  return [object isKindOfClass:UIColor.class] ? object : nil;
+}
+
+static void RFApplyTheme(UIView *view, SEL setter, SEL themeGetter) {
+  NSString *token = themeGetter == @selector(bodyTextColor) ? @"contentStrong"
+                   : themeGetter == @selector(metaTextColor) ? @"contentWeak" : @"background";
+  UIColor *fallback = RFPaletteColor(view, token);
+  if (!fallback) {
+    if ([view respondsToSelector:@selector(associatePropertySetter:withThemePropertyGetter:)])
+      [view associatePropertySetter:setter withThemePropertyGetter:themeGetter];
+    return;
+  }
+  __weak UIView *weakView = view;
+  UIColor *color = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
+    NSString *resolvedToken = setter == @selector(setOnTintColor:) && traits.userInterfaceStyle == UIUserInterfaceStyleDark
+                                ? @"contentWeak" : token;
+    return [(RFPaletteColor(weakView, resolvedToken) ?: fallback) resolvedColorWithTraitCollection:traits];
+  }];
+  ((void (*)(id, SEL, id))objc_msgSend)(view, setter, color);
+}
+
+@interface RFSettingsCell : UITableViewCell
+@property(nonatomic, strong) UILabel *mainLabel;
+@property(nonatomic, strong) UILabel *detailLabel;
+@property(nonatomic, strong) UIImageView *rowIcon;
+@property(nonatomic, strong) UISwitch *accessorySwitch;
+@property(nonatomic, strong) UIImageView *disclosure;
+- (void)showDisclosure:(BOOL)show;
+@end
+
+@implementation RFSettingsCell
+- (instancetype)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)identifier {
+  self = [super initWithStyle:style reuseIdentifier:identifier];
+  if (!self) return nil;
+  self.backgroundColor = UIColor.systemBackgroundColor;
+  RFApplyTheme(self, @selector(setBackgroundColor:), @selector(bodyColor));
+  _mainLabel = [UILabel new];
+  _mainLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+  _mainLabel.adjustsFontForContentSizeCategory = YES;
+  _mainLabel.numberOfLines = 0;
+  _mainLabel.textColor = UIColor.labelColor;
+  RFApplyTheme(_mainLabel, @selector(setTextColor:), @selector(bodyTextColor));
+  _detailLabel = [UILabel new];
+  _detailLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
+  _detailLabel.adjustsFontForContentSizeCategory = YES;
+  _detailLabel.numberOfLines = 0;
+  _detailLabel.textColor = UIColor.secondaryLabelColor;
+  RFApplyTheme(_detailLabel, @selector(setTextColor:), @selector(metaTextColor));
+  _rowIcon = [UIImageView new];
+  _rowIcon.contentMode = UIViewContentModeCenter;
+  _rowIcon.tintColor = UIColor.labelColor;
+  RFApplyTheme(_rowIcon, @selector(setTintColor:), @selector(bodyTextColor));
+  _accessorySwitch = [UISwitch new];
+  RFApplyTheme(_accessorySwitch, @selector(setOnTintColor:), @selector(bodyTextColor));
+  _disclosure = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"chevron.right"
+      withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:13 weight:UIImageSymbolWeightSemibold]]];
+  _disclosure.contentMode = UIViewContentModeCenter;
+  _disclosure.tintColor = UIColor.secondaryLabelColor;
+  RFApplyTheme(_disclosure, @selector(setTintColor:), @selector(metaTextColor));
+  _disclosure.hidden = YES;
+  UIStackView *labels = [[UIStackView alloc] initWithArrangedSubviews:@[_mainLabel, _detailLabel]];
+  labels.axis = UILayoutConstraintAxisVertical;
+  labels.spacing = 0;
+  for (UIView *view in @[_rowIcon, labels, _accessorySwitch, _disclosure]) {
+    view.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.contentView addSubview:view];
+  }
+  // Native Settings: 20pt edge inset, 24pt icon, text at 56pt, 63pt two-line rows.
+  [NSLayoutConstraint activateConstraints:@[
+    [_rowIcon.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:20],
+    [_rowIcon.widthAnchor constraintEqualToConstant:24],
+    [_rowIcon.heightAnchor constraintEqualToConstant:24],
+    [_rowIcon.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
+    [labels.leadingAnchor constraintEqualToAnchor:_rowIcon.trailingAnchor constant:12],
+    [labels.trailingAnchor constraintEqualToAnchor:_accessorySwitch.leadingAnchor constant:-12],
+    [labels.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
+    [labels.topAnchor constraintGreaterThanOrEqualToAnchor:self.contentView.topAnchor constant:10],
+    [labels.bottomAnchor constraintLessThanOrEqualToAnchor:self.contentView.bottomAnchor constant:-10],
+    [self.contentView.heightAnchor constraintGreaterThanOrEqualToConstant:63],
+    [_accessorySwitch.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-16],
+    [_accessorySwitch.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
+    [_disclosure.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-20],
+    [_disclosure.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
+  ]];
+  [_accessorySwitch setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
+  [_accessorySwitch setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
+  self.selectionStyle = UITableViewCellSelectionStyleNone;
+  return self;
+}
+- (void)showDisclosure:(BOOL)show {
+  self.accessorySwitch.hidden = show;
+  self.disclosure.hidden = !show;
+  self.selectionStyle = show ? UITableViewCellSelectionStyleDefault : UITableViewCellSelectionStyleNone;
+}
+@end
+
+static UILabel *RFMainLabel(RFSettingsCell *cell) { return cell.mainLabel; }
+static UILabel *RFDetailLabel(RFSettingsCell *cell) { return cell.detailLabel; }
+static UISwitch *RFSwitch(RFSettingsCell *cell) { return cell.accessorySwitch; }
+
+static void RFSetToggleCellEnabled(RFSettingsCell *cell, const RFToggleRow *row) {
   BOOL enabled = !row->requires || [NSUserDefaults.standardUserDefaults boolForKey:row->requires];
   cell.contentView.alpha = enabled ? 1.0 : 0.4;
   cell.userInteractionEnabled = enabled;
-}
-
-#pragma mark - Cell helpers (fall back to plain UIKit if Reddit renames its classes)
-
-static UILabel *RFMainLabel(ImageLabelTableViewCell *cell) {
-  if ([cell respondsToSelector:@selector(mainLabel)]) return cell.mainLabel;
-  if ([cell respondsToSelector:@selector(imageLabelView)]) return cell.imageLabelView.mainLabel;
-  return cell.textLabel;
-}
-
-static UILabel *RFDetailLabel(ImageLabelTableViewCell *cell) {
-  if ([cell respondsToSelector:@selector(detailLabel)]) return cell.detailLabel;
-  if ([cell respondsToSelector:@selector(imageLabelView)]) return cell.imageLabelView.detailLabel;
-  return cell.detailTextLabel;
-}
-
-static UISwitch *RFSwitch(ToggleImageTableViewCell *cell) {
-  if ([cell respondsToSelector:@selector(accessorySwitch)]) return cell.accessorySwitch;
-  if ([cell.accessoryView isKindOfClass:UISwitch.class]) return (UISwitch *)cell.accessoryView;
-  UISwitch *toggle = [UISwitch new];
-  cell.accessoryView = toggle;
-  return toggle;
 }
 
 // The first of Reddit's icons that's found, else the SF Symbol, drawn in a 20pt square and tinted
@@ -111,53 +204,43 @@ static UIImage *RFIcon(NSString *iconNames, NSString *fallbackSymbol) {
   return [boxed imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
 }
 
-static void RFSetIcon(ImageLabelTableViewCell *cell, NSString *iconNames, NSString *fallbackSymbol) {
-  UIImage *icon = RFIcon(iconNames, fallbackSymbol);
-  if (!icon) return;
-  if ([cell respondsToSelector:@selector(setDisplayImage:)]) {
-    // The icon's size is a separate setting that Reddit sets on its own rows. Unset, a reused row keeps
-    // whatever size it had, sometimes none, and the icon and its space disappear.
-    NSMethodSignature *signature = [cell methodSignatureForSelector:@selector(setImageSize:)];
-    if (signature.numberOfArguments == 3 && !strcmp([signature getArgumentTypeAtIndex:2], @encode(CGSize)))
-      ((void (*)(id, SEL, CGSize))objc_msgSend)(cell, @selector(setImageSize:), icon.size);
-    cell.displayImage = icon;
-  } else if ([cell respondsToSelector:@selector(imageLabelView)]) cell.imageLabelView.imageView.image = icon;
-  else cell.imageView.image = icon;
+static void RFSetIcon(RFSettingsCell *cell, NSString *iconNames, NSString *fallbackSymbol) {
+  cell.rowIcon.image = RFIcon(iconNames, fallbackSymbol);
 }
 
-static void RFApplyTheme(UIView *view, SEL setter, SEL themeGetter) {
-  if ([view respondsToSelector:@selector(associatePropertySetter:withThemePropertyGetter:)])
-    [view associatePropertySetter:setter withThemePropertyGetter:themeGetter];
+static UIFont *RFSectionFont(BOOL header) {
+  return header ? [UIFontMetrics.defaultMetrics scaledFontForFont:[UIFont systemFontOfSize:12 weight:UIFontWeightSemibold]]
+                : [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
+}
+
+// At least `minimum`, and tall enough for the text at the current text size.
+static CGFloat RFSectionHeight(UITableView *tableView, NSString *text, BOOL header, CGFloat minimum) {
+  if (!text.length) return minimum;
+  CGFloat width = MAX(tableView.bounds.size.width - 40.0, 100.0);
+  CGRect bounds = [text boundingRectWithSize:CGSizeMake(width, CGFLOAT_MAX)
+                                     options:NSStringDrawingUsesLineFragmentOrigin
+                                  attributes:@{NSFontAttributeName : RFSectionFont(header)}
+                                     context:nil];
+  return MAX(minimum, ceil(bounds.size.height) + (header ? 10.0 : 20.0));
 }
 
 // Section header/footer: a themed label inset like Reddit's own settings.
-static UIView *RFSectionView(UITableView *tableView, NSString *text, CGFloat height) {
+static UIView *RFSectionView(UITableView *tableView, NSString *text, CGFloat height, BOOL header) {
   if (!text) return nil;
 
-  // Reddit's spacing class is a Swift class, so it needs CoreClass to be found.
-  Class guidanceClass = CoreClass(@"LayoutGuidance");
-  LayoutGuidance *guidance =
-      [guidanceClass respondsToSelector:@selector(currentGuidance)] ? [guidanceClass currentGuidance] : nil;
-  CGFloat padding = guidance.gridPadding > 0 ? guidance.gridPadding : 16.0;
+  CGFloat padding = 20.0;
   CGFloat width = tableView.bounds.size.width;
-
-  Class labelClass = %c(BaseLabel);
-  UILabel *label = [labelClass respondsToSelector:@selector(labelWithSubheaderFont)]
-                       ? [labelClass labelWithSubheaderFont]
-                       : [UILabel new];
+  UILabel *label = [UILabel new];
+  label.font = RFSectionFont(header);
+  label.adjustsFontForContentSizeCategory = YES;
   label.frame = CGRectMake(padding, 0, MAX(width - padding * 2, 0), height);
-  label.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+  label.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
   label.numberOfLines = 0;
   label.text = text;
+  label.textColor = UIColor.secondaryLabelColor;
   RFApplyTheme(label, @selector(setTextColor:), @selector(metaTextColor));
-
-  Class containerClass = %c(BaseTableReusableView);
-  UIView *container = [[(containerClass ?: UIView.class) alloc] initWithFrame:CGRectMake(0, 0, width, height)];
-  UIView *content = [container respondsToSelector:@selector(contentView)]
-                        ? ((BaseTableReusableView *)container).contentView
-                        : container;
-  [content addSubview:label];
-  RFApplyTheme(container, @selector(setBackgroundColor:), @selector(canvasColor));
+  UIView *container = [[UIView alloc] initWithFrame:CGRectMake(0, 0, width, height)];
+  [container addSubview:label];
   return container;
 }
 
@@ -173,6 +256,28 @@ static RFSection RFSectionAt(NSInteger section) {
   if (section == 1) return RFSectionKeywords;
   if (REDDITFILTER_DEBUG && section == 2) return RFSectionDebug;
   return RFSectionAbout;
+}
+
+static NSString *RFHeaderText(NSInteger section) {
+  switch (RFSectionAt(section)) {
+    case RFSectionFilters: return @"TWEAKS";
+    case RFSectionKeywords: return @"KEYWORDS";
+    case RFSectionDebug: return @"SCHEMA PATHS · DEBUG";
+    case RFSectionAbout: return @"ABOUT";
+  }
+  return nil;
+}
+
+static NSString *RFFooterText(NSInteger section) {
+  switch (RFSectionAt(section)) {
+    case RFSectionFilters: return @"Filter posts and adjust how Reddit looks";
+    case RFSectionKeywords: return nil;
+    case RFSectionDebug:
+      return @"✓ resolved · ✗ broke (structural fallback is now filtering). "
+             @"Tap Copy on a ✗ row to grab the auto-discovered replacement path.";
+    case RFSectionAbout: return @"Based on original work from level3tjg and NicholasBly";
+  }
+  return nil;
 }
 
 // The switch tag of the row at this position, or -1 for rows without a switch.
@@ -219,17 +324,12 @@ static NSString *const kLinkCellID = @"RFLinkCellID";
 // swapped for a disclosure arrow, so the icons and text line up with them.
 static UITableViewCell *RFLinkCell(UITableView *tableView, NSString *title, NSString *subtitle, NSString *icons,
                                    NSString *symbol) {
-  ToggleImageTableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:kLinkCellID];
+  RFSettingsCell *cell = [tableView dequeueReusableCellWithIdentifier:kLinkCellID];
+  cell.accessibilityLabel = title;
   RFMainLabel(cell).text = title;
   RFDetailLabel(cell).text = subtitle;
   RFSetIcon(cell, icons, symbol);
-  UISwitch *toggle = RFSwitch(cell);
-  toggle.hidden = YES;
-  if (cell.accessoryView == toggle) cell.accessoryView = nil;
-  cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-  cell.selectionStyle = UITableViewCellSelectionStyleDefault;
-  objc_setAssociatedObject(cell, @selector(rfOwnedCell), @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-  [cell setNeedsUpdateConstraints];
+  [cell showDisclosure:YES];
   return cell;
 }
 
@@ -263,14 +363,37 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
 - (void)viewDidLoad {
   %orig;
   self.title = @"RedditFilter";
-  Class toggleCellClass = CoreClass(@"ToggleImageTableViewCell") ?: UITableViewCell.class;
+  Class toggleCellClass = RFSettingsCell.class;
   [self.tableView registerClass:toggleCellClass forCellReuseIdentifier:kToggleCellID];
   [self.tableView registerClass:toggleCellClass forCellReuseIdentifier:kLinkCellID];
-#if REDDITFILTER_DEBUG
-  // Debug rows carry multi-line detail text, so let them self-size.
-  self.tableView.estimatedRowHeight = 60.0;
+  self.tableView.estimatedRowHeight = 63.0;
   self.tableView.rowHeight = UITableViewAutomaticDimension;
-#endif
+  self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
+  self.tableView.sectionHeaderTopPadding = 0;
+  // Header and footer heights follow the text size, so recalculate them when it changes.
+  if (@available(iOS 17.0, *))
+    [self registerForTraitChanges:@[ UITraitPreferredContentSizeCategory.class ]
+                      withHandler:^(UIViewController *controller, UITraitCollection *previous) {
+                        [((UITableViewController *)controller).tableView reloadData];
+                      }];
+  self.tableView.backgroundColor = UIColor.systemBackgroundColor;
+  RFApplyTheme(self.tableView, @selector(setBackgroundColor:), @selector(bodyColor));
+  // Grouped tables otherwise add a separate empty area above the first header.
+  self.tableView.tableHeaderView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 0, 0.01)];
+}
+
+- (void)viewDidLayoutSubviews {
+  %orig;
+  // BaseTableViewController adds legacy top spacing. Match the current Settings header inset.
+  UINavigationBar *bar = self.navigationController.navigationBar;
+  if (!bar || bar.hidden) return;
+  CGFloat top = CGRectGetMaxY([bar convertRect:bar.bounds toView:self.view]) + 20.0;
+  UIEdgeInsets inset = self.tableView.contentInset;
+  if (fabs(inset.top - top) < 0.5) return;
+  BOOL atTop = self.tableView.contentOffset.y <= -self.tableView.adjustedContentInset.top + 0.5;
+  inset.top = top;
+  self.tableView.contentInset = inset;
+  if (atTop) self.tableView.contentOffset = CGPointMake(0, -self.tableView.adjustedContentInset.top);
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -311,11 +434,12 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
 #if REDDITFILTER_DEBUG
   if (section == RFSectionDebug) return [self debugCellForRow:indexPath.row inTableView:tableView];
 #endif
-  ToggleImageTableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:kToggleCellID
+  RFSettingsCell *cell = [tableView dequeueReusableCellWithIdentifier:kToggleCellID
                                                                    forIndexPath:indexPath];
   const RFToggleRow *row = RFToggleRowForTag(tag);
   if (!row) return cell;
 
+  cell.accessibilityLabel = row->title;
   RFMainLabel(cell).text = row->title;
   RFDetailLabel(cell).text = row->subtitle;
   RFSetIcon(cell, row->icons, nil);
@@ -325,13 +449,12 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
   BOOL saved = [NSUserDefaults.standardUserDefaults boolForKey:row->key];
   toggle.on = row->switchOnMeansShow ? !saved : saved;
   toggle.tag = tag;
+  toggle.accessibilityLabel = row->title;
+  toggle.accessibilityHint = row->subtitle;
   // Only remove our own action (cells get reused), never Reddit's.
   [toggle removeTarget:self action:NULL forControlEvents:UIControlEventAllEvents];
   [toggle addTarget:self action:@selector(rfToggleChanged:) forControlEvents:UIControlEventValueChanged];
 
-  // Tag the cell so the layout fix in Tweak.xm applies to our rows only.
-  objc_setAssociatedObject(cell, @selector(rfOwnedCell), @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-  [cell setNeedsUpdateConstraints];
   return cell;
 }
 
@@ -347,7 +470,7 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
   for (NSIndexPath *indexPath in self.tableView.indexPathsForVisibleRows) {
     const RFToggleRow *other = RFToggleRowForTag(RFToggleTagAt(indexPath));
     if (other && [other->requires isEqualToString:row->key])
-      RFSetToggleCellEnabled((ToggleImageTableViewCell *)[self.tableView cellForRowAtIndexPath:indexPath], other);
+      RFSetToggleCellEnabled((RFSettingsCell *)[self.tableView cellForRowAtIndexPath:indexPath], other);
   }
 }
 
@@ -367,44 +490,22 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
 
 %new
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
-  NSString *text = nil;
-  switch (RFSectionAt(section)) {
-    case RFSectionFilters: text = @"TWEAKS"; break;
-    case RFSectionKeywords: text = @"KEYWORDS"; break;
-    case RFSectionDebug: text = @"SCHEMA PATHS · DEBUG"; break;
-    case RFSectionAbout: text = @"ABOUT"; break;
-  }
-  return RFSectionView(tableView, text, 40.0);
+  return RFSectionView(tableView, RFHeaderText(section), [self tableView:tableView heightForHeaderInSection:section], YES);
 }
 
 %new
 - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
-  return 40.0;
+  return RFSectionHeight(tableView, RFHeaderText(section), YES, 26.0);
 }
 
 %new
 - (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
-  NSString *text = nil;
-  switch (RFSectionAt(section)) {
-    case RFSectionFilters:
-      text = @"Filter posts and adjust how Reddit looks";
-      break;
-    case RFSectionKeywords:
-      break;
-    case RFSectionDebug:
-      text = @"✓ resolved · ✗ broke (structural fallback is now filtering). "
-             @"Tap Copy on a ✗ row to grab the auto-discovered replacement path.";
-      break;
-    case RFSectionAbout:
-      text = @"Based on original work from level3tjg and NicholasBly";
-      break;
-  }
-  return RFSectionView(tableView, text, [self tableView:tableView heightForFooterInSection:section]);
+  return RFSectionView(tableView, RFFooterText(section), [self tableView:tableView heightForFooterInSection:section], NO);
 }
 
 %new
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
-  return RFSectionAt(section) == RFSectionDebug ? 76.0 : 40.0;
+  return RFSectionHeight(tableView, RFFooterText(section), NO, RFSectionAt(section) == RFSectionDebug ? 76.0 : 48.0);
 }
 
 // ---------------------------------------------------------------------------

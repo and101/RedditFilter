@@ -1,5 +1,4 @@
 #import <Comment.h>
-#import <ToggleImageTableViewCell.h>
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import "ColoredComments.h"
@@ -350,37 +349,6 @@ static BOOL RFIsAPIHost(NSString *host) {
 }
 %end
 
-// Lays out the subtitle on RedditFilter's own toggle rows. Reddit's toggle
-// cells elsewhere in the app are left alone (they aren't tagged).
-%hook ToggleImageTableViewCell
-- (void)updateConstraints {
-  %orig;
-  if (!objc_getAssociatedObject(self, @selector(rfOwnedCell))) return;
-
-  NSArray<NSLayoutConstraint *> *constraints = objc_getAssociatedObject(self, @selector(rfSubtitleConstraints));
-  UILabel *detailLabel = [self respondsToSelector:@selector(imageLabelView)] ? [self imageLabelView].detailLabel
-                                                                              : [self detailLabel];
-  if (!constraints) {
-    Ivar stackIvar = class_getInstanceVariable(object_getClass(self), "horizontalStackView");
-    UIStackView *stack = [self respondsToSelector:@selector(imageLabelView)]
-                             ? [self imageLabelView].horizontalStackView
-                             : (stackIvar ? object_getIvar(self, stackIvar) : nil);
-    if (!stack || !detailLabel) return;
-    UIView *contentView = [self contentView];
-    constraints = @[
-      [detailLabel.heightAnchor constraintEqualToAnchor:stack.heightAnchor multiplier:0.33],
-      [stack.heightAnchor constraintEqualToAnchor:contentView.heightAnchor],
-      [stack.centerYAnchor constraintEqualToAnchor:contentView.centerYAnchor],
-    ];
-    objc_setAssociatedObject(self, @selector(rfSubtitleConstraints), constraints,
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-  }
-  // Rows get reused, so switch the constraints on/off to match this row.
-  BOOL hasSubtitle = detailLabel.text.length > 0;
-  if (hasSubtitle) [NSLayoutConstraint activateConstraints:constraints];
-  else [NSLayoutConstraint deactivateConstraints:constraints];
-}
-%end
 
 %end
 
@@ -403,6 +371,5 @@ static BOOL RFIsAPIHost(NSString *host) {
   RFReloadPreferences();
 
   %init;
-  %init(SwiftClasses, Post = CoreClass(@"Post"), Comment = CoreClass(@"Comment"),
-        ToggleImageTableViewCell = CoreClass(@"ToggleImageTableViewCell"));
+  %init(SwiftClasses, Post = CoreClass(@"Post"), Comment = CoreClass(@"Comment"));
 }
