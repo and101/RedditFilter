@@ -148,6 +148,15 @@ static const double kRFExtraStepsDeadline = 5.0;
 extern "C" NSString *RFPendingWebSession(void);
 extern "C" void RFClearPendingWebSession(void);
 
+// Reddit's API hosts: gql-fed, oauth, and cf.gql-fed, the Cloudflare route that the ios_graphql_uri_v2
+// experiment moves some users onto.
+static BOOL RFIsAPIHost(NSString *host) {
+  if (![host hasSuffix:@".reddit.com"]) return NO;
+  for (NSString *label in [[host substringToIndex:host.length - 11] componentsSeparatedByString:@"."])
+    if ([label hasPrefix:@"gql"] || [label hasPrefix:@"oauth"]) return YES;
+  return NO;
+}
+
 %hook NSURLSession
 - (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request
                             completionHandler:(void (^)(NSData *data, NSURLResponse *response,
@@ -185,9 +194,7 @@ extern "C" void RFClearPendingWebSession(void);
 
   // One copy of the settings for this request, so a switch flipped halfway through doesn't mix them.
   RFPrefs prefs = globalPrefs;
-  if (!completionHandler || !RFPrefsAnyEnabled(prefs) ||
-      !([host hasPrefix:@"gql"] || [host hasPrefix:@"oauth"]))
-    return %orig;
+  if (!completionHandler || !RFPrefsAnyEnabled(prefs) || !RFIsAPIHost(host)) return %orig;
 
   NSString *operation = RFOperationName(request);
   if ([operation isEqualToString:@"FeedPostDetailsByIds"]) RFRememberPostDetailsRequest(request);

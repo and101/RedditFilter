@@ -114,10 +114,12 @@ typedef struct {
   NSUInteger calls;       // times the app's completion handler ran
 } RFTiming;
 
+static NSString *gHost = @"gql-fed.reddit.com";
+
 // Loads a Home page the way the app does and returns what the app got. Waits `settle` seconds after
 // the page arrives to catch a second delivery.
 static NSDictionary *LoadHome(NSURLSession *session, NSTimeInterval settle, RFTiming *timing) {
-  NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"https://gql-fed.reddit.com/"]];
+  NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[NSString stringWithFormat:@"https://%@/", gHost]]];
   request.HTTPMethod = @"POST";
   [request setValue:@"HomeFeedSdui" forHTTPHeaderField:@"X-APOLLO-OPERATION-NAME"];
   request.HTTPBody = [NSJSONSerialization dataWithJSONObject:@{@"operationName" : @"HomeFeedSdui", @"variables" : @{}}
@@ -168,6 +170,12 @@ int main(void) {
     Check([Edges(json)[0][@"node"][@"cells"] count] == 0, @"Hide a post with a keyword further down its text");
     Check([Edges(json)[1][@"node"][@"cells"] count] == 1, @"Keep other posts");
     Check(timing.seconds < 1.5 && timing.calls == 1, @"Hand over a quickly checked page once, right away");
+
+    // Some users are moved onto Reddit's Cloudflare host by the ios_graphql_uri_v2 experiment
+    gHost = @"cf.gql-fed.reddit.com";
+    json = LoadHome(session, 0.5, &timing);
+    Check([Edges(json)[0][@"node"][@"cells"] count] == 0, @"Filter responses from cf.gql-fed.reddit.com too");
+    gHost = @"gql-fed.reddit.com";
 
     detailsDelay = 8;
     json = LoadHome(session, 4.5, &timing);
