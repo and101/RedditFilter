@@ -15,6 +15,7 @@ typedef struct {
   __unsafe_unretained NSString *subtitle; // nil for none
   __unsafe_unretained NSString *icons;    // comma-separated, first icon found wins
   BOOL switchOnMeansShow;                 // YES: switch ON shows the content (the saved setting is the opposite)
+  __unsafe_unretained NSString *requires; // only switchable while this setting is on, nil for always
 } RFToggleRow;
 
 static const RFToggleRow kToggleRows[] = {
@@ -29,6 +30,8 @@ static const RFToggleRow kToggleRows[] = {
     {kRedditFilterAutoCollapseAutoMod, @"AutoMod", @"Auto collapse AutoMod comments", @"rpl3/mod,icon_mod", NO},
     {kRedditFilterColoredComments, @"Colored comment threads", @"Give each reply level its own color",
      @"rpl3/branch,rpl3/comment,icon_comment", NO},
+    {kRedditFilterColoredCommentsApollo, @"Apollo style", @"Only color each comment's own line",
+     @"rpl3/branch,rpl3/comment,icon_comment", NO, kRedditFilterColoredComments},
     {kRedditFilterRedgifsDirect, @"Direct-play RedGIFs", @"Plays with sound, but may use more data",
      @"rpl3/volumeOn,rpl3/play", NO},
 };
@@ -38,9 +41,8 @@ static const NSInteger kToggleRowCount = sizeof(kToggleRows) / sizeof(kToggleRow
 static const RFToggleRow kKeywordRows[] = {
     {kRedditFilterKeywordComments, @"Filter comments too", @"Hide comments that mention a keyword",
      @"rpl3/comment,icon_comment", NO},
-    // Only switchable while the row above is on.
     {kRedditFilterKeywordCommentReplies, @"Hide replies too", @"Also hide the replies below them",
-     @"rpl3/reply,icon_reply", NO},
+     @"rpl3/reply,icon_reply", NO, kRedditFilterKeywordComments},
 };
 
 static const RFToggleRow *RFToggleRowForTag(NSInteger tag) {
@@ -49,14 +51,9 @@ static const RFToggleRow *RFToggleRowForTag(NSInteger tag) {
   return keywordRow >= 0 && keywordRow < 2 ? &kKeywordRows[keywordRow] : NULL;
 }
 
-static const RFToggleRow *const kHideRepliesRow = &kKeywordRows[1];
-
-static BOOL RFFilteringComments(void) {
-  return [NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterKeywordComments];
-}
-
-// Greys out "Hide replies too" while comments aren't filtered.
-static void RFSetToggleCellEnabled(ToggleImageTableViewCell *cell, BOOL enabled) {
+// Greys out a row whose `requires` setting is off, like "Hide replies too" while comments aren't filtered.
+static void RFSetToggleCellEnabled(ToggleImageTableViewCell *cell, const RFToggleRow *row) {
+  BOOL enabled = !row->requires || [NSUserDefaults.standardUserDefaults boolForKey:row->requires];
   cell.contentView.alpha = enabled ? 1.0 : 0.4;
   cell.userInteractionEnabled = enabled;
 }
@@ -288,7 +285,7 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
   RFMainLabel(cell).text = row->title;
   RFDetailLabel(cell).text = row->subtitle;
   RFSetIcon(cell, row->icons, nil);
-  RFSetToggleCellEnabled(cell, row != kHideRepliesRow || RFFilteringComments());
+  RFSetToggleCellEnabled(cell, row);
 
   UISwitch *toggle = RFSwitch(cell);
   BOOL saved = [NSUserDefaults.standardUserDefaults boolForKey:row->key];
@@ -312,10 +309,14 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
   [NSUserDefaults.standardUserDefaults setBool:filterOn forKey:row->key];
   RFReloadPreferences();
 
-  // "Hide replies too" only applies while comments are filtered.
-  if (row == &kKeywordRows[0]) {
-    UITableViewCell *replies = [self.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:2 inSection:1]];
-    if (replies) RFSetToggleCellEnabled((ToggleImageTableViewCell *)replies, filterOn);
+  // Rows that depend on this one, like "Hide replies too", become switchable or not.
+  for (NSIndexPath *indexPath in self.tableView.indexPathsForVisibleRows) {
+    RFSection section = RFSectionAt(indexPath.section);
+    if (section != RFSectionFilters && (section != RFSectionKeywords || indexPath.row == 0)) continue;
+    const RFToggleRow *other =
+        RFToggleRowForTag(section == RFSectionKeywords ? kToggleRowCount + indexPath.row - 1 : indexPath.row);
+    if (other && [other->requires isEqualToString:row->key])
+      RFSetToggleCellEnabled((ToggleImageTableViewCell *)[self.tableView cellForRowAtIndexPath:indexPath], other);
   }
 }
 
@@ -335,7 +336,7 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
   NSString *text = nil;
   switch (RFSectionAt(section)) {
-    case RFSectionFilters: text = @"FILTERS"; break;
+    case RFSectionFilters: text = @"TWEAKS"; break;
     case RFSectionKeywords: text = @"KEYWORDS"; break;
     case RFSectionDebug: text = @"SCHEMA PATHS · DEBUG"; break;
     case RFSectionAbout: text = @"ABOUT"; break;

@@ -1,5 +1,6 @@
 // Colored comment threads: each thread line next to a reply gets a color for its depth, so you can
-// follow which comment a reply belongs to.
+// follow which comment a reply belongs to. A comment's own line (the last in its row) is in full
+// color and the lines of the comments above it are faded, or left grey in Apollo style.
 //
 // Reddit draws a reply's thread lines as a row of thin views at its left edge, one per level: a
 // direct reply has one, a reply to that has two, and so on. The first line in that row is always
@@ -14,7 +15,7 @@
 @interface TreeVerticalDivider : UIView
 @end
 
-static BOOL gEnabled;
+static BOOL gEnabled, gApolloStyle;
 static NSHashTable<UIView *> *gLines; // lines seen so far, to recolor when the setting changes (main thread)
 static const void *kRedditColorKey = &kRedditColorKey;
 
@@ -42,13 +43,20 @@ static BOOL RFIsPlainLine(UIColor *color) {
 // The color a line should have: Reddit's own, or the one for its depth.
 static UIColor *RFLineColor(UIView *line, UIColor *redditColor) {
   if (!gEnabled || !RFIsPlainLine(redditColor) || !line.superview) return redditColor;
-  NSUInteger depth = 0;
+  NSUInteger depth = 0, after = 0;
+  BOOL seen = NO;
   for (UIView *sibling in line.superview.subviews) {
-    if (sibling == line) break;
-    if (sibling.class == line.class && RFIsPlainLine(objc_getAssociatedObject(sibling, kRedditColorKey))) depth++;
+    if (sibling == line) {
+      seen = YES;
+    } else if (sibling.class == line.class && RFIsPlainLine(objc_getAssociatedObject(sibling, kRedditColorKey))) {
+      if (seen) after++;
+      else depth++;
+    }
   }
+  if (after > 0 && gApolloStyle) return redditColor; // a line of a comment above this one
   NSArray *colors = RFThreadColors();
-  return colors[depth % colors.count];
+  UIColor *color = colors[depth % colors.count];
+  return after > 0 ? [color colorWithAlphaComponent:0.35] : color;
 }
 
 // Reapplies Reddit's last color through the setter below, which swaps in the depth color.
@@ -63,9 +71,10 @@ static void RFTrackLine(UIView *line) {
   RFRefreshLine(line);
 }
 
-void RFSetColoredComments(BOOL enabled) {
-  if (enabled == gEnabled) return;
+void RFSetColoredComments(BOOL enabled, BOOL apolloStyle) {
+  if (enabled == gEnabled && apolloStyle == gApolloStyle) return;
   gEnabled = enabled;
+  gApolloStyle = apolloStyle;
   dispatch_async(dispatch_get_main_queue(), ^{
     for (UIView *line in gLines.allObjects) RFRefreshLine(line);
   });

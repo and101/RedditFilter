@@ -30,7 +30,8 @@ extern "C" void RFReloadPreferences(void) {
   prefs.keywordCommentReplies = [defaults boolForKey:kRedditFilterKeywordCommentReplies];
   prefs.redgifsDirect = [defaults boolForKey:kRedditFilterRedgifsDirect];
   globalPrefs = prefs;
-  RFSetColoredComments([defaults boolForKey:kRedditFilterColoredComments]);
+  RFSetColoredComments([defaults boolForKey:kRedditFilterColoredComments],
+                       [defaults boolForKey:kRedditFilterColoredCommentsApollo]);
 }
 
 #pragma mark - Helpers shared with the settings screen
@@ -396,6 +397,7 @@ static BOOL RFIsAPIHost(NSString *host) {
     kRedditFilterKeywordCommentReplies : @YES,
     kRedditFilterRedgifsDirect : @NO,
     kRedditFilterColoredComments : @NO,
+    kRedditFilterColoredCommentsApollo : @NO,
   }];
   RFReloadPreferences();
 
