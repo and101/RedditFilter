@@ -1,6 +1,6 @@
 # RedditFilter
 
-Filters unwanted content from the Reddit app: promoted posts, recommendations, NSFW posts, awards, scores, and posts or comments that mention your keywords. It can also play RedGIFs videos with sound. Based on original work from [level3tjg](https://github.com/level3tjg/RedditFilter) and [NicholasBly](https://github.com/NicholasBly/RedditFilter).
+Filters unwanted content from the Reddit app: promoted posts, recommendations, NSFW posts, awards, scores, and posts or comments that mention your keywords. It can also play RedGIFs videos with sound.
 
 <table>
   <tr>
@@ -85,3 +85,7 @@ cd RedditFilter
 The IPA is saved in `packages/`, unsigned. The script installs anything missing (Theos, theos-jailed, insert_dylib and a few Homebrew packages) at the versions used for the released IPAs, so builds match. The Reddit IPA must be decrypted.
 
 For jailbroken devices, `make package` builds a deb (add `THEOS_PACKAGE_SCHEME=rootless` for rootless).
+
+## Credits
+
+Based on original work from [level3tjg](https://github.com/level3tjg/RedditFilter) and [NicholasBly](https://github.com/NicholasBly/RedditFilter).
