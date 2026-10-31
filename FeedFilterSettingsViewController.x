@@ -34,8 +34,6 @@ static const RFToggleRow kToggleRows[] = {
      @"rpl3/branch,rpl3/comment,icon_comment", NO},
     {kRedditFilterColoredCommentsApollo, @"Apollo style", @"Only colour each comment's own line",
      @"rpl3/branch,rpl3/comment,icon_comment", NO, kRedditFilterColoredComments},
-    {kRedditFilterRedgifsDirect, @"Direct-play RedGIFs", @"Plays with sound, but may use more data",
-     @"rpl3/volumeOn,rpl3/play", NO},
 };
 static const NSInteger kToggleRowCount = sizeof(kToggleRows) / sizeof(kToggleRows[0]);
 
@@ -46,20 +44,47 @@ static const RFToggleRow kKeywordRows[] = {
     {kRedditFilterKeywordCommentReplies, @"Hide replies too", @"Also hide the replies below them",
      @"rpl3/reply,icon_reply", NO, kRedditFilterKeywordComments},
 };
+static const NSInteger kKeywordRowCount = sizeof(kKeywordRows) / sizeof(kKeywordRows[0]);
+
+// In the RedGIFs section. Their switch tags follow kUpdateRow's.
+static const RFToggleRow kRedgifsRows[] = {
+    {kRedditFilterRedgifsDirect, @"Direct-play RedGIFs", @"Plays with sound, but may use more data",
+     @"rpl3/volumeOn,rpl3/play", NO},
+    {kRedditFilterRedgifsHD, @"HD video", @"Sharper, but uses about 10 times the data. Off plays SD",
+     @"rpl3/video,icon_video,icon_play", NO, kRedditFilterRedgifsDirect},
+    {kRedditFilterRedgifsHDWiFiOnly, @"HD on Wi-Fi only", @"Plays SD on mobile data and in Low Data Mode",
+     @"rf/wifi", NO, kRedditFilterRedgifsHD},
+};
+static const NSInteger kRedgifsRowCount = sizeof(kRedgifsRows) / sizeof(kRedgifsRows[0]);
 
 // In the About section, between the RedditFilter and developer rows. Its switch tag follows kKeywordRows'.
 static const RFToggleRow kUpdateRow = {kRedditFilterCheckUpdates, @"Check for updates",
                                        @"Tell me when a new RedditFilter is out", @"rpl3/download,rpl3/notifications",
                                        NO};
-static const NSInteger kUpdateRowTag = kToggleRowCount + 2;
+static const NSInteger kKeywordRowTag = kToggleRowCount;
+static const NSInteger kUpdateRowTag = kKeywordRowTag + kKeywordRowCount;
+static const NSInteger kRedgifsRowTag = kUpdateRowTag + 1;
 // Its position: row 1 of the About section. The other About rows are kAboutRows.
 static const NSInteger kAboutUpdateRow = 1;
 
+static const RFToggleRow *RFToggleRowForKey(NSString *key) {
+  for (NSInteger i = 0; i < kToggleRowCount; i++)
+    if ([kToggleRows[i].key isEqualToString:key]) return &kToggleRows[i];
+  for (NSInteger i = 0; i < kKeywordRowCount; i++)
+    if ([kKeywordRows[i].key isEqualToString:key]) return &kKeywordRows[i];
+  for (NSInteger i = 0; i < kRedgifsRowCount; i++)
+    if ([kRedgifsRows[i].key isEqualToString:key]) return &kRedgifsRows[i];
+  return [kUpdateRow.key isEqualToString:key] ? &kUpdateRow : NULL;
+}
+
 static const RFToggleRow *RFToggleRowForTag(NSInteger tag) {
   if (tag >= 0 && tag < kToggleRowCount) return &kToggleRows[tag];
+  NSInteger keywordRow = tag - kKeywordRowTag;
+  if (keywordRow >= 0 && keywordRow < kKeywordRowCount) return &kKeywordRows[keywordRow];
+  NSInteger redgifsRow = tag - kRedgifsRowTag;
+  if (redgifsRow >= 0 && redgifsRow < kRedgifsRowCount) return &kRedgifsRows[redgifsRow];
   if (tag == kUpdateRowTag) return &kUpdateRow;
-  NSInteger keywordRow = tag - kToggleRowCount;
-  return keywordRow >= 0 && keywordRow < 2 ? &kKeywordRows[keywordRow] : NULL;
+  return NULL;
 }
 
 // Use our own layout: Reddit's legacy toggle cells no longer match its SwiftUI Settings.
@@ -178,18 +203,47 @@ static UILabel *RFMainLabel(RFSettingsCell *cell) { return cell.mainLabel; }
 static UILabel *RFDetailLabel(RFSettingsCell *cell) { return cell.detailLabel; }
 static UISwitch *RFSwitch(RFSettingsCell *cell) { return cell.accessorySwitch; }
 
+// Switchable only while the setting it requires is on, and that one is switchable too.
+static BOOL RFRowEnabled(const RFToggleRow *row) {
+  while (row && row->requires) {
+    if (![NSUserDefaults.standardUserDefaults boolForKey:row->requires]) return NO;
+    row = RFToggleRowForKey(row->requires);
+    if (!row) return NO;
+  }
+  return YES;
+}
+
 static void RFSetToggleCellEnabled(RFSettingsCell *cell, const RFToggleRow *row) {
-  BOOL enabled = !row->requires || [NSUserDefaults.standardUserDefaults boolForKey:row->requires];
+  BOOL enabled = RFRowEnabled(row);
   cell.contentView.alpha = enabled ? 1.0 : 0.4;
   cell.userInteractionEnabled = enabled;
 }
 
+// Reddit has no Wi-Fi icon, so draw one on its 20pt grid, with the same line weight and round ends.
+static UIImage *RFWiFiIcon(void) {
+  UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(20, 20)];
+  return [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
+    CGPoint centre = CGPointMake(10, 15.8);
+    for (NSNumber *radius in @[ @4.25, @8, @11.75 ]) {
+      UIBezierPath *arc = [UIBezierPath bezierPathWithArcCenter:centre
+                                                         radius:radius.doubleValue
+                                                     startAngle:-M_PI * 7 / 9
+                                                       endAngle:-M_PI * 2 / 9
+                                                      clockwise:YES];
+      arc.lineWidth = 1.8;
+      arc.lineCapStyle = kCGLineCapRound;
+      [arc stroke];
+    }
+    [[UIBezierPath bezierPathWithOvalInRect:CGRectMake(centre.x - 1.5, centre.y - 1.5, 3, 3)] fill];
+  }];
+}
+
 // The first of Reddit's icons that's found, else the SF Symbol, drawn in a 20pt square and tinted
-// like Reddit's own settings icons.
+// like Reddit's own settings icons. "rf/wifi" is RedditFilter's own.
 static UIImage *RFIcon(NSString *iconNames, NSString *fallbackSymbol) {
   UIImage *icon = nil;
   for (NSString *name in [iconNames componentsSeparatedByString:@","])
-    if ((icon = iconWithName(name))) break;
+    if ((icon = [name isEqualToString:@"rf/wifi"] ? RFWiFiIcon() : iconWithName(name))) break;
   if (!icon && fallbackSymbol) icon = [UIImage systemImageNamed:fallbackSymbol];
   if (!icon) return nil;
   CGFloat side = 20.0;
@@ -246,21 +300,29 @@ static UIView *RFSectionView(UITableView *tableView, NSString *text, CGFloat hei
 
 #pragma mark - Sections
 
-typedef NS_ENUM(NSInteger, RFSection) { RFSectionFilters, RFSectionKeywords, RFSectionDebug, RFSectionAbout };
+typedef NS_ENUM(NSInteger, RFSection) {
+  RFSectionFilters,
+  RFSectionRedgifs,
+  RFSectionKeywords,
+  RFSectionDebug,
+  RFSectionAbout,
+};
 
-// Filters, Keywords, [Schema Paths (debug builds only)], About
-static const NSInteger kSectionCount = REDDITFILTER_DEBUG ? 4 : 3;
+// Filters, RedGIFs, Keywords, [Schema Paths (debug builds only)], About
+static const NSInteger kSectionCount = REDDITFILTER_DEBUG ? 5 : 4;
 
 static RFSection RFSectionAt(NSInteger section) {
   if (section == 0) return RFSectionFilters;
-  if (section == 1) return RFSectionKeywords;
-  if (REDDITFILTER_DEBUG && section == 2) return RFSectionDebug;
+  if (section == 1) return RFSectionRedgifs;
+  if (section == 2) return RFSectionKeywords;
+  if (REDDITFILTER_DEBUG && section == 3) return RFSectionDebug;
   return RFSectionAbout;
 }
 
 static NSString *RFHeaderText(NSInteger section) {
   switch (RFSectionAt(section)) {
     case RFSectionFilters: return @"TWEAKS";
+    case RFSectionRedgifs: return @"REDGIFS";
     case RFSectionKeywords: return @"KEYWORDS";
     case RFSectionDebug: return @"SCHEMA PATHS · DEBUG";
     case RFSectionAbout: return @"ABOUT";
@@ -271,6 +333,9 @@ static NSString *RFHeaderText(NSInteger section) {
 static NSString *RFFooterText(NSInteger section) {
   switch (RFSectionAt(section)) {
     case RFSectionFilters: return @"Filter posts and adjust how Reddit looks";
+    case RFSectionRedgifs:
+      return @"Plays RedGIFs' own videos, which have sound. Your device connects to RedGIFs directly. "
+             @"If RedGIFs can't be reached, Reddit's silent version plays.";
     case RFSectionKeywords: return nil;
     case RFSectionDebug:
       return @"✓ resolved · ✗ broke (structural fallback is now filtering). "
@@ -284,7 +349,8 @@ static NSString *RFFooterText(NSInteger section) {
 static NSInteger RFToggleTagAt(NSIndexPath *indexPath) {
   switch (RFSectionAt(indexPath.section)) {
     case RFSectionFilters: return indexPath.row;
-    case RFSectionKeywords: return indexPath.row > 0 ? kToggleRowCount + indexPath.row - 1 : -1;
+    case RFSectionRedgifs: return kRedgifsRowTag + indexPath.row;
+    case RFSectionKeywords: return indexPath.row > 0 ? kKeywordRowTag + indexPath.row - 1 : -1;
     case RFSectionAbout: return indexPath.row == kAboutUpdateRow ? kUpdateRowTag : -1;
     case RFSectionDebug: return -1;
   }
@@ -412,8 +478,10 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
   switch (RFSectionAt(section)) {
     case RFSectionFilters:
       return kToggleRowCount;
+    case RFSectionRedgifs:
+      return kRedgifsRowCount;
     case RFSectionKeywords:
-      return 3; // Keywords, Filter comments too, Hide replies too
+      return 1 + kKeywordRowCount; // Keywords, then its switches
     case RFSectionDebug:
 #if REDDITFILTER_DEBUG
       // One row per tracked schema path, plus a trailing "reset" row.
@@ -466,10 +534,10 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
   [NSUserDefaults.standardUserDefaults setBool:filterOn forKey:row->key];
   RFReloadPreferences();
 
-  // Rows that depend on this one, like "Hide replies too", become switchable or not.
+  // Refresh every dependent row, as a chain (HD, then HD on Wi-Fi) can change further down.
   for (NSIndexPath *indexPath in self.tableView.indexPathsForVisibleRows) {
     const RFToggleRow *other = RFToggleRowForTag(RFToggleTagAt(indexPath));
-    if (other && [other->requires isEqualToString:row->key])
+    if (other && other->requires)
       RFSetToggleCellEnabled((RFSettingsCell *)[self.tableView cellForRowAtIndexPath:indexPath], other);
   }
 }
@@ -481,8 +549,9 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
     [self.navigationController pushViewController:[RFKeywordsViewController new] animated:YES];
     return;
   }
+  if (RFSectionAt(indexPath.section) != RFSectionAbout) return;
   NSInteger link = RFAboutLinkIndex(indexPath.row);
-  if (RFSectionAt(indexPath.section) != RFSectionAbout || link < 0 || link >= kAboutRowCount) return;
+  if (link < 0 || link >= kAboutRowCount) return;
   // The RedditFilter row opens the new version's page when there's an update.
   NSURL *url = link == 0 ? RFUpdateURL() : [NSURL URLWithString:kAboutRows[link].link];
   if (url) [UIApplication.sharedApplication openURL:url options:@{} completionHandler:nil];

@@ -28,7 +28,11 @@ extern "C" void RFReloadPreferences(void) {
   prefs.keywordComments = [defaults boolForKey:kRedditFilterKeywordComments];
   prefs.keywordCommentReplies = [defaults boolForKey:kRedditFilterKeywordCommentReplies];
   prefs.redgifsDirect = [defaults boolForKey:kRedditFilterRedgifsDirect];
+  prefs.redgifsHD = [defaults boolForKey:kRedditFilterRedgifsHD];
+  prefs.redgifsHDWiFiOnly = [defaults boolForKey:kRedditFilterRedgifsHDWiFiOnly];
   globalPrefs = prefs;
+  // Start watching the network now, so the first page already knows whether it's on Wi-Fi.
+  if (prefs.redgifsDirect && prefs.redgifsHD && prefs.redgifsHDWiFiOnly) RFRedgifsOnWiFi();
   RFSetColoredComments([defaults boolForKey:kRedditFilterColoredComments],
                        [defaults boolForKey:kRedditFilterColoredCommentsApollo]);
 }
@@ -265,6 +269,7 @@ static BOOL RFIsAPIHost(NSString *host) {
         NSArray *redgifs = prefs.redgifsDirect && ![NSURLProtocol propertyForKey:kRFOwnRequest inRequest:request]
                                ? RFRedgifsIds(data)
                                : nil;
+        BOOL hd = prefs.redgifsHD && (!prefs.redgifsHDWiFiOnly || RFRedgifsOnWiFi());
         if (!details && !redgifs) return topUpAndFinish(data);
         NSData *page = data;
         __block NSData *detailsData = nil;
@@ -292,7 +297,7 @@ static BOOL RFIsAPIHost(NSString *host) {
         }
         if (redgifs) {
           dispatch_group_enter(group);
-          RFFetchRedgifsVideos(redgifs, ^(NSDictionary *found) {
+          RFFetchRedgifsVideos(redgifs, hd, ^(NSDictionary *found) {
             @synchronized(lock) {
               videoURLs = found;
               progress(pageSoFar());
@@ -364,6 +369,8 @@ static BOOL RFIsAPIHost(NSString *host) {
     kRedditFilterKeywordComments : @NO,
     kRedditFilterKeywordCommentReplies : @YES,
     kRedditFilterRedgifsDirect : @NO,
+    kRedditFilterRedgifsHD : @NO,
+    kRedditFilterRedgifsHDWiFiOnly : @YES,
     kRedditFilterColoredComments : @NO,
     kRedditFilterColoredCommentsApollo : @NO,
     kRedditFilterCheckUpdates : @YES,

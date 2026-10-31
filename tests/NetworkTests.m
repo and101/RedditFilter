@@ -6,6 +6,7 @@
 #import <objc/runtime.h>
 #import "DebugMenu.h"
 #import "Preferences.h"
+#import "Redgifs.h"
 
 // Browser login lives in LoginHelper.x, which isn't part of this test.
 NSString *RFPendingWebSession(void) { return nil; }
@@ -151,12 +152,57 @@ static NSDictionary *LoadHome(NSURLSession *session, NSTimeInterval settle, RFTi
   return [NSJSONSerialization JSONObjectWithData:page options:0 error:NULL];
 }
 
+// Looks up videos without going through the page hook, so the quality choice can be checked directly.
+static NSDictionary *FetchRedgifs(NSArray<NSString *> *ids, BOOL hd) {
+  dispatch_semaphore_t finished = dispatch_semaphore_create(0);
+  __block NSDictionary *found = nil;
+  RFFetchRedgifsVideos(ids, hd, ^(NSDictionary *videoURLs) {
+    found = videoURLs;
+    dispatch_semaphore_signal(finished);
+  });
+  Check(dispatch_semaphore_wait(finished, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC)) == 0,
+        @"RedGIFs lookup finishes");
+  return found;
+}
+
 int main(void) {
   @autoreleasepool {
     NSURLSessionConfiguration *config = NSURLSessionConfiguration.ephemeralSessionConfiguration;
     NSURLSession *session = [NSURLSession sessionWithConfiguration:config];
     RFTiming timing;
     NSArray *full = @[ @"t3_a", @"t3_b" ]; // no next page, so no top-up
+
+    // RedGIFs quality: SD by default, HD when asked, and the other file when the preferred one is
+    // missing. Each video has a separate server entry; RedGIFs IDs are lowercase in the cache.
+    NSString *hdFile = @"https://media.redgifs.com/Both.mp4";
+    NSString *sdFile = @"https://media.redgifs.com/Both-mobile.mp4";
+    NSString *hdOnly = @"https://media.redgifs.com/HdOnly.mp4";
+    NSString *sdOnly = @"https://media.redgifs.com/SdOnly-mobile.mp4";
+    NSString *freshHD = @"https://media.redgifs.com/Fresh.mp4";
+    gRoute = ^NSArray *(NSString *operation, NSDictionary *body, NSURL *url) {
+      if ([url.path hasSuffix:@"/auth/temporary"]) return @[ @200, @0.01, @{@"token" : @"t"} ];
+      NSString *identifier = url.path.lastPathComponent;
+      NSDictionary *urls = @{
+        @"both" : @{@"hd" : hdFile, @"sd" : sdFile},
+        @"hdonly" : @{@"hd" : hdOnly},
+        @"sdonly" : @{@"sd" : sdOnly},
+        @"bothfresh" : @{@"hd" : freshHD, @"sd" : sdFile},
+      }[identifier];
+      return @[ @200, @0.01, @{@"gif" : @{@"hasAudio" : @YES, @"urls" : urls ?: @{}}} ];
+    };
+    NSArray *qualityIds = @[ @"both", @"hdonly", @"sdonly" ];
+    NSDictionary *sd = FetchRedgifs(qualityIds, NO);
+    Check([sd[@"both"] isEqual:sdFile], @"Use SD by default");
+    Check([sd[@"hdonly"] isEqual:hdOnly], @"Fall back to HD when SD is missing");
+    Check([sd[@"sdonly"] isEqual:sdOnly], @"Keep SD when HD is missing");
+
+    NSDictionary *fresh = FetchRedgifs(@[ @"bothfresh" ], YES);
+    Check([fresh[@"bothfresh"] isEqual:freshHD], @"Use HD when asked");
+
+    NSDictionary *hd = FetchRedgifs(qualityIds, YES);
+    Check([hd[@"both"] isEqual:hdFile], @"Use cached HD when asked");
+    Check([hd[@"hdonly"] isEqual:hdOnly], @"Keep HD when SD is missing");
+    Check([hd[@"sdonly"] isEqual:sdOnly], @"Fall back to SD when HD is missing");
 
     // Full post text
     SetPrefs(@[ @"tesla" ], NO);

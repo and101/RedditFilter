@@ -18,6 +18,8 @@ typedef struct {
   BOOL keywordComments; // also hide comments that mention a keyword
   BOOL keywordCommentReplies; // ...and their replies. NO: leave a placeholder and keep the replies
   BOOL redgifsDirect; // play RedGIFs videos from RedGIFs, with sound, instead of Reddit's silent copy
+  BOOL redgifsHD; // prefer the larger HD file
+  BOOL redgifsHDWiFiOnly; // keep HD for Wi-Fi, rather than mobile data or Low Data Mode
 } RFPrefs;
 
 #ifdef __cplusplus

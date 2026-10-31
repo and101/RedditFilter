@@ -5,8 +5,29 @@
 // so a new one is fetched when it's rejected, e.g. after switching networks.
 
 #import "Redgifs.h"
+#import <Network/Network.h>
+#import <stdatomic.h>
 
 static NSString *const kRFRedgifsAPI = @"https://api.redgifs.com/v2";
+static _Atomic BOOL gRFRedgifsOnWiFi;
+
+BOOL RFRedgifsOnWiFi(void) {
+  static dispatch_once_t once;
+  static nw_path_monitor_t monitor;
+  static dispatch_queue_t queue;
+  dispatch_once(&once, ^{
+    queue = dispatch_queue_create("com.and101.RedditFilter.redgifs-network", DISPATCH_QUEUE_SERIAL);
+    monitor = nw_path_monitor_create();
+    nw_path_monitor_set_queue(monitor, queue);
+    nw_path_monitor_set_update_handler(monitor, ^(nw_path_t path) {
+      BOOL onWiFi = nw_path_get_status(path) == nw_path_status_satisfied &&
+                    !nw_path_is_expensive(path) && !nw_path_is_constrained(path);
+      atomic_store_explicit(&gRFRedgifsOnWiFi, onWiFi, memory_order_relaxed);
+    });
+    nw_path_monitor_start(monitor);
+  });
+  return atomic_load_explicit(&gRFRedgifsOnWiFi, memory_order_relaxed);
+}
 
 static NSURLSession *RFRedgifsSession(void) {
   static NSURLSession *session;
@@ -21,7 +42,8 @@ static NSURLSession *RFRedgifsSession(void) {
   return session;
 }
 
-// Looked-up videos: ID -> URL, or NSNull when it has no sound (Reddit's version is just as good).
+// Looked-up videos: ID -> {hd, sd} URLs, or NSNull when it has no sound (Reddit's version is just
+// as good).
 static NSCache *RFRedgifsCache(void) {
   static NSCache *cache;
   static dispatch_once_t once;
@@ -70,7 +92,7 @@ static void RFWithToken(NSString *rejected, void (^completion)(NSString *token))
                      }] resume];
 }
 
-// Calls completion with the video URL, NSNull if it has no sound, or nil if the lookup failed.
+// Calls completion with the video URLs, NSNull if it has no sound, or nil if the lookup failed.
 // Retries once with a new token if the current one is rejected.
 static void RFLookUp(NSString *identifier, NSString *rejected, void (^completion)(id result)) {
   RFWithToken(rejected, ^(NSString *token) {
@@ -95,8 +117,13 @@ static void RFLookUp(NSString *identifier, NSString *rejected, void (^completion
                              if ([hasAudio isKindOfClass:NSNumber.class] && ![hasAudio boolValue])
                                return completion(NSNull.null);
                              NSDictionary *urls = [gif[@"urls"] isKindOfClass:NSDictionary.class] ? gif[@"urls"] : nil;
-                             id url = urls[@"hd"] ?: urls[@"sd"];
-                             completion([url isKindOfClass:NSString.class] && [url hasPrefix:@"https://"] ? url : nil);
+                             NSMutableDictionary *variants = [NSMutableDictionary dictionary];
+                             for (NSString *quality in @[ @"hd", @"sd" ]) {
+                               id url = urls[quality];
+                               if ([url isKindOfClass:NSString.class] && [url hasPrefix:@"https://"])
+                                 variants[quality] = url;
+                             }
+                             completion([variants copy]);
                            }] resume];
   });
 }
@@ -104,7 +131,15 @@ static void RFLookUp(NSString *identifier, NSString *rejected, void (^completion
 // How long a page waits for RedGIFs before it's shown with Reddit's versions of what's missing.
 static const double kRFRedgifsDeadline = 4.0;
 
-void RFFetchRedgifsVideos(NSArray<NSString *> *ids, void (^completion)(NSDictionary<NSString *, NSString *> *videoURLs)) {
+// Picks the preferred file, falling back to the other one when it's missing.
+static NSString *RFRedgifsURL(NSDictionary *variants, BOOL hd) {
+  NSString *first = hd ? @"hd" : @"sd";
+  NSString *second = hd ? @"sd" : @"hd";
+  return variants[first] ?: variants[second];
+}
+
+void RFFetchRedgifsVideos(NSArray<NSString *> *ids, BOOL hd,
+                          void (^completion)(NSDictionary<NSString *, NSString *> *videoURLs)) {
   NSMutableDictionary *found = [NSMutableDictionary dictionary];
   __block BOOL finished = NO;
   void (^finish)(void) = ^{
@@ -120,15 +155,19 @@ void RFFetchRedgifsVideos(NSArray<NSString *> *ids, void (^completion)(NSDiction
   for (NSString *identifier in ids) {
     id cached = [RFRedgifsCache() objectForKey:identifier];
     if (cached) {
-      if ([cached isKindOfClass:NSString.class]) found[identifier] = cached; // nothing else has started yet
+      if ([cached isKindOfClass:NSDictionary.class]) {
+        NSString *url = RFRedgifsURL(cached, hd);
+        if (url) found[identifier] = url; // nothing else has started yet
+      }
       continue;
     }
     dispatch_group_enter(group);
     RFLookUp(identifier, nil, ^(id result) {
       if (result) [RFRedgifsCache() setObject:result forKey:identifier]; // failures are tried again next time
-      if ([result isKindOfClass:NSString.class]) {
+      if ([result isKindOfClass:NSDictionary.class]) {
+        NSString *url = RFRedgifsURL(result, hd);
         @synchronized(found) {
-          found[identifier] = result;
+          if (url) found[identifier] = url;
         }
       }
       dispatch_group_leave(group);

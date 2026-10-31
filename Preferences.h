@@ -11,6 +11,8 @@
 #define kRedditFilterKeywordComments @"kRedditFilterKeywordComments"
 #define kRedditFilterKeywordCommentReplies @"kRedditFilterKeywordCommentReplies"
 #define kRedditFilterRedgifsDirect @"kRedditFilterRedgifsDirect"
+#define kRedditFilterRedgifsHD @"kRedditFilterRedgifsHD"
+#define kRedditFilterRedgifsHDWiFiOnly @"kRedditFilterRedgifsHDWiFiOnly"
 #define kRedditFilterColoredComments @"kRedditFilterColoredComments"
 #define kRedditFilterColoredCommentsApollo @"kRedditFilterColoredCommentsApollo"
 #define kRedditFilterCheckUpdates @"kRedditFilterCheckUpdates"
