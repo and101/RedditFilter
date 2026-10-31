@@ -2,6 +2,27 @@
 
 Filters unwanted content from the Reddit app: promoted posts, recommendations, NSFW posts, awards, scores, and posts or comments that mention your keywords. It can also play RedGIFs videos with sound. Based on original work from [level3tjg](https://github.com/level3tjg/RedditFilter) and [NicholasBly](https://github.com/NicholasBly/RedditFilter).
 
+<table>
+  <tr>
+    <th colspan="2">Coloured comment threads</th>
+    <th colspan="2">Settings</th>
+  </tr>
+  <tr>
+    <td align="center" width="25%"><img src="screenshots/threads.png" width="200" alt="Coloured comment threads: each reply level has its own colour, with the lines of parent comments faded"></td>
+    <td align="center" width="25%"><img src="screenshots/apollo.png" width="200" alt="Apollo style: only each comment's own line is coloured"></td>
+    <td align="center" width="25%"><img src="screenshots/settings.png" width="200" alt="RedditFilter settings: the Tweaks section"></td>
+    <td align="center" width="25%"><img src="screenshots/settings2.png" width="200" alt="RedditFilter settings: Keywords and About"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Default</b><br><sub>Parent lines faded</sub></td>
+    <td align="center"><b>Apollo style</b><br><sub>Only each comment's own line</sub></td>
+    <td align="center"><b>Tweaks</b><br><sub>Show or hide each kind of content</sub></td>
+    <td align="center"><b>Keywords and About</b><br><sub>Keyword filters and update check</sub></td>
+  </tr>
+</table>
+
+<sub>Screenshots use a made-up community, post and users.</sub>
+
 ## New in 1.3.2
 
 - **Coloured comment threads**: new option that gives each reply level's thread line its own colour. Each comment's own line is in full colour and the lines of the comments above it are faded. Turn on **Apollo style** to colour only each comment's own line. Off by default. Lines Reddit already colours, like a highlighted comment's, keep their colour.
