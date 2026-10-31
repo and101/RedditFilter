@@ -304,19 +304,39 @@ typedef NS_ENUM(NSInteger, RFSection) {
   RFSectionFilters,
   RFSectionRedgifs,
   RFSectionKeywords,
+  RFSectionSafari,
   RFSectionDebug,
   RFSectionAbout,
 };
 
-// Filters, RedGIFs, Keywords, [Schema Paths (debug builds only)], About
-static const NSInteger kSectionCount = REDDITFILTER_DEBUG ? 5 : 4;
+// The IPA includes the Safari extension unless it was built without it.
+static BOOL RFHasSafariExtension(void) {
+  static BOOL hasExtension;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    NSURL *url = [NSBundle.mainBundle.builtInPlugInsURL URLByAppendingPathComponent:@"RedditFilterSafari.appex"];
+    hasExtension = url && [NSFileManager.defaultManager fileExistsAtPath:url.path];
+  });
+  return hasExtension;
+}
+
+// Filters, RedGIFs, Keywords, [Safari (with the extension)], [Schema Paths (debug builds only)], About
+static NSArray<NSNumber *> *RFSections(void) {
+  static NSArray *sections;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    NSMutableArray *list = [@[ @(RFSectionFilters), @(RFSectionRedgifs), @(RFSectionKeywords) ] mutableCopy];
+    if (RFHasSafariExtension()) [list addObject:@(RFSectionSafari)];
+    if (REDDITFILTER_DEBUG) [list addObject:@(RFSectionDebug)];
+    [list addObject:@(RFSectionAbout)];
+    sections = list;
+  });
+  return sections;
+}
 
 static RFSection RFSectionAt(NSInteger section) {
-  if (section == 0) return RFSectionFilters;
-  if (section == 1) return RFSectionRedgifs;
-  if (section == 2) return RFSectionKeywords;
-  if (REDDITFILTER_DEBUG && section == 3) return RFSectionDebug;
-  return RFSectionAbout;
+  NSArray<NSNumber *> *sections = RFSections();
+  return section >= 0 && section < (NSInteger)sections.count ? sections[section].integerValue : RFSectionAbout;
 }
 
 static NSString *RFHeaderText(NSInteger section) {
@@ -324,6 +344,7 @@ static NSString *RFHeaderText(NSInteger section) {
     case RFSectionFilters: return @"TWEAKS";
     case RFSectionRedgifs: return @"REDGIFS";
     case RFSectionKeywords: return @"KEYWORDS";
+    case RFSectionSafari: return @"SAFARI";
     case RFSectionDebug: return @"SCHEMA PATHS · DEBUG";
     case RFSectionAbout: return @"ABOUT";
   }
@@ -337,6 +358,7 @@ static NSString *RFFooterText(NSInteger section) {
       return @"Plays RedGIFs' own videos, which have sound. Your device connects to RedGIFs directly. "
              @"If RedGIFs can't be reached, Reddit's silent version plays.";
     case RFSectionKeywords: return nil;
+    case RFSectionSafari: return @"Safari asks before each link opens here";
     case RFSectionDebug:
       return @"✓ resolved · ✗ broke (structural fallback is now filtering). "
              @"Tap Copy on a ✗ row to grab the auto-discovered replacement path.";
@@ -352,6 +374,7 @@ static NSInteger RFToggleTagAt(NSIndexPath *indexPath) {
     case RFSectionRedgifs: return kRedgifsRowTag + indexPath.row;
     case RFSectionKeywords: return indexPath.row > 0 ? kKeywordRowTag + indexPath.row - 1 : -1;
     case RFSectionAbout: return indexPath.row == kAboutUpdateRow ? kUpdateRowTag : -1;
+    case RFSectionSafari:
     case RFSectionDebug: return -1;
   }
   return -1;
@@ -413,6 +436,25 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
   return RFLinkCell(tableView, @"Keywords", subtitle, @"rpl3/search", @"text.magnifyingglass");
 }
 
+static UITableViewCell *RFSafariCell(UITableView *tableView) {
+  return RFLinkCell(tableView, @"Open Reddit links here", @"Set up the RedditFilter Safari extension",
+                    @"rpl3/link,icon_link", @"safari");
+}
+
+// How to turn on the extension. The app can't turn it on or check whether it's on.
+static void RFShowSafariSetup(UIViewController *controller) {
+  UIAlertController *alert = [UIAlertController
+      alertControllerWithTitle:@"Open Reddit links here"
+                       message:@"Reddit links you open in Safari can open in this app instead.\n\n"
+                               @"1. Open Settings, then Apps, then Safari, then Extensions.\n"
+                               @"2. Tap RedditFilter and turn on Allow Extension.\n"
+                               @"3. Under Permissions, set the Reddit websites to Allow.\n\n"
+                               @"Safari asks before each link opens. Tap Cancel to stay on the web page."
+                preferredStyle:UIAlertControllerStyleAlert];
+  [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
+  [controller presentViewController:alert animated:YES completion:nil];
+}
+
 #if REDDITFILTER_DEBUG
 // Declarations for the debug-only helpers so the call sites below are typed.
 // (The implementations are added to the class at runtime by Logos below.)
@@ -471,7 +513,7 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
 
 %new
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-  return kSectionCount;
+  return RFSections().count;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
@@ -482,6 +524,8 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
       return kRedgifsRowCount;
     case RFSectionKeywords:
       return 1 + kKeywordRowCount; // Keywords, then its switches
+    case RFSectionSafari:
+      return 1;
     case RFSectionDebug:
 #if REDDITFILTER_DEBUG
       // One row per tracked schema path, plus a trailing "reset" row.
@@ -499,6 +543,7 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
   NSInteger tag = RFToggleTagAt(indexPath);
   if (section == RFSectionAbout && tag < 0) return RFAboutCell(tableView, RFAboutLinkIndex(indexPath.row));
   if (section == RFSectionKeywords && indexPath.row == 0) return RFKeywordsCell(tableView);
+  if (section == RFSectionSafari) return RFSafariCell(tableView);
 #if REDDITFILTER_DEBUG
   if (section == RFSectionDebug) return [self debugCellForRow:indexPath.row inTableView:tableView];
 #endif
@@ -547,6 +592,10 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
   [tableView deselectRowAtIndexPath:indexPath animated:YES];
   if (RFSectionAt(indexPath.section) == RFSectionKeywords && indexPath.row == 0) {
     [self.navigationController pushViewController:[RFKeywordsViewController new] animated:YES];
+    return;
+  }
+  if (RFSectionAt(indexPath.section) == RFSectionSafari) {
+    RFShowSafariSetup(self);
     return;
   }
   if (RFSectionAt(indexPath.section) != RFSectionAbout) return;
