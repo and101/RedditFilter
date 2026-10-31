@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "RedditFilter",
+  "description": "Opens Reddit links from Safari in the RedditFilter app.",
+  "version": "1.0",
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": false
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://reddit.com/*", "*://*.reddit.com/*"],
+      "exclude_matches": ["*://accounts.reddit.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ]
+}
