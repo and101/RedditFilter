@@ -1,0 +1,30 @@
+name: Mirror to private repo
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    if: github.repository == 'and101/RedditFilter'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Push branches and tags
+        env:
+          DEPLOY_KEY: ${{ secrets.PRIVATE_MIRROR_DEPLOY_KEY }}
+        run: |
+          umask 077
+          printf '%s\n' "$DEPLOY_KEY" > "$RUNNER_TEMP/key"
+          echo 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "$RUNNER_TEMP/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/key -o IdentitiesOnly=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts -o StrictHostKeyChecking=yes"
+          git clone --bare "https://github.com/${GITHUB_REPOSITORY}.git" src.git
+          git -C src.git push git@github.com:and101/RedditFilter-private.git 'refs/heads/*:refs/heads/*' 'refs/tags/*:refs/tags/*'
+          rm -f "$RUNNER_TEMP/key"
