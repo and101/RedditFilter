@@ -6,6 +6,7 @@
 #import "JSONFilter.h"
 #import "Preferences.h"
 #import "Redgifs.h"
+#import "SwipeCollapse.h"
 
 #pragma mark - Preferences
 
@@ -35,6 +36,7 @@ extern "C" void RFReloadPreferences(void) {
   if (prefs.redgifsDirect && prefs.redgifsHD && prefs.redgifsHDWiFiOnly) RFRedgifsOnWiFi();
   RFSetColoredComments([defaults boolForKey:kRedditFilterColoredComments],
                        [defaults boolForKey:kRedditFilterColoredCommentsApollo]);
+  RFSetSwipeCollapse([defaults boolForKey:kRedditFilterSwipeToCollapse]);
 }
 
 #pragma mark - Helpers shared with the settings screen
@@ -365,6 +367,7 @@ static BOOL RFIsAPIHost(NSString *host) {
     kRedditFilterAwards : @NO,
     kRedditFilterScores : @NO,
     kRedditFilterAutoCollapseAutoMod : @NO,
+    kRedditFilterSwipeToCollapse : @NO,
     kRedditFilterVideosForYou : @NO,
     kRedditFilterKeywordComments : @NO,
     kRedditFilterKeywordCommentReplies : @YES,
