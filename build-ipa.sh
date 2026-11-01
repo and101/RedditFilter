@@ -90,6 +90,58 @@ make package FINALPACKAGE=1 SIDELOADED=1 IPA="$IPA" APP_VERSION="$APP_VERSION" I
 OUTPUT=packages/RedditFilter_$APP_VERSION-$(grep -E '^PACKAGE_VERSION = ' Makefile | cut -d' ' -f3).ipa
 [ -f "$OUTPUT" ] || fail "the build didn't produce $OUTPUT"
 unzip -Z1 "$OUTPUT" >"$CHECK/output-files"
+
+# SideStore and AltStore don't re-sign extensions in Extensions/, so iOS rejects the install.
+awk -v prefix="${APP_DIR}Extensions/" '
+  index($0, prefix) == 1 {
+    relative = substr($0, length(prefix) + 1)
+    split(relative, parts, "/")
+    if (parts[1] ~ /\.appex$/) print prefix parts[1] "/"
+  }' "$CHECK/output-files" | sort -u >"$CHECK/extension-bundles"
+while IFS= read -r appex; do
+  unzip -p "$OUTPUT" "${appex}Info.plist" >"$CHECK/extension.plist"
+  extension_point=$(plutil -extract EXAppExtensionAttributes.EXExtensionPointIdentifier raw \
+    -o - "$CHECK/extension.plist" 2>/dev/null || true)
+  if [ "$extension_point" = com.apple.crash-reporter.extension ]; then
+    zip -qd "$OUTPUT" "${appex}*"
+    unzip -Z1 "$OUTPUT" >"$CHECK/output-files"
+    if grep -Fxq "$appex" "$CHECK/output-files"; then
+      zip -qd "$OUTPUT" "$appex"
+    fi
+    step "Removed ExtensionKit crash reporter ${appex%/}"
+  fi
+done <"$CHECK/extension-bundles"
+
+unzip -Z1 "$OUTPUT" >"$CHECK/output-files"
+if ! grep -F "${APP_DIR}Extensions/" "$CHECK/output-files" |
+  grep -Fvx "${APP_DIR}Extensions/" >/dev/null; then
+  zip -qd "$OUTPUT" "${APP_DIR}Extensions/" || [ $? -eq 12 ]
+fi
+
+unzip -Z1 "$OUTPUT" >"$CHECK/output-files"
+awk -v prefix="${APP_DIR}Extensions/" '
+  index($0, prefix) == 1 {
+    relative = substr($0, length(prefix) + 1)
+    split(relative, parts, "/")
+    if (parts[1] ~ /\.appex$/) print prefix relative
+  }' "$CHECK/output-files" >"$CHECK/remaining-extensions"
+[ ! -s "$CHECK/remaining-extensions" ] ||
+  fail "an ExtensionKit extension is still in the IPA and SideStore/AltStore can't sign it"
+awk -v prefix="${APP_DIR}PlugIns/" '
+  index($0, prefix) == 1 {
+    relative = substr($0, length(prefix) + 1)
+    split(relative, parts, "/")
+    if (parts[1] ~ /\.appex$/) print parts[1]
+  }' "$CHECK/files" | sort -u >"$CHECK/source-plugins"
+while IFS= read -r appex; do
+  grep -Fq "${APP_DIR}PlugIns/$appex/" "$CHECK/output-files" ||
+    fail "the $appex PlugIns extension is missing from $OUTPUT"
+done <"$CHECK/source-plugins"
+if [ "${SAFARI_EXTENSION:-1}" = 1 ]; then
+  grep -Fq "${APP_DIR}PlugIns/RedditFilterSafari.appex/" "$CHECK/output-files" ||
+    fail "RedditFilterSafari.appex is missing from $OUTPUT"
+fi
+
 for library in RedditFilter RedditSideloadFix; do
   grep -qE "^Payload/[^/]+\.app/Frameworks/$library\.dylib$" "$CHECK/output-files" ||
     fail "$library.dylib is missing from $OUTPUT"
