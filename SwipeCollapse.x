@@ -639,12 +639,19 @@ static void RFPrepareSwipeCollapseHeader(UIView *header) {
   }
   // Most FlexStackViews fail this two-gesture check without walking ancestors.
   if (!RFHasNativeCommentHeaderRecognizers(header)) {
-    // A body or thread line laid out after its header: it collapses on a tap too.
-    if (!gTapCollapseEnabled && RFHasEnabledSingleTap(header)) {
-      UIView *card = RFCommentContainer(header);
-      if (card && objc_getAssociatedObject(card, kRFSwipeCollapseRecognizerKey))
-        RFSetNativeHeaderRecognizersEnabled(header, NO);
+    if (![header respondsToSelector:@selector(didSingleTap)] || !header.gestureRecognizers.count) return;
+    UIView *card = RFCommentContainer(header);
+    if (!card || !objc_getAssociatedObject(card, kRFSwipeCollapseRecognizerKey)) return;
+    // A reused cell that is no longer a comment, like a "1 more reply" row,
+    // keeps the old comment's recognizer: drop it and give its taps back.
+    if (!RFNativeHeaderInCard(card)) {
+      RFRemoveSwipeCollapse(card);
+      RFSetCardTapRecognizersEnabled(card, YES);
+      return;
     }
+    // A body or thread line laid out after its header: it collapses on a tap too.
+    if (!gTapCollapseEnabled && RFHasEnabledSingleTap(header) && RFExpandedHeaderInCard(card))
+      RFSetNativeHeaderRecognizersEnabled(header, NO);
     return;
   }
   UIView *card = RFCommentContainer(header);
