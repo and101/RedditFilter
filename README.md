@@ -1,23 +1,39 @@
 # RedditFilter
 
-Filters unwanted content from the Reddit app: promoted posts, recommendations, NSFW posts, awards, scores, and posts or comments that mention your keywords. It can also play RedGIFs videos with sound.
+Filters unwanted content from the Reddit app: promoted posts, recommendations, NSFW posts, awards, scores, and posts or comments that mention your keywords. It can also play RedGIFs videos with sound, collapse comments with a swipe and open Reddit links from Safari in the app.
 
 <table>
   <tr>
     <th colspan="2">Coloured comment threads</th>
-    <th colspan="2">Settings</th>
+    <th colspan="2">Swipe to collapse</th>
   </tr>
   <tr>
     <td align="center" width="25%"><img src="screenshots/threads.png" width="200" alt="Coloured comment threads: each reply level has its own colour, with the lines of parent comments faded"></td>
     <td align="center" width="25%"><img src="screenshots/apollo.png" width="200" alt="Apollo style: only each comment's own line is coloured"></td>
-    <td align="center" width="25%"><img src="screenshots/settings.png" width="200" alt="RedditFilter settings: the Tweaks section"></td>
-    <td align="center" width="25%"><img src="screenshots/settings2.png" width="200" alt="RedditFilter settings: Keywords and About"></td>
+    <td align="center" width="25%"><img src="screenshots/swipe.png" width="200" alt="A reply swiped left, showing Collapse behind it"></td>
+    <td align="center" width="25%"><img src="screenshots/swipe-thread.png" width="200" alt="A reply swiped further left, showing Collapse thread behind it"></td>
   </tr>
   <tr>
     <td align="center"><b>Default</b><br><sub>Parent lines faded</sub></td>
     <td align="center"><b>Apollo style</b><br><sub>Only each comment's own line</sub></td>
+    <td align="center"><b>Swipe left</b><br><sub>Collapses the comment and its replies</sub></td>
+    <td align="center"><b>Swipe further</b><br><sub>Collapses the whole thread</sub></td>
+  </tr>
+  <tr>
+    <th colspan="3">Settings</th>
+    <th>Safari</th>
+  </tr>
+  <tr>
+    <td align="center" width="25%"><img src="screenshots/settings.png" width="200" alt="RedditFilter settings: the Tweaks section"></td>
+    <td align="center" width="25%"><img src="screenshots/settings2.png" width="200" alt="RedditFilter settings: Collapsing comments and RedGIFs"></td>
+    <td align="center" width="25%"><img src="screenshots/settings3.png" width="200" alt="RedditFilter settings: Keywords, Safari and About"></td>
+    <td align="center" width="25%"><img src="screenshots/safari.png" width="200" alt="Steps to turn on the RedditFilter Safari extension"></td>
+  </tr>
+  <tr>
     <td align="center"><b>Tweaks</b><br><sub>Show or hide each kind of content</sub></td>
-    <td align="center"><b>Keywords and About</b><br><sub>Keyword filters and update check</sub></td>
+    <td align="center"><b>Collapsing and RedGIFs</b><br><sub>Swipe or tap, and video quality</sub></td>
+    <td align="center"><b>Keywords and About</b><br><sub>Keyword filters, Safari and update check</sub></td>
+    <td align="center"><b>Open Reddit links here</b><br><sub>Set up the Safari extension</sub></td>
   </tr>
 </table>
 
