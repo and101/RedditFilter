@@ -16,7 +16,7 @@ typedef struct {
   __unsafe_unretained NSString *title;
   __unsafe_unretained NSString *subtitle; // nil for none
   __unsafe_unretained NSString *icons;    // comma-separated, first icon found wins
-  BOOL switchOnMeansShow;                 // YES: switch ON shows the content (the saved setting is the opposite)
+  BOOL switchOnMeansShow;                 // YES: switch ON saves NO (shows the content, or prefers SD over HD)
   __unsafe_unretained NSString *requires; // only switchable while this setting is on, nil for always
 } RFToggleRow;
 
@@ -49,9 +49,10 @@ static const NSInteger kKeywordRowCount = sizeof(kKeywordRows) / sizeof(kKeyword
 static const RFToggleRow kRedgifsRows[] = {
     {kRedditFilterRedgifsDirect, @"Direct-play RedGIFs", @"Plays with sound, but may use more data",
      @"rpl3/volumeOn,rpl3/play", NO},
-    {kRedditFilterRedgifsHD, @"HD video", @"Sharper, but uses about 10 times the data. Off plays SD",
-     @"rpl3/video,icon_video,icon_play", NO, kRedditFilterRedgifsDirect},
-    {kRedditFilterRedgifsHDWiFiOnly, @"HD on Wi-Fi only", @"Plays SD on mobile data and in Low Data Mode",
+    // Saved as "prefer HD", so the switch is the opposite.
+    {kRedditFilterRedgifsHD, @"Prefer SD", @"Uses about a tenth of the data. Off prefers sharper HD",
+     @"rpl3/video,icon_video,icon_play", YES, kRedditFilterRedgifsDirect},
+    {kRedditFilterRedgifsHDWiFiOnly, @"Prefer SD on mobile data", @"And in Low Data Mode. HD is preferred on Wi-Fi",
      @"rf/wifi", NO, kRedditFilterRedgifsHD},
 };
 static const NSInteger kRedgifsRowCount = sizeof(kRedgifsRows) / sizeof(kRedgifsRows[0]);
@@ -380,7 +381,9 @@ static NSString *RFFooterText(NSInteger section) {
              @"A collapsed comment always opens with a tap.";
     case RFSectionRedgifs:
       return @"Plays RedGIFs' own videos, which have sound. Your device connects to RedGIFs directly. "
-             @"If RedGIFs can't be reached, Reddit's silent version plays.";
+             @"If RedGIFs can't be reached, Reddit's silent version plays. "
+             @"If a video has no SD version, HD plays. Videos already loaded keep their quality "
+             @"when your network changes.";
     case RFSectionKeywords: return nil;
     case RFSectionSafari: return @"Safari asks before each link opens here";
     case RFSectionDebug:
@@ -618,7 +621,7 @@ static void RFShowSafariSetup(UIViewController *controller) {
     [self presentViewController:alert animated:YES completion:nil];
   }
 
-  // Refresh every dependent row, as a chain (HD, then HD on Wi-Fi) can change further down.
+  // Refresh every dependent row, as a chain (Prefer SD, then on mobile data) can change further down.
   for (NSIndexPath *indexPath in self.tableView.indexPathsForVisibleRows) {
     const RFToggleRow *other = RFToggleRowForTag(RFToggleTagAt(indexPath));
     if (other && other->requires)
