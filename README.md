@@ -39,13 +39,19 @@ Filters unwanted content from the Reddit app: promoted posts, recommendations, N
 
 <sub>Screenshots use a made-up community, post and users.</sub>
 
+## New in 1.3.4
+
+- **Swipe haptics**: a light vibration when your swipe reaches Collapse or Collapse thread. On by default; turn it off under **Collapsing comments**.
+- **Stay on the web in Safari**: cancel the prompt twice in a row and that Safari tab stays on the web until it's closed. Going back or forward no longer asks again.
+- **RedGIFs quality switches renamed**: **Prefer SD** (on by default) and **Prefer SD on mobile data**, which also covers Low Data Mode. Your settings carry over. HD still plays when a video has no SD version, and videos already loaded keep their quality when your network changes.
+- **Fixes**: with **Swipe to collapse** on and **Tap to collapse too** off, "more replies" rows load again when tapped. A RedGIFs video whose lookup came back without a playable file is looked up again, instead of playing silently until Reddit is restarted. Reddit links the website opens without loading a new page now open in the app too. After turning ads off, RedditFilter asks you to reopen Reddit if your account was in the Reddit experiment that loads Home ads differently.
+
 ## New in 1.3.3
 
 - **Swipe to collapse**: swipe a comment left to collapse it and its replies, or swipe further to collapse the whole thread, like the 2024 app. The comment slides with your finger and shows what will happen. Swiping left on a collapsed comment or on the post still moves to the next post, and swiping right still goes back. Off by default; turn it on under **Collapsing comments**.
-- **Swipe haptics**: a light vibration when your swipe reaches Collapse or Collapse thread. On by default; turn it off under **Collapsing comments**.
 - **Collapsing comments settings**: a new section for **Swipe to collapse**, **Tap to collapse too** and the **AutoMod** switch. With swipe on, tapping or long pressing anywhere on a comment no longer collapses it, so it can't happen by accident. Links and spoilers still open with a tap. Turn on **Tap to collapse too** to keep both. A collapsed comment always opens with a tap.
 - **Open Reddit links in the app**: a Safari extension now opens Reddit links from Safari in RedditFilter. Safari asks before each one. To set it up, tap **Open Reddit links here** in the new **Safari** section of RedditFilter settings.
-- **RedGIFs quality**: RedGIFs has its own settings section, with **Prefer SD** (on by default, so videos use less data) and, with that off, **Prefer SD on mobile data**, which also covers Low Data Mode. HD plays when a video has no SD version. Videos already loaded keep their quality when your network changes.
+- **RedGIFs quality**: RedGIFs has its own settings section, with **HD video** (off by default, so videos play in SD and use less data) and **HD on Wi-Fi only**, which plays SD on mobile data and in Low Data Mode.
 - **Fixes**: ads no longer appear on the Home feed for users in a Reddit experiment that loads it differently. The IPA no longer includes Reddit's crash report extension, so SideStore and AltStore can install it.
 
 ## New in 1.3.2
