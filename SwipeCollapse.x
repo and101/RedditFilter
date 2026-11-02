@@ -18,6 +18,7 @@ static const void *kRFSwipeCollapseRecognizerKey = &kRFSwipeCollapseRecognizerKe
 static const void *kRFSwipeCollapseSuppressedPagersKey = &kRFSwipeCollapseSuppressedPagersKey;
 static const void *kRFSwipeCollapseRevealKey = &kRFSwipeCollapseRevealKey;
 static const void *kRFSwipeCollapseHandledKey = &kRFSwipeCollapseHandledKey;
+static const void *kRFSwipeCollapseStageKey = &kRFSwipeCollapseStageKey;
 
 static BOOL RFClassNameContains(UIView *view, NSString *needle) {
   return [NSStringFromClass(view.class) containsString:needle];
@@ -497,6 +498,13 @@ static void RFCollapseRootForHeader(UIView *header) {
 - (void)handleSwipe:(UIPanGestureRecognizer *)swipe;
 @end
 
+// The same light tap Reddit plays when a double tap upvotes.
+static UIImpactFeedbackGenerator *RFSwipeCollapseHaptics(void) {
+  static UIImpactFeedbackGenerator *generator;
+  if (!generator) generator = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
+  return generator;
+}
+
 @implementation RFSwipeCollapseGestureHandler
 + (instancetype)shared {
   static RFSwipeCollapseGestureHandler *handler;
@@ -539,6 +547,8 @@ static void RFCollapseRootForHeader(UIView *header) {
 
   if (swipe.state == UIGestureRecognizerStateBegan) {
     objc_setAssociatedObject(swipe, kRFSwipeCollapseHandledKey, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(swipe, kRFSwipeCollapseStageKey, @0, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [RFSwipeCollapseHaptics() prepare];
   }
 
   if (swipe.state == UIGestureRecognizerStateBegan || swipe.state == UIGestureRecognizerStateChanged) {
@@ -554,6 +564,13 @@ static void RFCollapseRootForHeader(UIView *header) {
       thread = header && !RFIsRootCommentCard(card, header);
     }
     RFSetCardOffset(card, dx, thread);
+    // One tap of feedback as the swipe passes Collapse, and one more at Collapse
+    // thread. Moving back below a threshold lets it fire again.
+    NSInteger stage = RFSwipeCollapseStage(translation, width, thread);
+    NSInteger previous = [objc_getAssociatedObject(swipe, kRFSwipeCollapseStageKey) integerValue];
+    if (stage > previous) [RFSwipeCollapseHaptics() impactOccurred];
+    if (stage != previous)
+      objc_setAssociatedObject(swipe, kRFSwipeCollapseStageKey, @(stage), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     return;
   }
 

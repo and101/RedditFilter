@@ -42,6 +42,11 @@ BOOL RFShouldCollapseThreadForSwipe(CGPoint translation, CGFloat headerWidth) {
   return travelledLeft && dx >= RFThreadCollapseDistance(headerWidth);
 }
 
+NSInteger RFSwipeCollapseStage(CGPoint translation, CGFloat headerWidth, BOOL threadAllowed) {
+  if (threadAllowed && RFShouldCollapseThreadForSwipe(translation, headerWidth)) return 2;
+  return RFShouldCollapseForSwipe(translation, CGPointZero) ? 1 : 0;
+}
+
 NSInteger RFCommentLevelFromLabel(NSString *label) {
   if (![label isKindOfClass:NSString.class]) return 0;
   NSRange range = [label rangeOfString:@"Level " options:NSCaseInsensitiveSearch | NSBackwardsSearch];

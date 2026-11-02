@@ -32,6 +32,12 @@ int main(void) {
     Check(!RFShouldCollapseThreadForSwipe(CGPointMake(140, 2), 400), @"A right swipe should not collapse the thread");
     Check(!RFShouldCollapseThreadForSwipe(CGPointMake(-140, 120), 400), @"A diagonal swipe should not collapse the thread");
 
+    Check(RFSwipeCollapseStage(CGPointMake(-30, 2), 300, YES) == 0, @"A short drag has crossed no threshold");
+    Check(RFSwipeCollapseStage(CGPointMake(-60, 2), 300, YES) == 1, @"Past the collapse distance is the first threshold");
+    Check(RFSwipeCollapseStage(CGPointMake(-121, 2), 300, YES) == 2, @"Past the thread distance is the second threshold");
+    Check(RFSwipeCollapseStage(CGPointMake(-121, 2), 300, NO) == 1, @"A top-level comment has no thread threshold");
+    Check(RFSwipeCollapseStage(CGPointMake(-60, 50), 300, YES) == 0, @"A diagonal drag crosses no threshold");
+
     Check(RFCommentLevelFromLabel(@"Comment by user, 1h ago, 10 votes, Level 3") == 3,
           @"A comment label exposes its reply level");
     Check(RFCommentLevelFromLabel(@"Comment by user, 1h ago") == 0,

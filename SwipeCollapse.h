@@ -13,6 +13,8 @@ BOOL RFHasLeftSwipeDirection(CGPoint translation, CGPoint velocity);
 BOOL RFShouldCollapseForSwipe(CGPoint translation, CGPoint velocity);
 BOOL RFShouldCollapseThreadForSwipe(CGPoint translation, CGFloat headerWidth);
 CGFloat RFThreadCollapseDistance(CGFloat headerWidth);
+// 0 before any threshold, 1 past Collapse, 2 past Collapse thread (only when allowed).
+NSInteger RFSwipeCollapseStage(CGPoint translation, CGFloat headerWidth, BOOL threadAllowed);
 BOOL RFIsExpandedCommentHeaderLabel(NSString *label);
 NSInteger RFCommentLevelFromLabel(NSString *label);
 
