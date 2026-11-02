@@ -29,10 +29,6 @@ static const RFToggleRow kToggleRows[] = {
     {kRedditFilterAwards, @"Awards", @"Show awards on posts and comments",
      @"rpl3/award,icon_gift_fill,icon_award,icon-award-outline", YES},
     {kRedditFilterScores, @"Scores", @"Show vote count on posts and comments", @"rpl3/upvote,icon_upvote", YES},
-    {kRedditFilterAutoCollapseAutoMod, @"AutoMod", @"Auto collapse AutoMod comments", @"rpl3/mod,icon_mod", NO},
-    {kRedditFilterSwipeToCollapse, @"Swipe to collapse",
-     @"Swipe a comment left to collapse it, or swipe further to collapse the whole thread",
-     @"rpl3/swipeLeft,rpl3/comment,icon_comment", NO},
     {kRedditFilterColoredComments, @"Coloured comment threads", @"Give each reply level its own colour",
      @"rpl3/branch,rpl3/comment,icon_comment", NO},
     {kRedditFilterColoredCommentsApollo, @"Apollo style", @"Only colour each comment's own line",
@@ -60,6 +56,18 @@ static const RFToggleRow kRedgifsRows[] = {
 };
 static const NSInteger kRedgifsRowCount = sizeof(kRedgifsRows) / sizeof(kRedgifsRows[0]);
 
+// In the Collapsing section. Their switch tags follow kRedgifsRows'.
+static const RFToggleRow kCollapseRows[] = {
+    {kRedditFilterSwipeToCollapse, @"Swipe to collapse",
+     @"Swipe a comment left to collapse it, or swipe further to collapse the whole thread",
+     @"rpl3/swipeLeft,rpl3/comment,icon_comment", NO},
+    {kRedditFilterTapToCollapse, @"Tap to collapse too",
+     @"Tap a comment to collapse it, or long press to collapse the whole thread", @"rpl3/comment,icon_comment", NO,
+     kRedditFilterSwipeToCollapse},
+    {kRedditFilterAutoCollapseAutoMod, @"AutoMod", @"Auto collapse AutoMod comments", @"rpl3/mod,icon_mod", NO},
+};
+static const NSInteger kCollapseRowCount = sizeof(kCollapseRows) / sizeof(kCollapseRows[0]);
+
 // In the About section, between the RedditFilter and developer rows. Its switch tag follows kKeywordRows'.
 static const RFToggleRow kUpdateRow = {kRedditFilterCheckUpdates, @"Check for updates",
                                        @"Tell me when a new RedditFilter is out", @"rpl3/download,rpl3/notifications",
@@ -67,6 +75,7 @@ static const RFToggleRow kUpdateRow = {kRedditFilterCheckUpdates, @"Check for up
 static const NSInteger kKeywordRowTag = kToggleRowCount;
 static const NSInteger kUpdateRowTag = kKeywordRowTag + kKeywordRowCount;
 static const NSInteger kRedgifsRowTag = kUpdateRowTag + 1;
+static const NSInteger kCollapseRowTag = kRedgifsRowTag + kRedgifsRowCount;
 // Its position: row 1 of the About section. The other About rows are kAboutRows.
 static const NSInteger kAboutUpdateRow = 1;
 
@@ -77,6 +86,8 @@ static const RFToggleRow *RFToggleRowForKey(NSString *key) {
     if ([kKeywordRows[i].key isEqualToString:key]) return &kKeywordRows[i];
   for (NSInteger i = 0; i < kRedgifsRowCount; i++)
     if ([kRedgifsRows[i].key isEqualToString:key]) return &kRedgifsRows[i];
+  for (NSInteger i = 0; i < kCollapseRowCount; i++)
+    if ([kCollapseRows[i].key isEqualToString:key]) return &kCollapseRows[i];
   return [kUpdateRow.key isEqualToString:key] ? &kUpdateRow : NULL;
 }
 
@@ -86,6 +97,8 @@ static const RFToggleRow *RFToggleRowForTag(NSInteger tag) {
   if (keywordRow >= 0 && keywordRow < kKeywordRowCount) return &kKeywordRows[keywordRow];
   NSInteger redgifsRow = tag - kRedgifsRowTag;
   if (redgifsRow >= 0 && redgifsRow < kRedgifsRowCount) return &kRedgifsRows[redgifsRow];
+  NSInteger collapseRow = tag - kCollapseRowTag;
+  if (collapseRow >= 0 && collapseRow < kCollapseRowCount) return &kCollapseRows[collapseRow];
   if (tag == kUpdateRowTag) return &kUpdateRow;
   return NULL;
 }
@@ -305,6 +318,7 @@ static UIView *RFSectionView(UITableView *tableView, NSString *text, CGFloat hei
 
 typedef NS_ENUM(NSInteger, RFSection) {
   RFSectionFilters,
+  RFSectionCollapse,
   RFSectionRedgifs,
   RFSectionKeywords,
   RFSectionSafari,
@@ -328,7 +342,7 @@ static NSArray<NSNumber *> *RFSections(void) {
   static NSArray *sections;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
-    NSMutableArray *list = [@[ @(RFSectionFilters), @(RFSectionRedgifs), @(RFSectionKeywords) ] mutableCopy];
+    NSMutableArray *list = [@[ @(RFSectionFilters), @(RFSectionCollapse), @(RFSectionRedgifs), @(RFSectionKeywords) ] mutableCopy];
     if (RFHasSafariExtension()) [list addObject:@(RFSectionSafari)];
     if (REDDITFILTER_DEBUG) [list addObject:@(RFSectionDebug)];
     [list addObject:@(RFSectionAbout)];
@@ -345,6 +359,7 @@ static RFSection RFSectionAt(NSInteger section) {
 static NSString *RFHeaderText(NSInteger section) {
   switch (RFSectionAt(section)) {
     case RFSectionFilters: return @"TWEAKS";
+    case RFSectionCollapse: return @"COLLAPSING COMMENTS";
     case RFSectionRedgifs: return @"REDGIFS";
     case RFSectionKeywords: return @"KEYWORDS";
     case RFSectionSafari: return @"SAFARI";
@@ -357,6 +372,9 @@ static NSString *RFHeaderText(NSInteger section) {
 static NSString *RFFooterText(NSInteger section) {
   switch (RFSectionAt(section)) {
     case RFSectionFilters: return @"Filter posts and adjust how Reddit looks";
+    case RFSectionCollapse:
+      return @"With swipe to collapse off, tapping a comment's header collapses it as usual. "
+             @"A collapsed comment always opens with a tap.";
     case RFSectionRedgifs:
       return @"Plays RedGIFs' own videos, which have sound. Your device connects to RedGIFs directly. "
              @"If RedGIFs can't be reached, Reddit's silent version plays.";
@@ -374,6 +392,7 @@ static NSString *RFFooterText(NSInteger section) {
 static NSInteger RFToggleTagAt(NSIndexPath *indexPath) {
   switch (RFSectionAt(indexPath.section)) {
     case RFSectionFilters: return indexPath.row;
+    case RFSectionCollapse: return kCollapseRowTag + indexPath.row;
     case RFSectionRedgifs: return kRedgifsRowTag + indexPath.row;
     case RFSectionKeywords: return indexPath.row > 0 ? kKeywordRowTag + indexPath.row - 1 : -1;
     case RFSectionAbout: return indexPath.row == kAboutUpdateRow ? kUpdateRowTag : -1;
@@ -523,6 +542,8 @@ static void RFShowSafariSetup(UIViewController *controller) {
   switch (RFSectionAt(section)) {
     case RFSectionFilters:
       return kToggleRowCount;
+    case RFSectionCollapse:
+      return kCollapseRowCount;
     case RFSectionRedgifs:
       return kRedgifsRowCount;
     case RFSectionKeywords:

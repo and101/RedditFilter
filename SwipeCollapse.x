@@ -8,7 +8,9 @@
 @end
 
 static BOOL gSwipeCollapseEnabled;
+static BOOL gTapCollapseEnabled = YES;
 static NSHashTable<UIView *> *gSwipeCollapseCards;
+static NSHashTable<UIGestureRecognizer *> *gDisabledHeaderRecognizers;
 static const void *kRFSwipeCollapseRecognizerKey = &kRFSwipeCollapseRecognizerKey;
 static const void *kRFSwipeCollapseSuppressedPagersKey = &kRFSwipeCollapseSuppressedPagersKey;
 static const void *kRFSwipeCollapseRevealKey = &kRFSwipeCollapseRevealKey;
@@ -98,6 +100,22 @@ static BOOL RFTouchBelongsToOwnHorizontalGesture(UIView *view, UIView *card) {
       return YES;
   }
   return NO;
+}
+
+// Whether the card is a top-level comment, where collapsing the comment and
+// collapsing its thread are the same thing. English labels give the level;
+// otherwise each top-level thread is a section whose item 0 is the root.
+static BOOL RFIsRootCommentCard(UIView *card, UIView *header) {
+  NSInteger level = RFCommentLevelFromLabel(header.accessibilityLabel);
+  if (level >= 1) return level == 1;
+  UICollectionViewCell *cell = nil;
+  UICollectionView *collection = nil;
+  for (UIView *view = card; view; view = view.superview) {
+    if (!cell && [view isKindOfClass:UICollectionViewCell.class]) cell = (UICollectionViewCell *)view;
+    else if (cell && [view isKindOfClass:UICollectionView.class]) { collection = (UICollectionView *)view; break; }
+  }
+  NSIndexPath *path = cell && collection ? [collection indexPathForCell:cell] : nil;
+  return path && path.item == 0;
 }
 
 #pragma mark - Card movement
@@ -463,7 +481,13 @@ static void RFCollapseRootForHeader(UIView *header) {
     CGFloat limit = RFThreadCollapseDistance(width);
     CGFloat dx = MIN(0.0, translation.x);
     if (dx < -limit) dx = -limit + (dx + limit) * 0.3;
-    RFSetCardOffset(card, dx, RFShouldCollapseThreadForSwipe(translation, width));
+    // A top-level comment is its whole thread, so it only ever says Collapse.
+    BOOL thread = RFShouldCollapseThreadForSwipe(translation, width);
+    if (thread) {
+      UIView *header = RFExpandedHeaderInCard(card);
+      thread = header && !RFIsRootCommentCard(card, header);
+    }
+    RFSetCardOffset(card, dx, thread);
     return;
   }
 
@@ -491,6 +515,33 @@ static void RFCollapseRootForHeader(UIView *header) {
 }
 @end
 
+#pragma mark - Tap and long press
+
+// With swipe on, an expanded comment's header ignores Reddit's tap and long
+// press, so they no longer collapse it by accident. A collapsed comment keeps
+// them, as a tap is the only way to open it again.
+static void RFSetNativeHeaderRecognizersEnabled(UIView *header, BOOL enabled) {
+  for (UIGestureRecognizer *recognizer in header.gestureRecognizers) {
+    BOOL tap = [recognizer isKindOfClass:UITapGestureRecognizer.class] &&
+               ((UITapGestureRecognizer *)recognizer).numberOfTapsRequired == 1;
+    if (!tap && ![recognizer isKindOfClass:UILongPressGestureRecognizer.class]) continue;
+    if (enabled) {
+      if (![gDisabledHeaderRecognizers containsObject:recognizer]) continue; // never turn on Reddit's own off ones
+      recognizer.enabled = YES;
+      [gDisabledHeaderRecognizers removeObject:recognizer];
+    } else if (recognizer.enabled) {
+      recognizer.enabled = NO;
+      if (!gDisabledHeaderRecognizers) gDisabledHeaderRecognizers = [NSHashTable weakObjectsHashTable];
+      [gDisabledHeaderRecognizers addObject:recognizer];
+    }
+  }
+}
+
+static void RFRestoreAllHeaderRecognizers(void) {
+  for (UIGestureRecognizer *recognizer in gDisabledHeaderRecognizers.allObjects) recognizer.enabled = YES;
+  [gDisabledHeaderRecognizers removeAllObjects];
+}
+
 // Called whenever a comment header lays out: gives its card a recognizer
 // while the comment is expanded and removes it once collapsed.
 static void RFPrepareSwipeCollapseHeader(UIView *header) {
@@ -506,6 +557,7 @@ static void RFPrepareSwipeCollapseHeader(UIView *header) {
 
   UIPanGestureRecognizer *swipe = objc_getAssociatedObject(card, kRFSwipeCollapseRecognizerKey);
   BOOL expanded = RFIsExpandedCommentHeader(header);
+  RFSetNativeHeaderRecognizersEnabled(header, gTapCollapseEnabled || !expanded);
   if (swipe) {
     if (!expanded && swipe.state == UIGestureRecognizerStatePossible) RFRemoveSwipeCollapse(card);
     return;
@@ -526,12 +578,23 @@ static void RFPrepareSwipeCollapseHeader(UIView *header) {
   [gSwipeCollapseCards addObject:card];
 }
 
-void RFSetSwipeCollapse(BOOL enabled) {
+void RFSetSwipeCollapse(BOOL enabled, BOOL tapToo) {
   if (![NSThread isMainThread]) {
-    dispatch_async(dispatch_get_main_queue(), ^{ RFSetSwipeCollapse(enabled); });
+    dispatch_async(dispatch_get_main_queue(), ^{ RFSetSwipeCollapse(enabled, tapToo); });
     return;
   }
-  if (gSwipeCollapseEnabled == enabled) return;
+  BOOL tapChanged = gTapCollapseEnabled != tapToo;
+  gTapCollapseEnabled = tapToo;
+  if (!enabled || tapToo) RFRestoreAllHeaderRecognizers();
+  if (gSwipeCollapseEnabled == enabled) {
+    // Turning tap off with swipe already on: apply it to comments on screen now.
+    if (tapChanged && enabled && !tapToo)
+      for (UIView *card in gSwipeCollapseCards.allObjects) {
+        UIView *header = RFExpandedHeaderInCard(card);
+        if (header) RFSetNativeHeaderRecognizersEnabled(header, NO);
+      }
+    return;
+  }
   gSwipeCollapseEnabled = enabled;
   if (enabled) return; // Headers pick it up as they lay out.
   for (UIView *card in gSwipeCollapseCards.allObjects) RFRemoveSwipeCollapse(card);
@@ -556,5 +619,7 @@ void RFSetSwipeCollapse(BOOL enabled) {
 %ctor {
   Class flexStack = NSClassFromString(@"SliceKit.FlexStackView");
   if (flexStack) %init(RFFlexStackViewHooks, RFFlexStackView = flexStack);
-  RFSetSwipeCollapse([NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterSwipeToCollapse]);
+  NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+  RFSetSwipeCollapse([defaults boolForKey:kRedditFilterSwipeToCollapse],
+                     [defaults boolForKey:kRedditFilterTapToCollapse]);
 }

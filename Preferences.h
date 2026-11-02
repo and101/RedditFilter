@@ -7,6 +7,7 @@
 #define kRedditFilterScores @"kRedditFilterScores"
 #define kRedditFilterAutoCollapseAutoMod @"kRedditFilterAutoCollapseAutoMod"
 #define kRedditFilterSwipeToCollapse @"kRedditFilterSwipeToCollapse"
+#define kRedditFilterTapToCollapse @"kRedditFilterTapToCollapse" // with swipe on, keep tap and long press too
 #define kRedditFilterVideosForYou @"kRedditFilterVideosForYou"
 #define kRedditFilterKeywords @"kRedditFilterKeywords" // array of strings
 #define kRedditFilterKeywordComments @"kRedditFilterKeywordComments"

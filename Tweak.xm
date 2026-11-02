@@ -36,7 +36,8 @@ extern "C" void RFReloadPreferences(void) {
   if (prefs.redgifsDirect && prefs.redgifsHD && prefs.redgifsHDWiFiOnly) RFRedgifsOnWiFi();
   RFSetColoredComments([defaults boolForKey:kRedditFilterColoredComments],
                        [defaults boolForKey:kRedditFilterColoredCommentsApollo]);
-  RFSetSwipeCollapse([defaults boolForKey:kRedditFilterSwipeToCollapse]);
+  RFSetSwipeCollapse([defaults boolForKey:kRedditFilterSwipeToCollapse],
+                     [defaults boolForKey:kRedditFilterTapToCollapse]);
 }
 
 #pragma mark - Helpers shared with the settings screen
@@ -392,6 +393,7 @@ static void RFCleanCachedExperiments(void) {
     kRedditFilterScores : @NO,
     kRedditFilterAutoCollapseAutoMod : @NO,
     kRedditFilterSwipeToCollapse : @NO,
+    kRedditFilterTapToCollapse : @NO,
     kRedditFilterVideosForYou : @NO,
     kRedditFilterKeywordComments : @NO,
     kRedditFilterKeywordCommentReplies : @YES,

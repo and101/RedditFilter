@@ -5,7 +5,8 @@
 extern "C" {
 #endif
 
-void RFSetSwipeCollapse(BOOL enabled);
+// tapToo keeps Reddit's tap and long press on expanded comments while swipe is on.
+void RFSetSwipeCollapse(BOOL enabled, BOOL tapToo);
 
 // Pure gesture/label rules, kept separate so their edge cases can be tested.
 BOOL RFHasLeftSwipeDirection(CGPoint translation, CGPoint velocity);
