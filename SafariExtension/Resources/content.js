@@ -52,20 +52,44 @@
     return rest === "/" || rest.startsWith("/r/") || rest.startsWith("/x/");
   }
 
-  // Don't send the same page twice in a row, so going back to Safari or cancelling the prompt
-  // leaves the web page usable.
-  const key = "redditfilter-sent";
+  // What this tab remembers, until it's closed.
+  const SENT = "redditfilter-sent"; // the last page sent, so it isn't sent twice in a row
+  const ASKED = "redditfilter-asked"; // set while Safari may still be asking about it
+  const CANCELS = "redditfilter-cancels"; // prompts cancelled in a row
+  const WEB_ONLY = "redditfilter-web"; // set after two: the tab stays on the web
+  const read = (name) => {
+    try { return sessionStorage.getItem(name); } catch (error) { return null; }
+  };
+  const write = (name, value) => {
+    try {
+      if (value === null) sessionStorage.removeItem(name);
+      else sessionStorage.setItem(name, value);
+    } catch (error) {}
+  };
+
+  // Safari doesn't say whether Open or Cancel was tapped, but opening the app hides the page.
+  // So a page still on screen when the next one is checked means the prompt was cancelled.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "hidden" || !read(ASKED)) return;
+    write(ASKED, null);
+    write(CANCELS, null);
+  });
 
   function check(href) {
     const url = new URL(href);
     // Reddit's own way to keep a link on the web, plus one of ours.
     if (url.searchParams.get("$web_only") === "true" || url.searchParams.has("rf_web")) return;
     if (!opensInApp(url.hostname.toLowerCase(), url.pathname)) return;
+    if (read(WEB_ONLY) || read(SENT) === url.href) return;
 
-    try {
-      if (sessionStorage.getItem(key) === url.href) return;
-      sessionStorage.setItem(key, url.href);
-    } catch (error) {}
+    if (read(ASKED)) {
+      write(ASKED, null);
+      const cancels = Number(read(CANCELS) || 0) + 1;
+      write(CANCELS, String(cancels));
+      if (cancels >= 2) return write(WEB_ONLY, "1");
+    }
+    write(SENT, url.href);
+    write(ASKED, "1");
 
     const target = SCHEME + "://" + url.host + url.pathname + url.search + url.hash;
     const openHere = () => location.replace(target);
@@ -81,21 +105,31 @@
 
   if (window.top !== window) return;
   let current = location.href;
-  check(current);
+  // Going back or forward to a page doesn't ask again: it's a page already kept on the web, and
+  // Safari won't open an app link during it anyway.
+  let traversed = false;
+  try {
+    traversed = performance.getEntriesByType("navigation")[0].type === "back_forward";
+  } catch (error) {}
+  if (!traversed) check(current);
 
   // Reddit's website changes pages without loading a new one, so check each new address too.
   // Only the part before "#" counts, so jumping within a page doesn't ask again.
   const page = (href) => href.split("#")[0];
-  const changed = () => {
+  const changed = (ask) => {
     if (page(location.href) === page(current)) return;
     current = location.href;
-    check(current);
+    if (ask) check(current);
   };
   if (window.navigation && typeof window.navigation.addEventListener === "function") {
-    window.navigation.addEventListener("currententrychange", changed);
+    window.navigation.addEventListener("currententrychange", (event) =>
+      changed(event.navigationType === "push" || event.navigationType === "replace"));
   } else {
     // Scripts like this one can't see the page's own history calls, so look for a new address.
-    window.addEventListener("popstate", changed);
-    setInterval(changed, 500);
+    // Back and forward come with popstate first, so they're noted without asking.
+    window.addEventListener("popstate", () => changed(false));
+    setInterval(() => changed(true), 500);
   }
+  // A page restored from Safari's back-forward cache keeps this script running.
+  window.addEventListener("pageshow", (event) => { if (event.persisted) current = location.href; });
 })();

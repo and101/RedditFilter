@@ -385,7 +385,8 @@ static NSString *RFFooterText(NSInteger section) {
              @"If a video has no SD version, HD plays. Videos already loaded keep their quality "
              @"when your network changes.";
     case RFSectionKeywords: return nil;
-    case RFSectionSafari: return @"Safari asks before each link opens here";
+    case RFSectionSafari:
+      return @"Safari asks before each link opens here. Cancel twice to stay on the web in that tab";
     case RFSectionDebug:
       return @"✓ resolved · ✗ broke (structural fallback is now filtering). "
              @"Tap Copy on a ✗ row to grab the auto-discovered replacement path.";
@@ -477,7 +478,8 @@ static void RFShowSafariSetup(UIViewController *controller) {
                                @"1. Open Settings, then Apps, then Safari, then Extensions.\n"
                                @"2. Tap RedditFilter and turn on Allow Extension.\n"
                                @"3. Under Permissions, set the Reddit websites to Allow.\n\n"
-                               @"Safari asks before each link opens. Tap Cancel to stay on the web page."
+                               @"Safari asks before each link opens. Tap Cancel to stay on the web page, "
+                               @"or cancel twice to stay on the web in that tab until it's closed."
                 preferredStyle:UIAlertControllerStyleAlert];
   [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
   [controller presentViewController:alert animated:YES completion:nil];
