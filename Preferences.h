@@ -27,6 +27,7 @@
 extern "C" {
 #endif
 void RFReloadPreferences(void); // call after changing a setting
+BOOL RFCleanCachedExperiments(void); // YES if it removed experiments the running app may still use
 UIImage *iconWithName(NSString *iconName);
 Class CoreClass(NSString *name);
 #ifdef __cplusplus

@@ -325,8 +325,10 @@ static BOOL RFIsAPIHost(NSString *host) {
 
 // Reddit keeps each account's experiments in <group container>/Library/Application Support/<account>/
 // ExperimentVariants and applies them at launch, before it fetches fresh ones. Cleaned here so the
-// ad-leaking experiments are gone from the first launch, not just the one after.
-static void RFCleanCachedExperiments(void) {
+// ad-leaking experiments are gone from the first launch, not just the one after. Returns YES if any
+// were removed (an app that has already read them keeps using them until it's reopened).
+BOOL RFCleanCachedExperiments(void) {
+  BOOL removed = NO;
   NSFileManager *fm = NSFileManager.defaultManager;
   NSString *group = @"group.com.reddit.Reddit";
   NSMutableOrderedSet<NSString *> *containers = [NSMutableOrderedSet orderedSet];
@@ -340,9 +342,10 @@ static void RFCleanCachedExperiments(void) {
     for (NSString *account in [fm contentsOfDirectoryAtPath:support error:nil]) {
       NSString *path = [[support stringByAppendingPathComponent:account] stringByAppendingPathComponent:@"ExperimentVariants"];
       NSData *cleaned = RFCachedExperimentsWithoutAdLeaks([NSData dataWithContentsOfFile:path]);
-      if (cleaned) [cleaned writeToFile:path options:NSDataWritingAtomic error:nil];
+      if (cleaned && [cleaned writeToFile:path options:NSDataWritingAtomic error:nil]) removed = YES;
     }
   }
+  return removed;
 }
 
 #pragma mark - Swift model and UI hooks

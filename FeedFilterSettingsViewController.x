@@ -606,6 +606,18 @@ static void RFShowSafariSetup(UIViewController *controller) {
   [NSUserDefaults.standardUserDefaults setBool:filterOn forKey:row->key];
   RFReloadPreferences();
 
+  // Some accounts are in a Reddit experiment that loads Home ads where the filter can't see them.
+  // It's removed at launch, but the running app has already read it.
+  if (filterOn && [row->key isEqualToString:kRedditFilterPromoted] && RFCleanCachedExperiments()) {
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"Restart Reddit"
+                                            message:@"To finish applying Home-feed ad blocking, fully close Reddit "
+                                                    @"and reopen it."
+                                     preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
+  }
+
   // Refresh every dependent row, as a chain (HD, then HD on Wi-Fi) can change further down.
   for (NSIndexPath *indexPath in self.tableView.indexPathsForVisibleRows) {
     const RFToggleRow *other = RFToggleRowForTag(RFToggleTagAt(indexPath));
