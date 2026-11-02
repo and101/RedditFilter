@@ -319,6 +319,30 @@ static BOOL RFIsAPIHost(NSString *host) {
 }
 %end
 
+#pragma mark - Cached experiments
+
+// Reddit keeps each account's experiments in <group container>/Library/Application Support/<account>/
+// ExperimentVariants and applies them at launch, before it fetches fresh ones. Cleaned here so the
+// ad-leaking experiments are gone from the first launch, not just the one after.
+static void RFCleanCachedExperiments(void) {
+  NSFileManager *fm = NSFileManager.defaultManager;
+  NSString *group = @"group.com.reddit.Reddit";
+  NSMutableOrderedSet<NSString *> *containers = [NSMutableOrderedSet orderedSet];
+  NSString *shared = [fm containerURLForSecurityApplicationGroupIdentifier:group].path;
+  if (shared) [containers addObject:shared];
+  // Sideloaded: RedditSideloadFix moves the group container here, and may load after this tweak.
+  [containers addObject:[NSHomeDirectory() stringByAppendingPathComponent:
+                                               [@"Documents/FakeGroupContainers" stringByAppendingPathComponent:group]]];
+  for (NSString *container in containers) {
+    NSString *support = [container stringByAppendingPathComponent:@"Library/Application Support"];
+    for (NSString *account in [fm contentsOfDirectoryAtPath:support error:nil]) {
+      NSString *path = [[support stringByAppendingPathComponent:account] stringByAppendingPathComponent:@"ExperimentVariants"];
+      NSData *cleaned = RFCachedExperimentsWithoutAdLeaks([NSData dataWithContentsOfFile:path]);
+      if (cleaned) [cleaned writeToFile:path options:NSDataWritingAtomic error:nil];
+    }
+  }
+}
+
 #pragma mark - Swift model and UI hooks
 
 %group SwiftClasses
@@ -379,6 +403,7 @@ static BOOL RFIsAPIHost(NSString *host) {
     kRedditFilterCheckUpdates : @YES,
   }];
   RFReloadPreferences();
+  if (globalPrefs.promoted) RFCleanCachedExperiments();
 
   %init;
   %init(SwiftClasses, Post = CoreClass(@"Post"), Comment = CoreClass(@"Comment"));

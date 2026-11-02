@@ -43,6 +43,24 @@ int main(void) {
     NSDictionary *unknownAds = Post(@{@"pdpCommentsAds": @{@"futureField": @YES}});
     Check([Filter(unknownAds, @"PdpCommentsAds", ads) isEqual:unknownAds], @"Keep unknown ad shapes");
 
+    // Experiments that load Home ads where the filter can't see them.
+    NSDictionary *deferVariant = @{@"experimentName": @"ios_home_feed_defer_query", @"name": @"defer_enabled"};
+    NSDictionary *otherVariant = @{@"experimentName": @"ios_home_feed_evo", @"name": @"enabled"};
+    NSDictionary *experiments = @{@"data": @{@"experimentVariants": @[otherVariant, deferVariant]}};
+    Check([Filter(experiments, @"GetAllExperimentVariants", ads)[@"data"][@"experimentVariants"] isEqual:@[otherVariant]],
+          @"Drop the deferred Home feed experiment");
+    Check([Filter(experiments, @"GetAllExperimentVariants", nsfw) isEqual:experiments], @"Keep experiments with ads allowed");
+    NSDictionary *noDefer = @{@"data": @{@"experimentVariants": @[otherVariant]}};
+    NSData *noDeferData = [NSJSONSerialization dataWithJSONObject:noDefer options:0 error:NULL];
+    Check(RFFilteredResponseData(noDeferData, @"GetAllExperimentVariants", ads) == nil, @"Leave other experiments untouched");
+    NSDictionary *cache = @{@"metadata": @{@"identifier": @"t2_x"}, @"variants": @[deferVariant, otherVariant]};
+    NSData *cleaned = RFCachedExperimentsWithoutAdLeaks([NSJSONSerialization dataWithJSONObject:cache options:0 error:NULL]);
+    NSDictionary *cleanedCache = [NSJSONSerialization JSONObjectWithData:cleaned options:0 error:NULL];
+    Check([cleanedCache[@"variants"] isEqual:@[otherVariant]] && [cleanedCache[@"metadata"] isEqual:cache[@"metadata"]],
+          @"Clean the cached experiments file");
+    Check(RFCachedExperimentsWithoutAdLeaks(cleaned) == nil, @"Leave a clean cache alone");
+    Check(RFCachedExperimentsWithoutAdLeaks([@"not json" dataUsingEncoding:NSUTF8StringEncoding]) == nil, @"Ignore unreadable caches");
+
     NSArray *cards = @[
       Card(@{@"__typename": @"IndicatorsCell", @"indicators": @[@"NSFW"]}),
       Card(@{@"__typename": @"TitleWithThumbnailCell", @"indicatorsCell": @{@"indicators": @[@"nsfw"]}}),

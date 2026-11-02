@@ -494,7 +494,43 @@ static BOOL RFFilterCommentAds(NSMutableDictionary *json, NSDictionary *payload,
   return RFClearAdKeys(container, @[ @"pdpCommentsAds" ]);
 }
 
+#pragma mark - Experiments
+
+// Experiments that make the app load ads in a way the filter can't see. ios_home_feed_defer_query
+// loads the first Home page with HomeFeedWithDefer, a streamed response the app requests without a
+// completion handler, so it never reaches the network hook. Without the experiment, Home uses
+// HomeFeedSdui like every other page.
+static NSSet<NSString *> *RFAdLeakExperiments(void) {
+  static NSSet *set;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{ set = [NSSet setWithObject:@"ios_home_feed_defer_query"]; });
+  return set;
+}
+
+// Removes those experiments from a list of variants: the app then treats them as not assigned.
+static BOOL RFDropAdLeakExperiments(NSMutableDictionary *container, NSString *key) {
+  NSArray *variants = RFArray(container[key]);
+  if (!variants) return NO;
+  NSArray *kept = [variants filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(id item, NSDictionary *b) {
+    return ![RFAdLeakExperiments() containsObject:RFString(RFDict(item)[@"experimentName"]) ?: @""];
+  }]];
+  if (kept.count == variants.count) return NO;
+  container[key] = kept;
+  return YES;
+}
+
+NSData *RFCachedExperimentsWithoutAdLeaks(NSData *data) {
+  if (!data.length) return nil;
+  NSMutableDictionary *json = RFMutableDict([NSJSONSerialization JSONObjectWithData:data
+                                                                            options:NSJSONReadingMutableContainers
+                                                                              error:NULL]);
+  if (!RFDropAdLeakExperiments(json, @"variants")) return nil;
+  return [NSJSONSerialization dataWithJSONObject:json options:0 error:NULL];
+}
+
 static BOOL RFFilterResponse(NSMutableDictionary *json, NSDictionary *payload, NSString *op, const RFContext *ctx) {
+  if ([op isEqualToString:@"GetAllExperimentVariants"])
+    return ctx->prefs.promoted && RFDropAdLeakExperiments(RFMutableDict(payload), @"experimentVariants");
   for (size_t i = 0; i < sizeof(kFastPaths) / sizeof(kFastPaths[0]); i++) {
     const RFFastPath *fast = &kFastPaths[i];
     if (![op isEqualToString:fast->operation]) continue;
@@ -516,7 +552,7 @@ static NSSet<NSString *> *RFIgnoredOperations(void) {
   dispatch_once(&once, ^{
     set = [[NSSet alloc] initWithObjects:
         @"GetAccount", @"FetchIdentityPreferences", @"DynamicConfigsByNames",
-        @"GetAllExperimentVariants", @"AdsOffRedditLocation", @"UserLocation",
+        @"AdsOffRedditLocation", @"UserLocation",
         @"CookiePreferences", @"FetchSubscribedSubreddits", @"AdsOffRedditPreferences",
         @"Age", @"RecommendedPrompts", @"EnrollInGamification", @"BadgeCounts",
         @"GetEligibleUXExperiences", @"GetUserAdEligibility", @"GoldBalances",

@@ -44,6 +44,11 @@ NSString *RFOperationName(NSURLRequest *request);
 // in which case the caller should pass the original data through.
 NSData *RFFilteredResponseData(NSData *data, NSString *operationName, RFPrefs prefs);
 
+// Reddit's cached copy of its experiments (an ExperimentVariants file), minus the ones that make the
+// app load ads where the filter can't see them. The app reads it at launch, before it fetches fresh
+// ones (which RFFilteredResponseData cleans). Returns nil if nothing changed.
+NSData *RFCachedExperimentsWithoutAdLeaks(NSData *data);
+
 // Feed cards only carry the first 300 characters of a post's text. Returns a request for the full
 // posts on a feed page (the one the app itself makes after showing the page), or nil when there are
 // no keywords or no posts to check.
