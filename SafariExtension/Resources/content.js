@@ -75,12 +75,15 @@
     write(CANCELS, null);
   });
 
-  function check(href) {
+  function check(href, replaced) {
     const url = new URL(href);
     // Reddit's own way to keep a link on the web, plus one of ours.
     if (url.searchParams.get("$web_only") === "true" || url.searchParams.has("rf_web")) return;
     if (!opensInApp(url.hostname.toLowerCase(), url.pathname)) return;
     if (read(WEB_ONLY) || read(SENT) === url.href) return;
+    // Reddit tidying the address (a share link's tracking, say) while Safari may still be asking
+    // about the page isn't a new page, so it isn't a cancel and isn't sent again.
+    if (replaced && read(ASKED)) return write(SENT, url.href);
 
     if (read(ASKED)) {
       write(ASKED, null);
@@ -116,14 +119,15 @@
   // Reddit's website changes pages without loading a new one, so check each new address too.
   // Only the part before "#" counts, so jumping within a page doesn't ask again.
   const page = (href) => href.split("#")[0];
-  const changed = (ask) => {
+  const changed = (ask, replaced) => {
     if (page(location.href) === page(current)) return;
     current = location.href;
-    if (ask) check(current);
+    if (ask) check(current, replaced);
   };
   if (window.navigation && typeof window.navigation.addEventListener === "function") {
     window.navigation.addEventListener("currententrychange", (event) =>
-      changed(event.navigationType === "push" || event.navigationType === "replace"));
+      changed(event.navigationType === "push" || event.navigationType === "replace",
+        event.navigationType === "replace"));
   } else {
     // Scripts like this one can't see the page's own history calls, so look for a new address.
     // Back and forward come with popstate first, so they're noted without asking.
