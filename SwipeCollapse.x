@@ -8,10 +8,10 @@
 @end
 
 static BOOL gSwipeCollapseEnabled;
-static NSHashTable<UIView *> *gSwipeCollapseHeaders;
+static NSHashTable<UIView *> *gSwipeCollapseCards;
 static const void *kRFSwipeCollapseRecognizerKey = &kRFSwipeCollapseRecognizerKey;
 static const void *kRFSwipeCollapseSuppressedPagersKey = &kRFSwipeCollapseSuppressedPagersKey;
-static const void *kRFSwipeCollapseOriginalTransformKey = &kRFSwipeCollapseOriginalTransformKey;
+static const void *kRFSwipeCollapseRevealKey = &kRFSwipeCollapseRevealKey;
 static const void *kRFSwipeCollapseHandledKey = &kRFSwipeCollapseHandledKey;
 
 static BOOL RFClassNameContains(UIView *view, NSString *needle) {
@@ -65,15 +65,174 @@ static BOOL RFIsExpandedCommentHeader(UIView *header) {
   return CGRectGetHeight(container.bounds) > CGRectGetHeight(headerBounds) + 16.0;
 }
 
-static BOOL RFIsInteractiveCommentHeaderSubview(UIView *view, UIView *header) {
-  for (UIView *candidate = view; candidate && candidate != header; candidate = candidate.superview) {
-    if ([candidate isKindOfClass:UIControl.class] || [candidate isKindOfClass:UITextView.class] ||
-        [candidate isKindOfClass:UITextField.class] || [candidate isKindOfClass:UIScrollView.class] ||
-        RFClassNameContains(candidate, @"WebView"))
+// The first view under a card that has Reddit's own header recognizers: the
+// comment's header, whose didSingleTap collapses or expands the comment.
+static UIView *RFNativeHeaderInCard(UIView *root) {
+  if (RFHasNativeCommentHeaderRecognizers(root)) return root;
+  for (UIView *child in root.subviews) {
+    UIView *header = RFNativeHeaderInCard(child);
+    if (header) return header;
+  }
+  return nil;
+}
+
+static UIView *RFExpandedHeaderInCard(UIView *card) {
+  UIView *header = RFNativeHeaderInCard(card);
+  return header && RFIsExpandedCommentHeader(header) ? header : nil;
+}
+
+// Touches that start on something with its own sideways gesture stay with it:
+// a horizontally scrolling view (gallery, wide code block or table), a slider,
+// a web view or a video player. Taps on links and buttons still work because
+// the swipe only begins after the finger moves sideways.
+static BOOL RFTouchBelongsToOwnHorizontalGesture(UIView *view, UIView *card) {
+  for (UIView *candidate = view; candidate && candidate != card; candidate = candidate.superview) {
+    if ([candidate isKindOfClass:UIScrollView.class]) {
+      UIScrollView *scroll = (UIScrollView *)candidate;
+      if (scroll.scrollEnabled && scroll.contentSize.width > CGRectGetWidth(scroll.bounds) + 1.0) return YES;
+    }
+    if ([candidate isKindOfClass:UISlider.class] || [candidate isKindOfClass:UISwitch.class] ||
+        [candidate isKindOfClass:UITextField.class] ||
+        ([candidate isKindOfClass:UITextView.class] && ((UITextView *)candidate).editable) ||
+        RFClassNameContains(candidate, @"WebView") || RFClassNameContains(candidate, @"Player"))
       return YES;
   }
   return NO;
 }
+
+#pragma mark - Card movement
+
+static UICollectionViewCell *RFCellForView(UIView *view) {
+  for (UIView *candidate = view; candidate; candidate = candidate.superview)
+    if ([candidate isKindOfClass:UICollectionViewCell.class]) return (UICollectionViewCell *)candidate;
+  return nil;
+}
+
+// The view whose contents slide: the cell's content view, so the whole card
+// (body, action bar and thread lines) moves together. Moving its sublayers
+// rather than the view itself leaves Reddit's frames and layout alone.
+static UIView *RFMovingViewForCard(UIView *card) {
+  UICollectionViewCell *cell = RFCellForView(card);
+  if (cell && [card isDescendantOfView:cell.contentView]) return cell.contentView;
+  return card;
+}
+
+@interface RFSwipeCollapseReveal : UIView
+@property (nonatomic, strong) UIImageView *icon;
+@property (nonatomic, strong) UILabel *label;
+@property (nonatomic) BOOL thread;
+@end
+
+@implementation RFSwipeCollapseReveal
+- (instancetype)initWithFrame:(CGRect)frame {
+  if ((self = [super initWithFrame:frame])) {
+    self.userInteractionEnabled = NO;
+    self.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    self.backgroundColor = UIColor.systemBlueColor;
+    _icon = [[UIImageView alloc] init];
+    _icon.tintColor = UIColor.whiteColor;
+    _icon.contentMode = UIViewContentModeScaleAspectFit;
+    _label = [[UILabel alloc] init];
+    _label.textColor = UIColor.whiteColor;
+    _label.font = [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
+    _label.adjustsFontForContentSizeCategory = YES;
+    _label.textAlignment = NSTextAlignmentCenter;
+    [self addSubview:_icon];
+    [self addSubview:_label];
+    self.thread = NO;
+    [self applyThread];
+  }
+  return self;
+}
+
+- (void)applyThread {
+  NSString *symbol = self.thread ? @"chevron.up.2" : @"chevron.up";
+  UIImage *image = [UIImage systemImageNamed:symbol] ?: [UIImage systemImageNamed:@"chevron.up"];
+  self.icon.image = [image imageWithConfiguration:
+      [UIImageSymbolConfiguration configurationWithPointSize:17 weight:UIImageSymbolWeightSemibold]];
+  self.label.text = self.thread ? @"Collapse thread" : @"Collapse";
+  self.backgroundColor = self.thread ? UIColor.systemIndigoColor : UIColor.systemBlueColor;
+  [self setNeedsLayout];
+}
+
+- (void)setThread:(BOOL)thread {
+  if (_thread == thread && self.label.text) return;
+  _thread = thread;
+  [self applyThread];
+}
+
+// Icon and label sit just inside the right edge, level with the comment's
+// header, so they stay on screen for long comments.
+- (void)layoutSubviews {
+  [super layoutSubviews];
+  CGFloat width = CGRectGetWidth(self.bounds), height = CGRectGetHeight(self.bounds);
+  CGFloat centreY = MIN(height / 2.0, 40.0);
+  CGSize labelSize = [self.label sizeThatFits:CGSizeMake(110, 40)];
+  CGFloat columnWidth = MAX(28.0, labelSize.width);
+  CGFloat centreX = width - 16.0 - columnWidth / 2.0;
+  self.icon.frame = CGRectMake(centreX - 11, centreY - 18, 22, 22);
+  self.label.frame = CGRectMake(centreX - columnWidth / 2.0, centreY + 6, columnWidth, labelSize.height);
+}
+@end
+
+static RFSwipeCollapseReveal *RFRevealForCard(UIView *card, BOOL create) {
+  UICollectionViewCell *cell = RFCellForView(card);
+  if (!cell) return nil;
+  RFSwipeCollapseReveal *reveal = objc_getAssociatedObject(cell, kRFSwipeCollapseRevealKey);
+  if (!reveal && create) {
+    reveal = [[RFSwipeCollapseReveal alloc] initWithFrame:cell.bounds];
+    reveal.hidden = YES;
+    objc_setAssociatedObject(cell, kRFSwipeCollapseRevealKey, reveal, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  }
+  if (reveal && reveal.superview != cell) [cell insertSubview:reveal belowSubview:cell.contentView];
+  return reveal;
+}
+
+static void RFSetCardOffset(UIView *card, CGFloat dx, BOOL thread) {
+  UIView *moving = RFMovingViewForCard(card);
+  RFSwipeCollapseReveal *reveal = RFRevealForCard(card, YES);
+  [CATransaction begin];
+  [CATransaction setDisableActions:YES];
+  [moving.layer removeAnimationForKey:@"RFSwipeCollapseReturn"];
+  moving.layer.sublayerTransform = CATransform3DMakeTranslation(dx, 0, 0);
+  if (reveal) {
+    reveal.frame = reveal.superview.bounds;
+    reveal.hidden = dx >= 0;
+    reveal.thread = thread;
+    reveal.alpha = MIN(1.0, -dx / 48.0);
+  }
+  [CATransaction commit];
+}
+
+// Slides the card back into place. animated:NO is for clean-up (removal,
+// cell reuse, setting turned off) where nothing should be left moved.
+static void RFResetCard(UIView *card, BOOL animated) {
+  UIView *moving = RFMovingViewForCard(card);
+  RFSwipeCollapseReveal *reveal = RFRevealForCard(card, NO);
+  CATransform3D current = moving.layer.presentationLayer ? moving.layer.presentationLayer.sublayerTransform
+                                                         : moving.layer.sublayerTransform;
+  [CATransaction begin];
+  [CATransaction setDisableActions:YES];
+  moving.layer.sublayerTransform = CATransform3DIdentity;
+  [moving.layer removeAnimationForKey:@"RFSwipeCollapseReturn"];
+  if (animated && !CATransform3DIsIdentity(current)) {
+    CABasicAnimation *back = [CABasicAnimation animationWithKeyPath:@"sublayerTransform"];
+    back.fromValue = [NSValue valueWithCATransform3D:current];
+    back.toValue = [NSValue valueWithCATransform3D:CATransform3DIdentity];
+    back.duration = 0.22;
+    back.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
+    __weak RFSwipeCollapseReveal *weakReveal = reveal;
+    [CATransaction setCompletionBlock:^{
+      if (CATransform3DIsIdentity(moving.layer.sublayerTransform)) weakReveal.hidden = YES;
+    }];
+    [moving.layer addAnimation:back forKey:@"RFSwipeCollapseReturn"];
+  } else {
+    reveal.hidden = YES;
+  }
+  [CATransaction commit];
+}
+
+#pragma mark - Pager
 
 static BOOL RFIsPagerPan(UIGestureRecognizer *recognizer) {
   NSString *name = NSStringFromClass(recognizer.class);
@@ -84,14 +243,14 @@ static BOOL RFIsPagerPan(UIGestureRecognizer *recognizer) {
 // Wait until the first small movement proves this is a left swipe before
 // temporarily disabling scrolling and post paging. This leaves rightward and
 // vertical gestures entirely to Reddit's existing recognizers.
-static void RFSuppressPagerRecognizersForSwipe(UIView *header, UIPanGestureRecognizer *swipe) {
+static void RFSuppressPagerRecognizersForSwipe(UIView *card, UIPanGestureRecognizer *swipe) {
   NSHashTable<UIGestureRecognizer *> *suppressed =
       objc_getAssociatedObject(swipe, kRFSwipeCollapseSuppressedPagersKey);
   if (suppressed) return;
   suppressed = [NSHashTable weakObjectsHashTable];
   objc_setAssociatedObject(swipe, kRFSwipeCollapseSuppressedPagersKey, suppressed,
                            OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-  for (UIView *ancestor = header.superview; ancestor; ancestor = ancestor.superview) {
+  for (UIView *ancestor = card.superview; ancestor; ancestor = ancestor.superview) {
     if (![ancestor isKindOfClass:UIScrollView.class]) continue;
     for (UIGestureRecognizer *recognizer in ancestor.gestureRecognizers) {
       if (recognizer == swipe || !RFIsPagerPan(recognizer) || !recognizer.enabled) continue;
@@ -128,19 +287,17 @@ static void RFRestorePagersIfSwipeNeverBegan(UIPanGestureRecognizer *swipe, NSIn
   });
 }
 
-static void RFRemoveSwipeCollapse(UIView *header) {
-  UIPanGestureRecognizer *swipe =
-      objc_getAssociatedObject(header, kRFSwipeCollapseRecognizerKey);
+static void RFRemoveSwipeCollapse(UIView *card) {
+  UIPanGestureRecognizer *swipe = objc_getAssociatedObject(card, kRFSwipeCollapseRecognizerKey);
   if (!swipe) return;
   // Removing a recognizer mid-swipe sends no final action, so undo its effects here.
   RFRestorePagerRecognizersForSwipe(swipe);
-  NSValue *original = objc_getAssociatedObject(swipe, kRFSwipeCollapseOriginalTransformKey);
-  if (original) header.layer.sublayerTransform = original.CATransform3DValue;
-  objc_setAssociatedObject(swipe, kRFSwipeCollapseOriginalTransformKey, nil,
-                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-  [header removeGestureRecognizer:swipe];
-  objc_setAssociatedObject(header, kRFSwipeCollapseRecognizerKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  RFResetCard(card, NO);
+  [card removeGestureRecognizer:swipe];
+  objc_setAssociatedObject(card, kRFSwipeCollapseRecognizerKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
+
+#pragma mark - Collapsing
 
 static void RFCollapseHeader(UIView *header) {
   if (!header.window || ![header respondsToSelector:@selector(didSingleTap)]) return;
@@ -270,48 +427,43 @@ static void RFCollapseRootForHeader(UIView *header) {
 
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
     shouldReceiveTouch:(UITouch *)touch {
-  if (![gestureRecognizer isKindOfClass:UIPanGestureRecognizer.class]) return NO;
-  UIView *header = gestureRecognizer.view;
-  return gSwipeCollapseEnabled && RFIsExpandedCommentHeader(header) &&
-         !RFIsInteractiveCommentHeaderSubview(touch.view, header);
+  if (![gestureRecognizer isKindOfClass:UIPanGestureRecognizer.class] || !gSwipeCollapseEnabled) return NO;
+  UIView *card = gestureRecognizer.view;
+  return !RFTouchBelongsToOwnHorizontalGesture(touch.view, card) && RFExpandedHeaderInCard(card) != nil;
 }
 
+// Only leftward swipes on an expanded comment are claimed. Rightward and
+// vertical ones, and every swipe on a collapsed comment (which has no
+// recognizer), stay with Reddit: scrolling and moving between posts.
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
   if (![gestureRecognizer isKindOfClass:UIPanGestureRecognizer.class] || !gSwipeCollapseEnabled)
     return NO;
   UIPanGestureRecognizer *swipe = (UIPanGestureRecognizer *)gestureRecognizer;
-  BOOL shouldBegin = RFIsExpandedCommentHeader(swipe.view) &&
-                     RFHasLeftSwipeDirection([swipe translationInView:swipe.view],
-                                             [swipe velocityInView:swipe.view]);
+  UIView *card = swipe.view;
+  BOOL shouldBegin = RFHasLeftSwipeDirection([swipe translationInView:card], [swipe velocityInView:card]) &&
+                     RFExpandedHeaderInCard(card) != nil;
   if (shouldBegin) {
-    RFSuppressPagerRecognizersForSwipe(swipe.view, swipe);
+    RFSuppressPagerRecognizersForSwipe(card, swipe);
     RFRestorePagersIfSwipeNeverBegan(swipe, 10);
   }
   return shouldBegin;
 }
 
 - (void)handleSwipe:(UIPanGestureRecognizer *)swipe {
-  UIView *header = swipe.view;
-  UIView *coordinateView = header.superview ?: header;
+  UIView *card = swipe.view;
+  CGFloat width = CGRectGetWidth(card.bounds);
 
   if (swipe.state == UIGestureRecognizerStateBegan) {
-    objc_setAssociatedObject(swipe, kRFSwipeCollapseHandledKey, @NO,
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    objc_setAssociatedObject(swipe, kRFSwipeCollapseOriginalTransformKey,
-                             [NSValue valueWithCATransform3D:header.layer.sublayerTransform],
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(swipe, kRFSwipeCollapseHandledKey, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
   }
 
-  if (swipe.state == UIGestureRecognizerStateChanged) {
-    CGPoint translation = [swipe translationInView:coordinateView];
-    CGFloat limit = RFThreadCollapseDistance(header.bounds.size.width);
-    CGFloat dx = MIN(0.0, MAX(-limit, translation.x));
-    // Move the header's contents, not the header: Reddit keeps setting the
-    // header's frame during layout, and that doesn't mix with a view transform.
-    [CATransaction begin];
-    [CATransaction setDisableActions:YES];
-    header.layer.sublayerTransform = CATransform3DMakeTranslation(dx, 0, 0);
-    [CATransaction commit];
+  if (swipe.state == UIGestureRecognizerStateBegan || swipe.state == UIGestureRecognizerStateChanged) {
+    CGPoint translation = [swipe translationInView:card];
+    // The card follows the finger, with resistance past the whole-thread distance.
+    CGFloat limit = RFThreadCollapseDistance(width);
+    CGFloat dx = MIN(0.0, translation.x);
+    if (dx < -limit) dx = -limit + (dx + limit) * 0.3;
+    RFSetCardOffset(card, dx, RFShouldCollapseThreadForSwipe(translation, width));
     return;
   }
 
@@ -321,21 +473,17 @@ static void RFCollapseRootForHeader(UIView *header) {
     return;
 
   RFRestorePagerRecognizersForSwipe(swipe);
-  NSValue *original = objc_getAssociatedObject(swipe, kRFSwipeCollapseOriginalTransformKey);
-  if (original) header.layer.sublayerTransform = original.CATransform3DValue;
-  objc_setAssociatedObject(swipe, kRFSwipeCollapseOriginalTransformKey, nil,
-                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  RFResetCard(card, YES);
 
-  if (swipe.state != UIGestureRecognizerStateEnded || !gSwipeCollapseEnabled ||
-      !RFIsExpandedCommentHeader(header))
-    return;
+  if (swipe.state != UIGestureRecognizerStateEnded || !gSwipeCollapseEnabled) return;
+  UIView *header = RFExpandedHeaderInCard(card);
+  if (!header) return;
   if ([objc_getAssociatedObject(swipe, kRFSwipeCollapseHandledKey) boolValue]) return;
-  objc_setAssociatedObject(swipe, kRFSwipeCollapseHandledKey, @YES,
-                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  objc_setAssociatedObject(swipe, kRFSwipeCollapseHandledKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-  CGPoint translation = [swipe translationInView:coordinateView];
-  CGPoint velocity = [swipe velocityInView:coordinateView];
-  if (RFShouldCollapseThreadForSwipe(translation, header.bounds.size.width)) {
+  CGPoint translation = [swipe translationInView:card];
+  CGPoint velocity = [swipe velocityInView:card];
+  if (RFShouldCollapseThreadForSwipe(translation, width)) {
     RFCollapseRootForHeader(header);
   } else if (RFShouldCollapseForSwipe(translation, velocity)) {
     RFCollapseHeader(header);
@@ -343,24 +491,26 @@ static void RFCollapseRootForHeader(UIView *header) {
 }
 @end
 
+// Called whenever a comment header lays out: gives its card a recognizer
+// while the comment is expanded and removes it once collapsed.
 static void RFPrepareSwipeCollapseHeader(UIView *header) {
   if (!gSwipeCollapseEnabled) return;
   if (![NSThread isMainThread]) {
     dispatch_async(dispatch_get_main_queue(), ^{ RFPrepareSwipeCollapseHeader(header); });
     return;
   }
+  // Most FlexStackViews fail this two-gesture check without walking ancestors.
+  if (!RFHasNativeCommentHeaderRecognizers(header)) return;
+  UIView *card = RFCommentContainer(header);
+  if (!card) return;
 
-  UIPanGestureRecognizer *swipe =
-      objc_getAssociatedObject(header, kRFSwipeCollapseRecognizerKey);
+  UIPanGestureRecognizer *swipe = objc_getAssociatedObject(card, kRFSwipeCollapseRecognizerKey);
+  BOOL expanded = RFIsExpandedCommentHeader(header);
   if (swipe) {
-    if (RFIsExpandedCommentHeaderLabel(header.accessibilityLabel)) return;
-    if (RFIsExpandedCommentHeader(header)) return;
-    RFRemoveSwipeCollapse(header);
+    if (!expanded && swipe.state == UIGestureRecognizerStatePossible) RFRemoveSwipeCollapse(card);
     return;
   }
-
-  // Most FlexStackViews fail this two-gesture check without walking ancestors.
-  if (!RFHasNativeCommentHeaderRecognizers(header) || !RFIsExpandedCommentHeader(header)) return;
+  if (!expanded) return;
 
   swipe = [[UIPanGestureRecognizer alloc] initWithTarget:RFSwipeCollapseGestureHandler.shared
                                                  action:@selector(handleSwipe:)];
@@ -369,12 +519,11 @@ static void RFPrepareSwipeCollapseHeader(UIView *header) {
   swipe.maximumNumberOfTouches = 1;
   swipe.cancelsTouchesInView = YES;
   swipe.name = @"RedditFilterSwipeToCollapse";
-  [header addGestureRecognizer:swipe];
-  objc_setAssociatedObject(header, kRFSwipeCollapseRecognizerKey, swipe,
-                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  [card addGestureRecognizer:swipe];
+  objc_setAssociatedObject(card, kRFSwipeCollapseRecognizerKey, swipe, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-  if (!gSwipeCollapseHeaders) gSwipeCollapseHeaders = [NSHashTable weakObjectsHashTable];
-  [gSwipeCollapseHeaders addObject:header];
+  if (!gSwipeCollapseCards) gSwipeCollapseCards = [NSHashTable weakObjectsHashTable];
+  [gSwipeCollapseCards addObject:card];
 }
 
 void RFSetSwipeCollapse(BOOL enabled) {
@@ -384,15 +533,8 @@ void RFSetSwipeCollapse(BOOL enabled) {
   }
   if (gSwipeCollapseEnabled == enabled) return;
   gSwipeCollapseEnabled = enabled;
-  NSArray<UIView *> *headers = gSwipeCollapseHeaders.allObjects;
-  for (UIView *header in headers) {
-    if (enabled) {
-      RFPrepareSwipeCollapseHeader(header);
-    } else {
-      header.layer.sublayerTransform = CATransform3DIdentity;
-      RFRemoveSwipeCollapse(header);
-    }
-  }
+  if (enabled) return; // Headers pick it up as they lay out.
+  for (UIView *card in gSwipeCollapseCards.allObjects) RFRemoveSwipeCollapse(card);
 }
 
 %group RFFlexStackViewHooks

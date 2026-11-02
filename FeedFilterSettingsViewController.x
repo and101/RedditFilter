@@ -31,7 +31,7 @@ static const RFToggleRow kToggleRows[] = {
     {kRedditFilterScores, @"Scores", @"Show vote count on posts and comments", @"rpl3/upvote,icon_upvote", YES},
     {kRedditFilterAutoCollapseAutoMod, @"AutoMod", @"Auto collapse AutoMod comments", @"rpl3/mod,icon_mod", NO},
     {kRedditFilterSwipeToCollapse, @"Swipe to collapse",
-     @"Swipe a comment's header left to collapse it, or swipe further to collapse the whole thread",
+     @"Swipe a comment left to collapse it, or swipe further to collapse the whole thread",
      @"rpl3/swipeLeft,rpl3/comment,icon_comment", NO},
     {kRedditFilterColoredComments, @"Coloured comment threads", @"Give each reply level its own colour",
      @"rpl3/branch,rpl3/comment,icon_comment", NO},
