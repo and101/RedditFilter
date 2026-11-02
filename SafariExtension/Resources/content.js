@@ -52,28 +52,50 @@
     return rest === "/" || rest.startsWith("/r/") || rest.startsWith("/x/");
   }
 
-  const url = new URL(location.href);
-  if (window.top !== window) return;
-  // Reddit's own way to keep a link on the web, plus one of ours.
-  if (url.searchParams.get("$web_only") === "true" || url.searchParams.has("rf_web")) return;
-  if (!opensInApp(url.hostname.toLowerCase(), url.pathname)) return;
-
   // Don't send the same page twice in a row, so going back to Safari or cancelling the prompt
   // leaves the web page usable.
   const key = "redditfilter-sent";
-  try {
-    if (sessionStorage.getItem(key) === url.href) return;
-    sessionStorage.setItem(key, url.href);
-  } catch (error) {}
 
-  const target = SCHEME + "://" + url.host + url.pathname + url.search + url.hash;
-  const openHere = () => location.replace(target);
-  try {
-    browser.runtime.sendMessage({ open: target }).then(
-      (response) => { if (!response || !response.ok) openHere(); },
-      openHere,
-    );
-  } catch (error) {
-    openHere();
+  function check(href) {
+    const url = new URL(href);
+    // Reddit's own way to keep a link on the web, plus one of ours.
+    if (url.searchParams.get("$web_only") === "true" || url.searchParams.has("rf_web")) return;
+    if (!opensInApp(url.hostname.toLowerCase(), url.pathname)) return;
+
+    try {
+      if (sessionStorage.getItem(key) === url.href) return;
+      sessionStorage.setItem(key, url.href);
+    } catch (error) {}
+
+    const target = SCHEME + "://" + url.host + url.pathname + url.search + url.hash;
+    const openHere = () => location.replace(target);
+    try {
+      browser.runtime.sendMessage({ open: target }).then(
+        (response) => { if (!response || !response.ok) openHere(); },
+        openHere,
+      );
+    } catch (error) {
+      openHere();
+    }
+  }
+
+  if (window.top !== window) return;
+  let current = location.href;
+  check(current);
+
+  // Reddit's website changes pages without loading a new one, so check each new address too.
+  // Only the part before "#" counts, so jumping within a page doesn't ask again.
+  const page = (href) => href.split("#")[0];
+  const changed = () => {
+    if (page(location.href) === page(current)) return;
+    current = location.href;
+    check(current);
+  };
+  if (window.navigation && typeof window.navigation.addEventListener === "function") {
+    window.navigation.addEventListener("currententrychange", changed);
+  } else {
+    // Scripts like this one can't see the page's own history calls, so look for a new address.
+    window.addEventListener("popstate", changed);
+    setInterval(changed, 500);
   }
 })();
