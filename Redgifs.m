@@ -158,7 +158,9 @@ void RFFetchRedgifsVideos(NSArray<NSString *> *ids, BOOL hd,
     if (cached) {
       if ([cached isKindOfClass:NSDictionary.class]) {
         NSString *url = RFRedgifsURL(cached, hd);
-        if (url) found[identifier] = url; // nothing else has started yet
+        @synchronized(found) { // an earlier lookup may already be finishing
+          if (url) found[identifier] = url;
+        }
       }
       continue;
     }
