@@ -373,7 +373,7 @@ static NSString *RFFooterText(NSInteger section) {
   switch (RFSectionAt(section)) {
     case RFSectionFilters: return @"Filter posts and adjust how Reddit looks";
     case RFSectionCollapse:
-      return @"With swipe to collapse off, tapping a comment's header collapses it as usual. "
+      return @"With swipe to collapse off, tapping a comment collapses it as usual. "
              @"A collapsed comment always opens with a tap.";
     case RFSectionRedgifs:
       return @"Plays RedGIFs' own videos, which have sound. Your device connects to RedGIFs directly. "
