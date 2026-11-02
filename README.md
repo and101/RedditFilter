@@ -108,7 +108,7 @@ Download the IPA from [Releases](../../releases), sign it with your usual signer
 On a Mac with Xcode and [Homebrew](https://brew.sh):
 
 ```sh
-git clone --recursive https://github.com/and101/RedditFilter.git
+git clone https://github.com/and101/RedditFilter.git
 cd RedditFilter
 ./build-ipa.sh /path/to/decrypted-Reddit.ipa
 ```
@@ -120,3 +120,5 @@ For jailbroken devices, `make package` builds a deb (add `THEOS_PACKAGE_SCHEME=r
 ## Credits
 
 Based on original work from [level3tjg](https://github.com/level3tjg/RedditFilter) and [NicholasBly](https://github.com/NicholasBly/RedditFilter).
+
+The sideloaded IPA includes [RedditSideloadFix](https://github.com/level3tjg/RedditSideloadFix) by level3tjg (MIT), with fixes, and [fishhook](https://github.com/facebook/fishhook) (BSD).

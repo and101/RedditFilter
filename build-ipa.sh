@@ -71,9 +71,6 @@ if [ ! -x "$INSERT_DYLIB" ]; then
   clang -O2 -o "$INSERT_DYLIB" "$TOOLS/insert_dylib-src/insert_dylib/main.c"
 fi
 
-step "Checking submodules"
-git submodule update -q --init --recursive
-
 CHECK=$(mktemp -d)
 trap 'rm -rf "$CHECK"' EXIT
 unzip -Z1 "$IPA" >"$CHECK/files"
