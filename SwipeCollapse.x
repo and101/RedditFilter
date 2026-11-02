@@ -7,6 +7,9 @@
 - (void)didSingleTap;
 @end
 
+@interface RFRichTextSliceView : UIView
+@end
+
 static BOOL gSwipeCollapseEnabled;
 static BOOL gTapCollapseEnabled = YES;
 static NSHashTable<UIView *> *gSwipeCollapseCards;
@@ -39,6 +42,65 @@ static UIView *RFCommentContainer(UIView *header) {
       return candidate;
   }
   return nil;
+}
+
+#pragma mark - Taps on the comment text
+
+// The comment text's own tap and long press open links, spoilers and inline
+// media, and collapse the comment anywhere else. So they keep working on those,
+// and only plain text stops collapsing.
+static BOOL RFTextIsInteractiveAtPoint(UITextView *textView, CGPoint point) {
+  UITextRange *range = [textView characterRangeAtPoint:point];
+  if (!range || range.empty) return NO;
+  CGRect rect = CGRectInset([textView firstRectForRange:range], -6.0, -6.0);
+  if (!CGRectContainsPoint(rect, point)) return NO;
+  NSInteger offset = [textView offsetFromPosition:textView.beginningOfDocument toPosition:range.start];
+  NSAttributedString *text = textView.attributedText;
+  if (offset < 0 || offset >= (NSInteger)text.length) return NO;
+  NSDictionary *attributes = [text attributesAtIndex:(NSUInteger)offset effectiveRange:NULL];
+  if (attributes[NSLinkAttributeName] || attributes[NSAttachmentAttributeName]) return YES;
+  for (NSString *key in attributes) {
+    // A spoiler's text is clear until revealed; after that it is plain text.
+    if ([key containsString:@"Spoiler"]) {
+      CGFloat alpha = 1.0;
+      UIColor *colour = attributes[NSForegroundColorAttributeName];
+      if (![colour isKindOfClass:UIColor.class] || ![colour getRed:NULL green:NULL blue:NULL alpha:&alpha])
+        return YES;
+      if (alpha < 0.5) return YES;
+      continue;
+    }
+    for (NSString *part in @[ @"Link", @"Attachment", @"Media", @"Image", @"Mention" ])
+      if ([key containsString:part]) return YES;
+  }
+  return NO;
+}
+
+static UITextView *RFTextViewAtPoint(UIView *root, CGPoint pointInRoot) {
+  for (UIView *child in root.subviews.reverseObjectEnumerator) {
+    if (child.hidden || child.alpha <= 0.01) continue;
+    CGPoint point = [root convertPoint:pointInRoot toView:child];
+    if (![child pointInside:point withEvent:nil]) continue;
+    if ([child isKindOfClass:UITextView.class]) return (UITextView *)child;
+    UITextView *found = RFTextViewAtPoint(child, point);
+    if (found) return found;
+  }
+  return nil;
+}
+
+// YES when this touch on an expanded comment's text would only collapse it.
+static BOOL RFShouldBlockCommentTextTouch(UIView *textSlice, UIGestureRecognizer *recognizer, UITouch *touch) {
+  if (!gSwipeCollapseEnabled || gTapCollapseEnabled) return NO;
+  BOOL tap = [recognizer isKindOfClass:UITapGestureRecognizer.class] &&
+             ((UITapGestureRecognizer *)recognizer).numberOfTapsRequired == 1;
+  if (!tap && ![recognizer isKindOfClass:UILongPressGestureRecognizer.class]) return NO;
+  UIView *card = RFCommentContainer(textSlice);
+  if (!card || !objc_getAssociatedObject(card, kRFSwipeCollapseRecognizerKey)) return NO; // collapsed
+  UITextView *textView = RFTextViewAtPoint(textSlice, [touch locationInView:textSlice]);
+  return !(textView && RFTextIsInteractiveAtPoint(textView, [touch locationInView:textView]));
+}
+
+static BOOL RFIsCommentTextSlice(UIView *view) {
+  return RFClassNameContains(view, @"RichTextSliceView");
 }
 
 // Reddit's own comment header has both of these recognizers and the collapse
@@ -445,6 +507,9 @@ static void RFCollapseRootForHeader(UIView *header) {
 
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
     shouldReceiveTouch:(UITouch *)touch {
+  // The comment text's long press, which has no delegate of its own.
+  if (gestureRecognizer.view != nil && RFIsCommentTextSlice(gestureRecognizer.view))
+    return !RFShouldBlockCommentTextTouch(gestureRecognizer.view, gestureRecognizer, touch);
   if (![gestureRecognizer isKindOfClass:UIPanGestureRecognizer.class] || !gSwipeCollapseEnabled) return NO;
   UIView *card = gestureRecognizer.view;
   return !RFTouchBelongsToOwnHorizontalGesture(touch.view, card) && RFExpandedHeaderInCard(card) != nil;
@@ -454,6 +519,7 @@ static void RFCollapseRootForHeader(UIView *header) {
 // vertical ones, and every swipe on a collapsed comment (which has no
 // recognizer), stay with Reddit: scrolling and moving between posts.
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
+  if (gestureRecognizer.view != nil && RFIsCommentTextSlice(gestureRecognizer.view)) return YES; // the text's long press
   if (![gestureRecognizer isKindOfClass:UIPanGestureRecognizer.class] || !gSwipeCollapseEnabled)
     return NO;
   UIPanGestureRecognizer *swipe = (UIPanGestureRecognizer *)gestureRecognizer;
@@ -517,9 +583,10 @@ static void RFCollapseRootForHeader(UIView *header) {
 
 #pragma mark - Tap and long press
 
-// With swipe on, an expanded comment's header ignores Reddit's tap and long
-// press, so they no longer collapse it by accident. A collapsed comment keeps
-// them, as a tap is the only way to open it again.
+// With swipe on, an expanded comment ignores Reddit's tap and long press, so
+// they no longer collapse it by accident. A collapsed comment keeps them, as a
+// tap is the only way to open it again. These are the recognizers of one of
+// the card's FlexStackViews (header, body or thread line), which all collapse.
 static void RFSetNativeHeaderRecognizersEnabled(UIView *header, BOOL enabled) {
   for (UIGestureRecognizer *recognizer in header.gestureRecognizers) {
     BOOL tap = [recognizer isKindOfClass:UITapGestureRecognizer.class] &&
@@ -537,6 +604,26 @@ static void RFSetNativeHeaderRecognizersEnabled(UIView *header, BOOL enabled) {
   }
 }
 
+// Every collapsing FlexStackView in the card: the header, the body and the
+// thread line all call didSingleTap. Links, avatars and buttons are other views.
+static void RFSetCardTapRecognizersEnabled(UIView *root, BOOL enabled) {
+  if ([root respondsToSelector:@selector(didSingleTap)]) RFSetNativeHeaderRecognizersEnabled(root, enabled);
+  // The text's long press has no delegate; ours filters it like the text's tap (see RFShouldBlockCommentTextTouch).
+  if (!enabled && RFIsCommentTextSlice(root))
+    for (UIGestureRecognizer *recognizer in root.gestureRecognizers)
+      if ([recognizer isKindOfClass:UILongPressGestureRecognizer.class] && !recognizer.delegate)
+        recognizer.delegate = RFSwipeCollapseGestureHandler.shared;
+  for (UIView *child in root.subviews) RFSetCardTapRecognizersEnabled(child, enabled);
+}
+
+static BOOL RFHasEnabledSingleTap(UIView *view) {
+  for (UIGestureRecognizer *recognizer in view.gestureRecognizers)
+    if (recognizer.enabled && [recognizer isKindOfClass:UITapGestureRecognizer.class] &&
+        ((UITapGestureRecognizer *)recognizer).numberOfTapsRequired == 1)
+      return YES;
+  return NO;
+}
+
 static void RFRestoreAllHeaderRecognizers(void) {
   for (UIGestureRecognizer *recognizer in gDisabledHeaderRecognizers.allObjects) recognizer.enabled = YES;
   [gDisabledHeaderRecognizers removeAllObjects];
@@ -551,13 +638,21 @@ static void RFPrepareSwipeCollapseHeader(UIView *header) {
     return;
   }
   // Most FlexStackViews fail this two-gesture check without walking ancestors.
-  if (!RFHasNativeCommentHeaderRecognizers(header)) return;
+  if (!RFHasNativeCommentHeaderRecognizers(header)) {
+    // A body or thread line laid out after its header: it collapses on a tap too.
+    if (!gTapCollapseEnabled && RFHasEnabledSingleTap(header)) {
+      UIView *card = RFCommentContainer(header);
+      if (card && objc_getAssociatedObject(card, kRFSwipeCollapseRecognizerKey))
+        RFSetNativeHeaderRecognizersEnabled(header, NO);
+    }
+    return;
+  }
   UIView *card = RFCommentContainer(header);
   if (!card) return;
 
   UIPanGestureRecognizer *swipe = objc_getAssociatedObject(card, kRFSwipeCollapseRecognizerKey);
   BOOL expanded = RFIsExpandedCommentHeader(header);
-  RFSetNativeHeaderRecognizersEnabled(header, gTapCollapseEnabled || !expanded);
+  RFSetCardTapRecognizersEnabled(card, gTapCollapseEnabled || !expanded);
   if (swipe) {
     if (!expanded && swipe.state == UIGestureRecognizerStatePossible) RFRemoveSwipeCollapse(card);
     return;
@@ -591,7 +686,7 @@ void RFSetSwipeCollapse(BOOL enabled, BOOL tapToo) {
     if (tapChanged && enabled && !tapToo)
       for (UIView *card in gSwipeCollapseCards.allObjects) {
         UIView *header = RFExpandedHeaderInCard(card);
-        if (header) RFSetNativeHeaderRecognizersEnabled(header, NO);
+        if (header) RFSetCardTapRecognizersEnabled(card, NO);
       }
     return;
   }
@@ -599,6 +694,18 @@ void RFSetSwipeCollapse(BOOL enabled, BOOL tapToo) {
   if (enabled) return; // Headers pick it up as they lay out.
   for (UIView *card in gSwipeCollapseCards.allObjects) RFRemoveSwipeCollapse(card);
 }
+
+%group RFRichTextSliceHooks
+%hook RFRichTextSliceView
+
+// The text's tap opens links and spoilers, and collapses the comment elsewhere.
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)recognizer shouldReceiveTouch:(UITouch *)touch {
+  if (!%orig) return NO;
+  return !RFShouldBlockCommentTextTouch((UIView *)self, recognizer, touch);
+}
+
+%end
+%end
 
 %group RFFlexStackViewHooks
 %hook RFFlexStackView
@@ -619,6 +726,9 @@ void RFSetSwipeCollapse(BOOL enabled, BOOL tapToo) {
 %ctor {
   Class flexStack = NSClassFromString(@"SliceKit.FlexStackView");
   if (flexStack) %init(RFFlexStackViewHooks, RFFlexStackView = flexStack);
+  Class richTextSlice = NSClassFromString(@"RedditSliceKit_RPLSlices.RichTextSliceView");
+  if (richTextSlice && class_getInstanceMethod(richTextSlice, @selector(gestureRecognizer:shouldReceiveTouch:)))
+    %init(RFRichTextSliceHooks, RFRichTextSliceView = richTextSlice);
   NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
   RFSetSwipeCollapse([defaults boolForKey:kRedditFilterSwipeToCollapse],
                      [defaults boolForKey:kRedditFilterTapToCollapse]);
