@@ -123,7 +123,8 @@ static void RFLookUp(NSString *identifier, NSString *rejected, void (^completion
                                if ([url isKindOfClass:NSString.class] && [url hasPrefix:@"https://"])
                                  variants[quality] = url;
                              }
-                             completion([variants copy]);
+                             // Nothing playable is a failure too, so it isn't cached and is tried again.
+                             completion(variants.count ? [variants copy] : nil);
                            }] resume];
   });
 }

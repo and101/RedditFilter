@@ -205,6 +205,20 @@ int main(void) {
     Check([hd[@"hdonly"] isEqual:hdOnly], @"Keep HD when SD is missing");
     Check([hd[@"sdonly"] isEqual:sdOnly], @"Fall back to SD when HD is missing");
 
+    // A response without a usable file isn't cached, so the next page asks again.
+    __block NSInteger lookups = 0;
+    __block BOOL fixed = NO;
+    gRoute = ^NSArray *(NSString *operation, NSDictionary *body, NSURL *url) {
+      if ([url.path hasSuffix:@"/auth/temporary"]) return @[ @200, @0.01, @{@"token" : @"t"} ];
+      lookups++;
+      NSDictionary *urls = fixed ? @{@"sd" : sdOnly} : @{@"sd" : @"http://insecure.example/x.mp4"};
+      return @[ @200, @0.01, @{@"gif" : @{@"hasAudio" : @YES, @"urls" : urls}} ];
+    };
+    Check(FetchRedgifs(@[ @"empty" ], NO).count == 0, @"Play nothing when no file is usable");
+    fixed = YES;
+    NSDictionary *retried = FetchRedgifs(@[ @"empty" ], NO);
+    Check(lookups == 2 && [retried[@"empty"] isEqual:sdOnly], @"Look up again after a response without a usable file");
+
     // Full post text
     SetPrefs(@[ @"tesla" ], NO);
     __block NSTimeInterval detailsDelay = 0.1;
