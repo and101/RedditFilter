@@ -12,6 +12,7 @@
 
 static BOOL gSwipeCollapseEnabled;
 static BOOL gTapCollapseEnabled = YES;
+static BOOL gSwipeCollapseHapticsEnabled = YES;
 static NSHashTable<UIView *> *gSwipeCollapseCards;
 static NSHashTable<UIGestureRecognizer *> *gDisabledHeaderRecognizers;
 static const void *kRFSwipeCollapseRecognizerKey = &kRFSwipeCollapseRecognizerKey;
@@ -548,7 +549,7 @@ static UIImpactFeedbackGenerator *RFSwipeCollapseHaptics(void) {
   if (swipe.state == UIGestureRecognizerStateBegan) {
     objc_setAssociatedObject(swipe, kRFSwipeCollapseHandledKey, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(swipe, kRFSwipeCollapseStageKey, @0, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    [RFSwipeCollapseHaptics() prepare];
+    if (gSwipeCollapseHapticsEnabled) [RFSwipeCollapseHaptics() prepare];
   }
 
   if (swipe.state == UIGestureRecognizerStateBegan || swipe.state == UIGestureRecognizerStateChanged) {
@@ -568,7 +569,7 @@ static UIImpactFeedbackGenerator *RFSwipeCollapseHaptics(void) {
     // thread. Moving back below a threshold lets it fire again.
     NSInteger stage = RFSwipeCollapseStage(translation, width, thread);
     NSInteger previous = [objc_getAssociatedObject(swipe, kRFSwipeCollapseStageKey) integerValue];
-    if (stage > previous) [RFSwipeCollapseHaptics() impactOccurred];
+    if (gSwipeCollapseHapticsEnabled && stage > previous) [RFSwipeCollapseHaptics() impactOccurred];
     if (stage != previous)
       objc_setAssociatedObject(swipe, kRFSwipeCollapseStageKey, @(stage), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     return;
@@ -697,12 +698,13 @@ static void RFPrepareSwipeCollapseHeader(UIView *header) {
   [gSwipeCollapseCards addObject:card];
 }
 
-void RFSetSwipeCollapse(BOOL enabled, BOOL tapToo) {
+void RFSetSwipeCollapse(BOOL enabled, BOOL tapToo, BOOL haptics) {
   if (![NSThread isMainThread]) {
-    dispatch_async(dispatch_get_main_queue(), ^{ RFSetSwipeCollapse(enabled, tapToo); });
+    dispatch_async(dispatch_get_main_queue(), ^{ RFSetSwipeCollapse(enabled, tapToo, haptics); });
     return;
   }
   BOOL tapChanged = gTapCollapseEnabled != tapToo;
+  gSwipeCollapseHapticsEnabled = haptics;
   gTapCollapseEnabled = tapToo;
   if (!enabled || tapToo) RFRestoreAllHeaderRecognizers();
   if (gSwipeCollapseEnabled == enabled) {
@@ -755,5 +757,6 @@ void RFSetSwipeCollapse(BOOL enabled, BOOL tapToo) {
     %init(RFRichTextSliceHooks, RFRichTextSliceView = richTextSlice);
   NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
   RFSetSwipeCollapse([defaults boolForKey:kRedditFilterSwipeToCollapse],
-                     [defaults boolForKey:kRedditFilterTapToCollapse]);
+                     [defaults boolForKey:kRedditFilterTapToCollapse],
+                     [defaults boolForKey:kRedditFilterSwipeCollapseHaptics]);
 }

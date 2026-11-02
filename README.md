@@ -42,6 +42,7 @@ Filters unwanted content from the Reddit app: promoted posts, recommendations, N
 ## New in 1.3.3
 
 - **Swipe to collapse**: swipe a comment left to collapse it and its replies, or swipe further to collapse the whole thread, like the 2024 app. The comment slides with your finger and shows what will happen. Swiping left on a collapsed comment or on the post still moves to the next post, and swiping right still goes back. Off by default; turn it on under **Collapsing comments**.
+- **Swipe haptics**: a light vibration when your swipe reaches Collapse or Collapse thread. On by default; turn it off under **Collapsing comments**.
 - **Collapsing comments settings**: a new section for **Swipe to collapse**, **Tap to collapse too** and the **AutoMod** switch. With swipe on, tapping or long pressing anywhere on a comment no longer collapses it, so it can't happen by accident. Links and spoilers still open with a tap. Turn on **Tap to collapse too** to keep both. A collapsed comment always opens with a tap.
 - **Open Reddit links in the app**: a Safari extension now opens Reddit links from Safari in RedditFilter. Safari asks before each one. To set it up, tap **Open Reddit links here** in the new **Safari** section of RedditFilter settings.
 - **RedGIFs quality**: RedGIFs has its own settings section, with **HD video** (off by default, so videos play in SD and use less data) and **HD on Wi-Fi only**, which plays SD on mobile data and in Low Data Mode.
