@@ -12,6 +12,7 @@
 NSString *RFPendingWebSession(void) { return nil; }
 void RFClearPendingWebSession(void) {}
 void RFSetColoredComments(BOOL enabled, BOOL apolloStyle) {}
+void RFSetSwipeCollapse(BOOL enabled, BOOL tapToo) {}
 
 static void Check(BOOL condition, NSString *message) {
   if (!condition) { NSLog(@"FAIL: %@", message); exit(1); }
