@@ -75,17 +75,20 @@ void RFClearPendingWebSession(void) {
   WKWebViewConfiguration *configuration = [WKWebViewConfiguration new];
   configuration.websiteDataStore = [WKWebsiteDataStore nonPersistentDataStore];
   // The store starts empty, so reddit.com asks about cookies every time and its banner covers the
-  // form. Answer it with Reject Optional Cookies, which only turns off the optional ones.
+  // form. Answer it with Reject Optional Cookies, which only turns off the optional ones. The banner
+  // can turn up late (after reddit.com's script check, on a slow connection) and ignores a click
+  // before it's ready, so keep at it until reddit.com has the answer (its eu_cookie_opted cookie).
   [configuration.userContentController
       addUserScript:[[WKUserScript alloc]
                           initWithSource:@"(() => {"
                                          @"  let tries = 0;"
                                          @"  const timer = setInterval(() => {"
+                                         @"    if (/(^|; )eu_cookie_opted=/.test(document.cookie) || ++tries > 120)"
+                                         @"      return clearInterval(timer);"
                                          @"    const reject = [...document.querySelectorAll('button[slot=\"secondary-button\"]')]"
                                          @"      .find((button) => /reject/i.test(button.textContent));"
                                          @"    if (reject) reject.click();"
-                                         @"    if (reject || ++tries > 40) clearInterval(timer);"
-                                         @"  }, 250);"
+                                         @"  }, 500);"
                                          @"})();"
                            injectionTime:WKUserScriptInjectionTimeAtDocumentEnd
                         forMainFrameOnly:YES
