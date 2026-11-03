@@ -14,15 +14,14 @@
 //   * surfaces all of that in a debug section of the RedditFilter menu so the
 //     corrected path can be copied straight out of the app.
 //
-// EVERYTHING here is gated behind REDDITFILTER_DEBUG. When it is 0 (the
-// default) the tracker, the recording call sites, and the debug menu all
-// compile away to nothing.
-//
-// To turn it on: tick "Include debug menu" when running the GitHub build, or
-// build locally with `make package DEBUG_MENU=1`.
+// It's in every build but only records while the Diagnostics switch at the end
+// of the settings screen is on. Off, each request costs one flag check.
+// What it records stays in memory: it's cleared when Reddit closes or the switch
+// is turned off.
 
 #import <Foundation/Foundation.h>
 
+// Only the login notes in Tweak.xm still need a build with DEBUG_MENU=1.
 #ifndef REDDITFILTER_DEBUG
 #define REDDITFILTER_DEBUG 0
 #endif
@@ -39,7 +38,16 @@ typedef NS_ENUM(NSInteger, RFSchemaSig) {
   RFSchemaSigCommentsAds, // an ad array or a PdpAds object containing adPosts
 };
 
-#if REDDITFILTER_DEBUG
+#ifdef __cplusplus
+extern "C" {
+#endif
+// Whether the Diagnostics switch is on. Thread-safe.
+BOOL RFDiagnosticsEnabled(void);
+// Called when the settings are read. Turning it off clears what was recorded.
+void RFSetDiagnosticsEnabled(BOOL enabled);
+#ifdef __cplusplus
+}
+#endif
 
 // Keys used in the dictionaries returned by -snapshot.
 extern NSString *const kRFDebugOp;            // NSString  operation name
@@ -82,24 +90,21 @@ extern NSString *const kRFDebugUnfiltered;    // NSArray   on the unfiltered-req
 
 @end
 
-// Recording macro used at the call sites. In a release build it expands to a
-// no-op and, because none of its parameters appear in the replacement text,
-// the arguments (including any block/enum tokens) are discarded entirely.
+// Recording macros used at the call sites. They do nothing unless Diagnostics is on.
 // (Parameter names start with an underscore so they can't collide with the
 // selector keywords below, e.g. `resolved:` and `json:`.)
 #define RF_RECORD_SCHEMA(_op, _expected, _resolved, _json, _sig)               \
-  [[RFSchemaDebug shared] recordOperation:(_op)                                \
-                             expectedPath:(_expected)                          \
-                                 resolved:(_resolved)                          \
-                                     json:(_json)                              \
-                                signature:(_sig)]
+  do {                                                                         \
+    if (RFDiagnosticsEnabled())                                                \
+      [[RFSchemaDebug shared] recordOperation:(_op)                            \
+                                 expectedPath:(_expected)                      \
+                                     resolved:(_resolved)                      \
+                                         json:(_json)                          \
+                                    signature:(_sig)];                         \
+  } while (0)
 
 #define RF_RECORD_UNFILTERED(_request, _hasHandler)                           \
-  [[RFSchemaDebug shared] recordUnfilteredRequest:(_request) hasHandler:(_hasHandler)]
-
-#else // !REDDITFILTER_DEBUG
-
-#define RF_RECORD_SCHEMA(_op, _expected, _resolved, _json, _sig) ((void)0)
-#define RF_RECORD_UNFILTERED(_request, _hasHandler) ((void)0)
-
-#endif // REDDITFILTER_DEBUG
+  do {                                                                         \
+    if (RFDiagnosticsEnabled())                                                \
+      [[RFSchemaDebug shared] recordUnfilteredRequest:(_request) hasHandler:(_hasHandler)]; \
+  } while (0)

@@ -1,11 +1,18 @@
 // DebugMenu.x
 //
-// Implementation of RFSchemaDebug. The entire file is compiled out when
-// REDDITFILTER_DEBUG is 0, so nothing here ships in a release build.
+// Implementation of RFSchemaDebug, which records only while Diagnostics is on.
 
 #import "DebugMenu.h"
+#include <stdatomic.h>
 
-#if REDDITFILTER_DEBUG
+static atomic_bool gRFDiagnosticsEnabled;
+
+BOOL RFDiagnosticsEnabled(void) { return atomic_load_explicit(&gRFDiagnosticsEnabled, memory_order_relaxed); }
+
+void RFSetDiagnosticsEnabled(BOOL enabled) {
+  BOOL was = atomic_exchange(&gRFDiagnosticsEnabled, (bool)enabled);
+  if (was && !enabled) [[RFSchemaDebug shared] reset];
+}
 
 NSString *const kRFDebugOp = @"op";
 NSString *const kRFDebugExpected = @"expected";
@@ -314,4 +321,3 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
 
 @end
 
-#endif // REDDITFILTER_DEBUG

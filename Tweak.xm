@@ -32,6 +32,7 @@ extern "C" void RFReloadPreferences(void) {
   prefs.redgifsHD = [defaults boolForKey:kRedditFilterRedgifsHD];
   prefs.redgifsHDWiFiOnly = [defaults boolForKey:kRedditFilterRedgifsHDWiFiOnly];
   globalPrefs = prefs;
+  RFSetDiagnosticsEnabled([defaults boolForKey:kRedditFilterDiagnostics]);
   // Start watching the network now, so the first page already knows whether it's on Wi-Fi.
   if (prefs.redgifsDirect && prefs.redgifsHD && prefs.redgifsHDWiFiOnly) RFRedgifsOnWiFi();
   RFSetColoredComments([defaults boolForKey:kRedditFilterColoredComments],

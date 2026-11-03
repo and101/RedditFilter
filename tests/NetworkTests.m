@@ -123,6 +123,7 @@ static void SetPrefs(NSArray *keywords, BOOL redgifs) {
   [defaults setBool:YES forKey:kRedditFilterPromoted];
   [defaults setBool:redgifs forKey:kRedditFilterRedgifsDirect];
   [defaults setObject:keywords forKey:kRedditFilterKeywords];
+  [defaults setBool:YES forKey:kRedditFilterDiagnostics];
   RFReloadPreferences();
 }
 
@@ -370,7 +371,7 @@ int main(void) {
       Check([Edges(json)[0][@"node"][@"cells"] count] == 0, [NSString stringWithFormat:@"Filter responses from %@", host]);
     }
 
-    // The debug menu lists GraphQL requests that skip the filter, so a new address shows up there
+    // The Debug section lists GraphQL requests that skip the filter, so a new address shows up there
     NSArray *(^unfiltered)(void) = ^NSArray * {
       for (NSDictionary *row in [[RFSchemaDebug shared] snapshot])
         if (row[kRFDebugUnfiltered]) return row[kRFDebugUnfiltered];
@@ -383,7 +384,15 @@ int main(void) {
     json = LoadHome(session, 0.2, &timing);
     Check([Edges(json)[0][@"node"][@"cells"] count] == 1, @"Pass requests to other addresses through");
     Check(unfiltered().count == 1 && [unfiltered()[0] hasPrefix:@"api-v9.reddit.com \u00b7 1 \u00b7 last HomeFeedSdui"],
-          @"List a GraphQL request to an unknown Reddit address in the debug menu");
+          @"List a GraphQL request to an unknown Reddit address in the Debug section");
+    // Diagnostics off: what was recorded is cleared and nothing new is recorded
+    [NSUserDefaults.standardUserDefaults setBool:NO forKey:kRedditFilterDiagnostics];
+    RFReloadPreferences();
+    Check(unfiltered().count == 0, @"Clear the diagnostics when they're turned off");
+    LoadHome(session, 0.2, &timing);
+    Check(unfiltered().count == 0, @"Record nothing while diagnostics are off");
+    [NSUserDefaults.standardUserDefaults setBool:YES forKey:kRedditFilterDiagnostics];
+    RFReloadPreferences();
     gHost = @"gql-fed.reddit.com";
 
     detailsDelay = 8;

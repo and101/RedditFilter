@@ -92,6 +92,13 @@ static const NSInteger kCollapseRowTag = kRedgifsRowTag + kRedgifsRowCount;
 // Its position: row 1 of the About section. The other About rows are kAboutRows.
 static const NSInteger kAboutUpdateRow = 1;
 
+// First row of the Debug section, at the very end. The schema paths show below it while it's on.
+static const RFToggleRow kDiagnosticsRow = {kRedditFilterDiagnostics, @"Diagnostics",
+                                            @"Show whether RedditFilter still finds the posts and ads in "
+                                            @"Reddit's responses",
+                                            @"rpl3/bug,icon_bug", NO};
+static const NSInteger kDiagnosticsRowTag = kCollapseRowTag + kCollapseRowCount;
+
 static const RFToggleRow *RFToggleRowForKey(NSString *key) {
   for (NSInteger i = 0; i < kToggleRowCount; i++)
     if ([kToggleRows[i].key isEqualToString:key]) return &kToggleRows[i];
@@ -101,6 +108,7 @@ static const RFToggleRow *RFToggleRowForKey(NSString *key) {
     if ([kRedgifsRows[i].key isEqualToString:key]) return &kRedgifsRows[i];
   for (NSInteger i = 0; i < kCollapseRowCount; i++)
     if ([kCollapseRows[i].key isEqualToString:key]) return &kCollapseRows[i];
+  if ([kDiagnosticsRow.key isEqualToString:key]) return &kDiagnosticsRow;
   return [kUpdateRow.key isEqualToString:key] ? &kUpdateRow : NULL;
 }
 
@@ -113,6 +121,7 @@ static const RFToggleRow *RFToggleRowForTag(NSInteger tag) {
   NSInteger collapseRow = tag - kCollapseRowTag;
   if (collapseRow >= 0 && collapseRow < kCollapseRowCount) return &kCollapseRows[collapseRow];
   if (tag == kUpdateRowTag) return &kUpdateRow;
+  if (tag == kDiagnosticsRowTag) return &kDiagnosticsRow;
   return NULL;
 }
 
@@ -347,8 +356,8 @@ typedef NS_ENUM(NSInteger, RFSection) {
   RFSectionRedgifs,
   RFSectionKeywords,
   RFSectionSafari,
-  RFSectionDebug,
   RFSectionAbout,
+  RFSectionDebug,
 };
 
 // The IPA includes the Safari extension unless it was built without it.
@@ -362,15 +371,15 @@ static BOOL RFHasSafariExtension(void) {
   return hasExtension;
 }
 
-// Filters, RedGIFs, Keywords, [Safari (with the extension)], [Schema Paths (debug builds only)], About
+// Filters, Collapsing, RedGIFs, Keywords, [Safari (with the extension)], About, Debug
 static NSArray<NSNumber *> *RFSections(void) {
   static NSArray *sections;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
     NSMutableArray *list = [@[ @(RFSectionFilters), @(RFSectionCollapse), @(RFSectionRedgifs), @(RFSectionKeywords) ] mutableCopy];
     if (RFHasSafariExtension()) [list addObject:@(RFSectionSafari)];
-    if (REDDITFILTER_DEBUG) [list addObject:@(RFSectionDebug)];
     [list addObject:@(RFSectionAbout)];
+    [list addObject:@(RFSectionDebug)];
     sections = list;
   });
   return sections;
@@ -388,7 +397,7 @@ static NSString *RFHeaderText(NSInteger section) {
     case RFSectionRedgifs: return @"REDGIFS";
     case RFSectionKeywords: return @"KEYWORDS";
     case RFSectionSafari: return @"SAFARI";
-    case RFSectionDebug: return @"SCHEMA PATHS · DEBUG";
+    case RFSectionDebug: return @"DEBUG";
     case RFSectionAbout: return @"ABOUT";
   }
   return nil;
@@ -409,8 +418,13 @@ static NSString *RFFooterText(NSInteger section) {
     case RFSectionSafari:
       return @"Safari asks before each link opens here. Cancel twice to stay on the web in that tab";
     case RFSectionDebug:
-      return @"✓ resolved · ✗ broke (structural fallback is now filtering). "
-             @"Tap Copy on a ✗ row to grab the auto-discovered replacement path.";
+      if (!RFDiagnosticsEnabled())
+        return @"Turn on if posts or ads come back, then use Reddit for a minute and copy what's shown here "
+               @"into your bug report.";
+      return @"✓ found · ✗ not found where expected (RedditFilter searches the whole response instead). "
+             @"Tap Copy on a ✗ row for the new location, or Copy JSON for the response, which can include "
+             @"usernames and post text. Nothing leaves your device unless you copy it, and it's cleared when "
+             @"Reddit closes or you turn this off.";
     case RFSectionAbout: return @"Based on original work from level3tjg and NicholasBly";
   }
   return nil;
@@ -424,8 +438,8 @@ static NSInteger RFToggleTagAt(NSIndexPath *indexPath) {
     case RFSectionRedgifs: return kRedgifsRowTag + indexPath.row;
     case RFSectionKeywords: return indexPath.row > 0 ? kKeywordRowTag + indexPath.row - 1 : -1;
     case RFSectionAbout: return indexPath.row == kAboutUpdateRow ? kUpdateRowTag : -1;
-    case RFSectionSafari:
-    case RFSectionDebug: return -1;
+    case RFSectionDebug: return indexPath.row == 0 ? kDiagnosticsRowTag : -1;
+    case RFSectionSafari: return -1;
   }
   return -1;
 }
@@ -506,8 +520,7 @@ static void RFShowSafariSetup(UIViewController *controller) {
   [controller presentViewController:alert animated:YES completion:nil];
 }
 
-#if REDDITFILTER_DEBUG
-// Declarations for the debug-only helpers so the call sites below are typed.
+// Declarations for the Debug section's helpers so the call sites below are typed.
 // (The implementations are added to the class at runtime by Logos below.)
 @interface FeedFilterSettingsViewController (RFSchemaDebug)
 - (UITableViewCell *)debugCellForRow:(NSInteger)row inTableView:(UITableView *)tableView;
@@ -515,7 +528,6 @@ static void RFShowSafariSetup(UIViewController *controller) {
 - (void)rfCopyFailedJSON:(UIButton *)sender;
 - (void)rfResetCounters:(UIButton *)sender;
 @end
-#endif
 
 %subclass FeedFilterSettingsViewController : BaseTableViewController
 
@@ -558,7 +570,7 @@ static void RFShowSafariSetup(UIViewController *controller) {
 - (void)viewWillAppear:(BOOL)animated {
   %orig;
   // Refresh the keyword count after coming back from the Keywords screen
-  // (and, in debug builds, the stats that accrue while the app runs).
+  // (and the schema paths, which add up while the app runs).
   [self.tableView reloadData];
 }
 
@@ -580,11 +592,8 @@ static void RFShowSafariSetup(UIViewController *controller) {
     case RFSectionSafari:
       return 1;
     case RFSectionDebug:
-#if REDDITFILTER_DEBUG
-      // One row per tracked schema path, plus a trailing "reset" row.
-      return [[RFSchemaDebug shared] snapshot].count + 1;
-#endif
-      return 0;
+      // The switch, then while it's on one row per tracked schema path and a "reset" row.
+      return 1 + (RFDiagnosticsEnabled() ? [[RFSchemaDebug shared] snapshot].count + 1 : 0);
     case RFSectionAbout:
       return kAboutRowCount + 1; // plus "Check for updates"
   }
@@ -597,9 +606,7 @@ static void RFShowSafariSetup(UIViewController *controller) {
   if (section == RFSectionAbout && tag < 0) return RFAboutCell(tableView, RFAboutLinkIndex(indexPath.row));
   if (section == RFSectionKeywords && indexPath.row == 0) return RFKeywordsCell(tableView);
   if (section == RFSectionSafari) return RFSafariCell(tableView);
-#if REDDITFILTER_DEBUG
-  if (section == RFSectionDebug) return [self debugCellForRow:indexPath.row inTableView:tableView];
-#endif
+  if (section == RFSectionDebug && tag < 0) return [self debugCellForRow:indexPath.row - 1 inTableView:tableView];
   RFSettingsCell *cell = [tableView dequeueReusableCellWithIdentifier:kToggleCellID
                                                                    forIndexPath:indexPath];
   const RFToggleRow *row = RFToggleRowForTag(tag);
@@ -608,7 +615,7 @@ static void RFShowSafariSetup(UIViewController *controller) {
   cell.accessibilityLabel = row->title;
   RFMainLabel(cell).text = row->title;
   RFDetailLabel(cell).text = row->subtitle;
-  RFSetIcon(cell, row->icons, nil);
+  RFSetIcon(cell, row->icons, tag == kDiagnosticsRowTag ? @"ladybug" : nil);
   RFSetToggleCellEnabled(cell, row);
   BOOL updateRow = tag == kUpdateRowTag;
   if (updateRow && RFCheckingForUpdate(self)) RFDetailLabel(cell).text = @"Checking\u2026";
@@ -646,6 +653,13 @@ static void RFShowSafariSetup(UIViewController *controller) {
                                      preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
     [self presentViewController:alert animated:YES completion:nil];
+  }
+
+  // Show or hide the schema paths below the Diagnostics switch.
+  // (A plain reload: an animated section reload lays the new footer out too wide.)
+  if (sender.tag == kDiagnosticsRowTag) {
+    [self.tableView reloadData];
+    return;
   }
 
   // Refresh every dependent row, as a chain (Prefer SD, then on mobile data) can change further down.
@@ -714,15 +728,11 @@ static void RFShowSafariSetup(UIViewController *controller) {
 // ---------------------------------------------------------------------------
 // Schema-path debug section.
 //
-// All of the method *declarations* below are compiled unconditionally so that
-// Logos always registers them on the subclass; only their bodies are gated on
-// REDDITFILTER_DEBUG. In a release build the bodies collapse to no-ops, the
-// section is never shown (numberOfSections returns 1), and these methods are
-// never invoked.
+// Shown below the Diagnostics switch while it's on. `row` counts from the first
+// schema path (the switch is row 0 of the section).
 // ---------------------------------------------------------------------------
 %new
 - (UITableViewCell *)debugCellForRow:(NSInteger)row inTableView:(UITableView *)tableView {
-#if REDDITFILTER_DEBUG
   static NSString *const kRFDebugCellID = @"RFSchemaDebugCell";
   
   // Deliberately a plain UIKit cell, not a Reddit class: the whole point of
@@ -836,13 +846,9 @@ static void RFShowSafariSetup(UIViewController *controller) {
   cell.detailTextLabel.text = detail;
   cell.detailTextLabel.textColor = detailColor;
   return cell;
-#else
-  return nil;
-#endif
 }
 %new
 - (void)rfCopyDiscoveredPath:(UIButton *)sender {
-#if REDDITFILTER_DEBUG
   NSArray<NSDictionary *> *snapshot = [[RFSchemaDebug shared] snapshot];
   if (sender.tag < 0 || sender.tag >= (NSInteger)snapshot.count) return;
   NSString *discovered = snapshot[sender.tag][kRFDebugDiscovered];
@@ -856,11 +862,9 @@ static void RFShowSafariSetup(UIViewController *controller) {
                    [weakSender setTitle:@"Copy" forState:UIControlStateNormal];
                    [weakSender sizeToFit];
                  });
-#endif
 }
 %new
 - (void)rfCopyFailedJSON:(UIButton *)sender {
-#if REDDITFILTER_DEBUG
   NSArray<NSDictionary *> *snapshot = [[RFSchemaDebug shared] snapshot];
   if (sender.tag < 0 || sender.tag >= (NSInteger)snapshot.count) return;
   
@@ -877,13 +881,10 @@ static void RFShowSafariSetup(UIViewController *controller) {
                    [weakSender setTitle:@"Copy JSON" forState:UIControlStateNormal];
                    [weakSender sizeToFit];
                  });
-#endif
 }
 %new
 - (void)rfResetCounters:(UIButton *)sender {
-#if REDDITFILTER_DEBUG
   [[RFSchemaDebug shared] reset];
   [self.tableView reloadData];
-#endif
 }
 %end

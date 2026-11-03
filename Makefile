@@ -37,7 +37,8 @@ ifeq ($(SIDELOADED),1)
   $(TWEAK_NAME)_CFLAGS += -DRF_SIDELOADED=1
 endif
 
-# Debug menu: off unless you build with DEBUG_MENU=1 (the GitHub build has a checkbox for it)
+# Login notes in the device log (Tweak.xm): off unless you build with DEBUG_MENU=1.
+# The Diagnostics section is in every build, behind its own switch.
 ifeq ($(DEBUG_MENU),1)
   $(TWEAK_NAME)_CFLAGS += -DREDDITFILTER_DEBUG=1
 endif

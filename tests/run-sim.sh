@@ -1,7 +1,7 @@
 #!/bin/sh
 # Runs tests/NetworkTests.m in the iOS Simulator: the real network hook from Tweak.xm against stubbed
 # Reddit responses. Needs Xcode, Theos (for its Logos preprocessor) and a booted simulator, or pass a
-# simulator's ID. Built with the debug menu on, so its record of unfiltered requests is tested too, and as a
+# simulator's ID. Built with DEBUG_MENU's flag for the login notes (the tests turn Diagnostics on), and as a
 # sideloaded build, so the app's own password login is tested with a stand-in for the browser sheet.
 # Also runs tests/ColoredCommentsTests.mm on the color rules in ColoredComments.x.
 set -eu
