@@ -175,6 +175,13 @@ static NSHTTPURLResponse *RFLoginResponse(NSURL *url, NSString *session) {
 }
 
 #if RF_SIDELOADED
+// Login notes for testing: field names, statuses and Reddit's error codes only, never what was typed.
+#if REDDITFILTER_DEBUG
+#define RFLoginLog(...) NSLog(__VA_ARGS__)
+#else
+#define RFLoginLog(...) ((void)0)
+#endif
+
 // The username and password from the app's password login request, or NO if they aren't there.
 // A streamed body is read into *request so it can still be sent if they aren't.
 static BOOL RFLoginCredentials(NSURLRequest **request, NSString **username, NSString **password) {
@@ -183,13 +190,18 @@ static BOOL RFLoginCredentials(NSURLRequest **request, NSString **username, NSSt
     NSMutableData *read = [NSMutableData data];
     NSInputStream *stream = (*request).HTTPBodyStream;
     uint8_t buffer[4096];
+    NSInteger n;
     [stream open];
-    for (NSInteger n; (n = [stream read:buffer maxLength:sizeof buffer]) > 0;) [read appendBytes:buffer length:n];
+    while ((n = [stream read:buffer maxLength:sizeof buffer]) > 0) [read appendBytes:buffer length:n];
+    BOOL complete = n == 0 && !stream.streamError;
     [stream close];
+    // Only part of it could be read: send what there is rather than nothing, and leave it to Reddit.
+    if (!complete) RFLoginLog(@"[RedditFilter] Couldn't read the whole password login request");
     NSMutableURLRequest *copy = [*request mutableCopy];
     copy.HTTPBodyStream = nil;
     copy.HTTPBody = read;
     *request = copy;
+    if (!complete) return NO;
     body = read;
   }
   if (!body.length) return NO;
@@ -199,7 +211,10 @@ static BOOL RFLoginCredentials(NSURLRequest **request, NSString **username, NSSt
     fields = json;
   } else {
     NSURLComponents *form = [NSURLComponents new];
-    form.percentEncodedQuery = [[NSString alloc] initWithData:body encoding:NSUTF8StringEncoding];
+    // In a form body, + stands for a space.
+    form.percentEncodedQuery = [[[NSString alloc] initWithData:body encoding:NSUTF8StringEncoding]
+        stringByReplacingOccurrencesOfString:@"+"
+                                  withString:@"%20"];
     NSMutableDictionary *parsed = [NSMutableDictionary dictionary];
     for (NSURLQueryItem *item in form.queryItems)
       if (item.value) parsed[item.name] = item.value;
@@ -212,11 +227,25 @@ static BOOL RFLoginCredentials(NSURLRequest **request, NSString **username, NSSt
   if (![user isKindOfClass:NSString.class] || ![pass isKindOfClass:NSString.class] || ![user length] ||
       ![pass length]) {
     // Field names only, never their values.
-    NSLog(@"[RedditFilter] Password login request without a username and password: %@", fields.allKeys);
+    RFLoginLog(@"[RedditFilter] Password login request without a username and password: %@", fields.allKeys);
     return NO;
   }
   *username = user;
   *password = pass;
+  return YES;
+}
+
+// Whether logging in through reddit.com could get past Reddit refusing the app's password login.
+// Not when it's about the username or password themselves, or too many tries: reddit.com would only
+// say the same, so the app shows Reddit's answer. When unsure, try the browser.
+static BOOL RFBrowserCanHelpWithLogin(NSInteger status, NSData *data) {
+  if (status == 429) return NO;
+  NSString *text = data ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding].lowercaseString : nil;
+  if (!text.length) return YES;
+  for (NSString *word in @[ @"captcha", @"attest", @"integrity" ])
+    if ([text containsString:word]) return YES;
+  for (NSString *word in @[ @"password", @"identifier", @"username", @"credential", @"otp" ])
+    if ([text containsString:word]) return NO;
   return YES;
 }
 #endif
@@ -270,12 +299,17 @@ static BOOL RFIsAPIHost(NSString *host) {
       NSInteger status = [response isKindOfClass:NSHTTPURLResponse.class] ? ((NSHTTPURLResponse *)response).statusCode : 0;
       // Logged in, or the connection failed and the browser wouldn't do any better.
       if (error || status < 400 || status >= 500) {
-        NSLog(@"[RedditFilter] Password login: %ld", (long)status);
+        RFLoginLog(@"[RedditFilter] Password login: %ld", (long)status);
         return completionHandler(data, response, error);
       }
       id json = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
       id reason = [json isKindOfClass:NSDictionary.class] ? json[@"error"] : nil;
-      NSLog(@"[RedditFilter] Password login refused (%ld): %@; trying the browser", (long)status, reason);
+      // A wrong password, for one: the app shows Reddit's own message.
+      if (!RFBrowserCanHelpWithLogin(status, data)) {
+        RFLoginLog(@"[RedditFilter] Password login refused (%ld): %@", (long)status, reason);
+        return completionHandler(data, response, error);
+      }
+      RFLoginLog(@"[RedditFilter] Password login refused (%ld): %@; trying the browser", (long)status, reason);
       RFBrowserLoginWithCredentials(username, password, ^(NSString *session) {
         void (^answer)(void) = ^{
           if (session)

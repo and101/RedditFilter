@@ -126,6 +126,7 @@ void RFClearPendingWebSession(void) {
   if (!self.popups) self.popups = [NSMutableArray array];
   [self.popups addObject:popup];
   [self.view addSubview:popup];
+  [self updateCloseButton];
   return popup;
 }
 
@@ -133,6 +134,22 @@ void RFClearPendingWebSession(void) {
   if (webView == self.webView) return;
   [webView removeFromSuperview];
   [self.popups removeObject:webView];
+  [self updateCloseButton];
+}
+
+// While a popup is showing, a Close button on the right takes the user back to the login page, in
+// case the popup doesn't close itself. Cancel still cancels the whole login.
+- (void)updateCloseButton {
+  self.navigationItem.rightBarButtonItem =
+      self.popups.count ? [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemClose
+                                                                        target:self
+                                                                        action:@selector(closePopup)]
+                        : nil;
+}
+
+- (void)closePopup {
+  WKWebView *popup = self.popups.lastObject;
+  if (popup) [self webViewDidClose:popup];
 }
 
 - (void)dealloc {
@@ -248,7 +265,8 @@ static NSString *const kAutofillScript =
         NSString *session;
         for (NSHTTPCookie *cookie in cookies)
           if ([cookie.name isEqualToString:@"reddit_session"] &&
-              [cookie.domain hasSuffix:@"reddit.com"] && cookie.value.length)
+              ([cookie.domain isEqualToString:@"reddit.com"] || [cookie.domain hasSuffix:@".reddit.com"]) &&
+              cookie.value.length)
             session = cookie.value;
         if (!session || self.finished) return;
         // Confirm the session belongs to a logged-in account and get its username.
@@ -477,27 +495,47 @@ static UIViewController *topViewController(void) {
   return top;
 }
 
+// The sheet opened by RFBrowserLoginWithCredentials, while it's open.
+static __weak RFWebLoginViewController *activeCredentialsLogin;
+
 // The app's own Log in button: log in with the same username and password in the browser sheet,
-// which fills them in and submits them itself. Calls completion on the main queue with the session,
-// or nil if the sheet couldn't be shown or the user closed it.
+// which fills them in and submits them itself. Calls completion once, on the main queue, with the
+// session, or nil if the sheet couldn't be shown, one is already open, or the user closed it.
 void RFBrowserLoginWithCredentials(NSString *username, NSString *password, void (^completion)(NSString *session)) {
   dispatch_async(dispatch_get_main_queue(), ^{
+    __block BOOL answered = NO;
+    void (^answer)(NSString *) = ^(NSString *session) {
+      if (answered) return;
+      answered = YES;
+      completion(session);
+    };
     UIViewController *presenter = topViewController();
-    if (!presenter) return completion(nil);
+    if (!presenter.view.window || activeCredentialsLogin ||
+        UIApplication.sharedApplication.applicationState == UIApplicationStateBackground)
+      return answer(nil);
     [presenter.view endEditing:YES];
     RFWebLoginViewController *webLogin = [RFWebLoginViewController new];
     webLogin.prefillUsername = username;
     webLogin.prefillPassword = password;
     webLogin.completion = ^(NSString *session, NSString *loggedInAs) {
-      completion(session);
+      answer(session);
     };
     webLogin.cancellation = ^{
-      completion(nil);
+      answer(nil);
     };
     UINavigationController *navigationController =
         [[UINavigationController alloc] initWithRootViewController:webLogin];
     navigationController.presentationController.delegate = webLogin;
+    activeCredentialsLogin = webLogin;
     [presenter presentViewController:navigationController animated:YES completion:nil];
+    // UIKit quietly skips a presentation it can't make, such as while another screen is still
+    // animating in or out. Answer then, so the app's login doesn't wait forever.
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+      if (navigationController.presentingViewController || webLogin.finished) return;
+      webLogin.finished = YES;
+      webLogin.prefillPassword = nil;
+      answer(nil);
+    });
   });
 }
 

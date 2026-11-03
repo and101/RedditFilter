@@ -169,6 +169,14 @@ static NSError *deviceCheckUnsupported(void) {
   return [NSError errorWithDomain:DCErrorDomain code:DCErrorFeatureUnsupported userInfo:nil];
 }
 
+// Answer later, as DeviceCheck does, not before the method has returned.
+static void answerUnsupported(void (^completionHandler)(id, NSError *)) {
+  if (!completionHandler) return;
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+    completionHandler(nil, deviceCheckUnsupported());
+  });
+}
+
 %group AttestFixes
 
 %hook DCAppAttestService
@@ -176,17 +184,17 @@ static NSError *deviceCheckUnsupported(void) {
   return NO;
 }
 - (void)generateKeyWithCompletionHandler:(void (^)(NSString *, NSError *))completionHandler {
-  if (completionHandler) completionHandler(nil, deviceCheckUnsupported());
+  answerUnsupported(completionHandler);
 }
 - (void)attestKey:(NSString *)keyId
      clientDataHash:(NSData *)clientDataHash
   completionHandler:(void (^)(NSData *, NSError *))completionHandler {
-  if (completionHandler) completionHandler(nil, deviceCheckUnsupported());
+  answerUnsupported(completionHandler);
 }
 - (void)generateAssertion:(NSString *)keyId
            clientDataHash:(NSData *)clientDataHash
         completionHandler:(void (^)(NSData *, NSError *))completionHandler {
-  if (completionHandler) completionHandler(nil, deviceCheckUnsupported());
+  answerUnsupported(completionHandler);
 }
 %end
 
@@ -195,7 +203,7 @@ static NSError *deviceCheckUnsupported(void) {
   return NO;
 }
 - (void)generateTokenWithCompletionHandler:(void (^)(NSData *, NSError *))completionHandler {
-  if (completionHandler) completionHandler(nil, deviceCheckUnsupported());
+  answerUnsupported(completionHandler);
 }
 %end
 

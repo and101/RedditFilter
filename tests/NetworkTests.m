@@ -12,6 +12,20 @@
 // Browser login lives in LoginHelper.x, which isn't part of this test.
 NSString *RFPendingWebSession(void) { return nil; }
 void RFClearPendingWebSession(void) {}
+
+// The browser sheet for the app's own login (sideloaded builds): counts how often it's asked and
+// answers with gBrowserSession, as the sheet does, on the main queue.
+static NSUInteger gBrowserLogins;
+static NSString *gBrowserUsername, *gBrowserPassword, *gBrowserSession;
+void RFBrowserLoginWithCredentials(NSString *username, NSString *password, void (^completion)(NSString *session)) {
+  gBrowserLogins++;
+  gBrowserUsername = username;
+  gBrowserPassword = password;
+  NSString *session = gBrowserSession;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    completion(session);
+  });
+}
 void RFSetColoredComments(BOOL enabled, BOOL apolloStyle) {}
 void RFSetSwipeCollapse(BOOL enabled, BOOL tapToo, BOOL haptics) {}
 
@@ -192,6 +206,81 @@ static RFUpdateStatus FetchLatestRelease(void) {
   return result;
 }
 
+// Sends the app's password login with this body and returns what the app got back. The browser
+// sheet answers on the main queue, so keep the main run loop going until then.
+static NSHTTPURLResponse *PasswordLogin(NSURLSession *session, NSData *body, NSString *contentType) {
+  NSMutableURLRequest *request =
+      [NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"https://www.reddit.com/auth/v2/login/password"]];
+  request.HTTPMethod = @"POST";
+  [request setValue:contentType forHTTPHeaderField:@"Content-Type"];
+  request.HTTPBody = body;
+  __block NSHTTPURLResponse *answer = nil;
+  __block NSUInteger calls = 0;
+  [[session dataTaskWithRequest:request
+              completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+                calls++;
+                answer = (NSHTTPURLResponse *)response;
+              }] resume];
+  NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
+  while (!calls && deadline.timeIntervalSinceNow > 0)
+    [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+  [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.3]];
+  Check(calls == 1, @"Answer the app's password login exactly once");
+  return answer;
+}
+
+static NSData *JSONBody(NSDictionary *fields) {
+  return [NSJSONSerialization dataWithJSONObject:fields options:0 error:NULL];
+}
+
+static void TestPasswordLogin(NSURLSession *session) {
+  __block NSArray *reddit = nil;
+  __block NSDictionary *sent = nil;
+  gRoute = ^NSArray *(NSString *operation, NSDictionary *body, NSURL *url) {
+    sent = body;
+    return reddit;
+  };
+  NSData *credentials = JSONBody(@{@"username" : @"someone", @"password" : @"pass word+1"});
+
+  // Accepted: the app gets Reddit's answer and the browser isn't involved.
+  gBrowserLogins = 0;
+  reddit = @[ @200, @0.01, @{@"success" : @YES} ];
+  NSHTTPURLResponse *answer = PasswordLogin(session, credentials, @"application/json");
+  Check(answer.statusCode == 200 && gBrowserLogins == 0, @"Pass an accepted login straight through");
+  Check([sent[@"password"] isEqual:@"pass word+1"], @"Send the app's login to Reddit unchanged");
+
+  // A wrong password, or too many tries: reddit.com would say the same, so show Reddit's answer.
+  reddit = @[ @400, @0.01, @{@"error" : @{@"params" : @{@"password" : @"INCORRECT"}}} ];
+  answer = PasswordLogin(session, credentials, @"application/json");
+  Check(answer.statusCode == 400 && gBrowserLogins == 0, @"Show Reddit's answer for a wrong password");
+  reddit = @[ @429, @0.01, @{} ];
+  answer = PasswordLogin(session, credentials, @"application/json");
+  Check(answer.statusCode == 429 && gBrowserLogins == 0, @"Show Reddit's answer for too many tries");
+
+  // Refused over the app itself: log in through the browser and hand its session to the app.
+  reddit = @[ @400, @0.01, @{@"error" : @{@"params" : @{@"identifier" : @"OK", @"recaptcha_token" : @"INVALID"}}} ];
+  gBrowserSession = @"browser-session";
+  answer = PasswordLogin(session, credentials, @"application/json");
+  Check(gBrowserLogins == 1 && [gBrowserUsername isEqual:@"someone"] && [gBrowserPassword isEqual:@"pass word+1"],
+        @"Log in through the browser with the same username and password");
+  Check(answer.statusCode == 200 &&
+            [[answer valueForHTTPHeaderField:@"Set-Cookie"] hasPrefix:@"reddit_session=browser-session;"],
+        @"Answer the app with the browser's session");
+
+  // Browser closed without logging in: the app gets Reddit's own answer.
+  gBrowserSession = nil;
+  answer = PasswordLogin(session, credentials, @"application/json");
+  Check(gBrowserLogins == 2 && answer.statusCode == 400, @"Show Reddit's answer when the browser is closed");
+
+  // A form body: + is a space.
+  gBrowserSession = @"browser-session";
+  NSData *form = [@"username=some+one&password=a+b%2Bc" dataUsingEncoding:NSUTF8StringEncoding];
+  answer = PasswordLogin(session, form, @"application/x-www-form-urlencoded");
+  Check([gBrowserUsername isEqual:@"some one"] && [gBrowserPassword isEqual:@"a b+c"],
+        @"Read + as a space in a form body");
+  gBrowserSession = nil;
+}
+
 int main(void) {
   @autoreleasepool {
     NSURLSessionConfiguration *config = NSURLSessionConfiguration.ephemeralSessionConfiguration;
@@ -364,6 +453,9 @@ int main(void) {
     Check(FetchLatestRelease() == RFUpdateStatusUpToDate && RFAvailableUpdate() == nil, @"Report being up to date");
     github = @[ @200, @0.05, @{@"tag_name" : @"nightly"} ];
     Check(FetchLatestRelease() == RFUpdateStatusFailed, @"Ignore a tag that isn't a release");
+
+    // The app's own password login, sideloaded.
+    TestPasswordLogin(session);
 
     NSLog(@"All network pipeline tests passed.");
   }
