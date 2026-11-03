@@ -97,14 +97,22 @@ Filters unwanted content from the Reddit app: promoted posts, recommendations, N
 
 ## Logging in
 
-Reddit rejects the app's normal username and password login when the app is sideloaded. Use one of these instead:
+Reddit rejects the app's normal username and password login when the app is sideloaded, so RedditFilter logs in on reddit.com for you instead:
 
 1. Open the login screen: **I already have an account** (or **Log in**) → **Use email or username**. To add another account, open the account switcher → **Add account** → **Log in**.
-2. Tap **Other options** at the top right, then choose:
-   - **Log in with browser**: log in on the reddit.com page that opens, including any 2FA code. The app finishes logging in by itself.
-   - **Open login link**: first tap **Email me a login link instead**, then copy the link from Reddit's email and paste it here.
+2. Type your username and password and tap **Continue** as usual.
+3. A reddit.com sheet opens, fills them in and logs in. It closes by itself once you're logged in. If Reddit asks for a 2FA code or a check, finish it in the sheet.
 
-Google sign-in may not work inside the browser, because Google often blocks it in apps. Use your Reddit username and password on the web page instead.
+Your password only goes to reddit.com, the same as logging in on the website.
+
+**Continue with Google** works from the app's own login screen.
+
+### Other options
+
+For accounts without a Reddit password, such as ones made with Apple, or if the steps above stop working after a Reddit update, tap **Other options** at the top right of the login screen:
+
+- **Log in with browser**: log in on the reddit.com page that opens, including with **Continue with Apple** or **Continue with Google** and any 2FA code. The app finishes logging in by itself.
+- **Open login link**: first tap **Email me a login link instead**, then copy the link from Reddit's email and paste it here.
 
 ## Install
 
