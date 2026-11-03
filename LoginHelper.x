@@ -71,6 +71,22 @@ void RFClearPendingWebSession(void) {
   // A fresh, non-persistent store so an old web session can't be picked up by mistake.
   WKWebViewConfiguration *configuration = [WKWebViewConfiguration new];
   configuration.websiteDataStore = [WKWebsiteDataStore nonPersistentDataStore];
+  // The store starts empty, so reddit.com asks about cookies every time and its banner covers the
+  // form. Answer it with Reject Optional Cookies, which only turns off the optional ones.
+  [configuration.userContentController
+      addUserScript:[[WKUserScript alloc]
+                          initWithSource:@"(() => {"
+                                         @"  let tries = 0;"
+                                         @"  const timer = setInterval(() => {"
+                                         @"    const reject = [...document.querySelectorAll('button[slot=\"secondary-button\"]')]"
+                                         @"      .find((button) => /reject/i.test(button.textContent));"
+                                         @"    if (reject) reject.click();"
+                                         @"    if (reject || ++tries > 40) clearInterval(timer);"
+                                         @"  }, 250);"
+                                         @"})();"
+                           injectionTime:WKUserScriptInjectionTimeAtDocumentEnd
+                        forMainFrameOnly:YES
+                          inContentWorld:WKContentWorld.defaultClientWorld]];
   self.webView = [[WKWebView alloc] initWithFrame:self.view.bounds configuration:configuration];
   self.webView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
   self.webView.navigationDelegate = self;
