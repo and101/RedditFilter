@@ -1,6 +1,7 @@
 // Run on macOS: ./tests/run.sh
 #import <Foundation/Foundation.h>
 #import "JSONFilter.h"
+#import "RFStats.h"
 #import "RFVersion.h"
 
 static void Check(BOOL condition, NSString *message) {
@@ -23,6 +24,7 @@ static NSDictionary *Feed(NSArray *cards) {
 
 int main(void) {
   @autoreleasepool {
+    RFStatsDisableSaving();
     RFPrefs ads = {.promoted = YES};
     RFPrefs nsfw = {.nsfw = YES};
     RFPrefs recommended = {.recommended = YES};
@@ -308,6 +310,29 @@ int main(void) {
               !RFReleaseIsNewer(@"v2026.45.0-1.3.2", @"dev", @"2026.43.0") &&
               !RFReleaseIsNewer(@"v2026.45.0-1.3.2", @"1.3.2", nil) && !RFReleaseIsNewer(@"v2026.45.0", @"1.3.2", @"2026.43.0"),
           @"Betas update to their release; development builds, unknown Reddit versions and untagged releases don't");
+
+    // Stats: one count per hidden item, and an item Reddit sends again isn't counted twice.
+    RFStatsReset();
+    NSDictionary *counted = Feed(@[
+      @{@"__typename": @"CellGroup", @"id": @"ad1", @"adPayload": @{}, @"cells": @[@{@"__typename": @"TitleCell"}]},
+      @{@"__typename": @"CellGroup", @"id": @"n1", @"cells": @[@{@"__typename": @"IndicatorsCell", @"indicators": @[@"NSFW"]}]},
+      @{@"__typename": @"CellGroup", @"id": @"k1", @"cells": @[@{@"__typename": @"TitleCell", @"title": @"keep"}]},
+    ]);
+    RFPrefs adsAndNSFW = {.promoted = YES, .nsfw = YES};
+    Filter(counted, @"HomeFeedSdui", adsAndNSFW);
+    Filter(counted, @"HomeFeedSdui", adsAndNSFW);
+    Filter(Post(@{@"pdpCommentsAds": @{@"adPosts": @[@{@"id": @"a1"}, @{@"id": @"a2"}]}}), @"PdpCommentsAds", ads);
+    NSDictionary *stats = RFStatsSnapshot();
+    NSArray *statCounts = stats[kRFStatsCounts];
+    Check([statCounts[RFStatFeedAds] integerValue] == 1 && [statCounts[RFStatNSFW] integerValue] == 1,
+          @"Count each hidden feed post once");
+    Check([statCounts[RFStatCommentAds] integerValue] == 2, @"Count each comment ad");
+    Check([statCounts[RFStatKeywordPosts] integerValue] == 0, @"Don't count posts that stay");
+    Check([stats[kRFStatsDays][RFStatsDayKey([NSDate date])] integerValue] == 4, @"Add today's counts up");
+    RFStatsReset();
+    Check([[RFStatsSnapshot()[kRFStatsCounts] valueForKeyPath:@"@sum.self"] integerValue] == 0 &&
+              [RFStatsSnapshot()[kRFStatsDays] count] == 0,
+          @"Reset the stats");
 
     puts("All JSON filtering regression tests passed.");
   }

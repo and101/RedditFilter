@@ -8,6 +8,7 @@
 
 #import "JSONFilter.h"
 #import "DebugMenu.h"
+#import "RFStats.h"
 
 static NSString *const kAutoModAccountId = @"t2_6l4z3";
 
@@ -35,6 +36,23 @@ static id RFValueAtPath(id root, NSString *path) {
 BOOL RFPrefsAnyEnabled(RFPrefs p) {
   return p.promoted || p.recommended || p.nsfw || p.awards || p.scores || p.automod || p.videosForYou || p.keywords ||
          p.redgifsDirect;
+}
+
+#pragma mark - Counting what's hidden
+
+// The ID of a post, comment or feed card, or of the node a { node: ... } wrapper holds.
+static NSString *RFItemId(id item) {
+  NSDictionary *dict = RFDict(item);
+  return RFString(dict[@"id"]) ?: RFString(RFDict(dict[@"node"])[@"id"]) ?: RFString(RFDict(dict[@"post"])[@"id"]);
+}
+
+static void RFCount(RFStat stat, id item) { RFStatsRecord(stat, RFItemId(item)); }
+
+static void RFCountItems(RFStat stat, id items) {
+  if (RFArray(items))
+    for (id item in items) RFCount(stat, item);
+  else if (items && items != NSNull.null)
+    RFCount(stat, items);
 }
 
 #pragma mark - Filtering single objects
@@ -180,6 +198,7 @@ static BOOL RFFilterNode(id object, const RFContext *ctx) {
       changed = YES;
     }
     if (isPost && p.nsfw && RFTrue(node[@"isNsfw"])) {
+      RFCount(RFStatNSFW, node);
       node[@"isHidden"] = @YES;
       changed = YES;
     }
@@ -193,6 +212,7 @@ static BOOL RFFilterNode(id object, const RFContext *ctx) {
 
   if ([type isEqualToString:@"AdPost"]) {
     if (!p.promoted) return NO;
+    RFCount(RFStatFeedAds, node);
     node[@"isHidden"] = @YES;
     return YES;
   }
@@ -201,11 +221,13 @@ static BOOL RFFilterNode(id object, const RFContext *ctx) {
 
   // Promoted: ads carry an adPayload. Emptying the cells hides the whole post.
   if (p.promoted && RFDict(node[@"adPayload"])) {
+    RFCount(RFStatFeedAds, node);
     node[@"cells"] = @[];
     return YES;
   }
 
   if (ctx->keywords && RFMatchesKeywords(RFArray(node[@"cells"]), ctx->keywords)) {
+    RFCount(RFStatKeywordPosts, node);
     node[@"cells"] = @[];
     return YES;
   }
@@ -217,6 +239,7 @@ static BOOL RFFilterNode(id object, const RFContext *ctx) {
   if (p.nsfw) {
     for (id cell in RFArray(node[@"cells"])) {
       if (!RFHasNSFWIndicator(cell)) continue;
+      RFCount(RFStatNSFW, node);
       node[@"cells"] = @[];
       return YES;
     }
@@ -277,8 +300,9 @@ static BOOL RFFilterEdges(NSArray *edges, const RFContext *ctx) {
   BOOL changed = NO;
   for (id edge in edges) {
     NSMutableDictionary *wrapper = RFMutableDict(edge);
-    if (wrapper && ((ctx->prefs.videosForYou && RFIsVideosForYou(wrapper[@"node"])) ||
-                    RFIsKeywordPostPreview(wrapper[@"node"], ctx))) {
+    BOOL videos = wrapper && ctx->prefs.videosForYou && RFIsVideosForYou(wrapper[@"node"]);
+    if (videos || (wrapper && RFIsKeywordPostPreview(wrapper[@"node"], ctx))) {
+      RFCount(videos ? RFStatVideosForYou : RFStatKeywordPosts, wrapper[@"node"]);
       wrapper[@"node"] = RFEmptyCard(wrapper[@"node"]);
       changed = YES;
       continue;
@@ -335,6 +359,7 @@ static BOOL RFHideKeywordComments(NSMutableDictionary *forest, const RFContext *
       if ([RFString(node[@"__typename"]) isEqualToString:@"Comment"] &&
           RFContentMatchesKeywords(node, ctx->keywords)) {
         NSMutableDictionary *comment = RFMutableDict(node);
+        RFCount(RFStatKeywordComments, node);
         if (!ctx->prefs.keywordCommentReplies && comment) {
           RFMakePlaceholderComment(comment);
           replaced = YES;
@@ -347,6 +372,7 @@ static BOOL RFHideKeywordComments(NSMutableDictionary *forest, const RFContext *
       }
     }
     if (hide) {
+      if (depth > hiddenDepth) RFCount(RFStatKeywordComments, tree[@"node"]); // a reply hidden with it
       for (NSMutableDictionary *parent in parents) {
         id count = parent[@"childCount"];
         if ([count isKindOfClass:NSNumber.class] && [count integerValue] > 0)
@@ -362,10 +388,11 @@ static BOOL RFHideKeywordComments(NSMutableDictionary *forest, const RFContext *
   return YES;
 }
 
-static BOOL RFClearKeys(NSMutableDictionary *dict, NSArray *keys) {
+static BOOL RFClearKeys(NSMutableDictionary *dict, NSArray *keys, RFStat stat) {
   BOOL changed = NO;
   for (NSString *key in keys) {
     if (![dict objectForKey:key]) continue;
+    RFCountItems(stat, dict[key]);
     [dict setObject:@[] forKey:key];
     changed = YES;
   }
@@ -379,9 +406,11 @@ static BOOL RFClearAdKeys(NSMutableDictionary *dict, NSArray *keys) {
   for (NSString *key in keys) {
     id ads = dict[key];
     if (RFArray(ads)) {
+      RFCountItems(RFStatCommentAds, ads);
       dict[key] = @[];
       changed = YES;
     } else if (RFMutableDict(ads) && RFArray(ads[@"adPosts"])) {
+      RFCountItems(RFStatCommentAds, ads[@"adPosts"]);
       ads[@"adPosts"] = @[];
       changed = YES;
     }
@@ -395,7 +424,9 @@ static BOOL RFFilterPostExtras(NSMutableDictionary *root, const RFContext *ctx) 
   NSArray *edges = RFArray(components[@"edges"]);
   if (ctx->prefs.recommended && edges) {
     NSArray *filtered = [edges filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(id edge, NSDictionary *bindings) {
-      return ![RFString(RFValueAtPath(edge, @"node.__typename")) isEqualToString:@"RelatedAnswersFeedUnit"];
+      if (![RFString(RFValueAtPath(edge, @"node.__typename")) isEqualToString:@"RelatedAnswersFeedUnit"]) return YES;
+      RFCount(RFStatRecommended, edge);
+      return NO;
     }]];
     if (filtered.count != edges.count) {
       components[@"edges"] = filtered;
@@ -405,7 +436,9 @@ static BOOL RFFilterPostExtras(NSMutableDictionary *root, const RFContext *ctx) 
   NSArray *highlights = RFArray(root[@"highlightedPosts"]);
   if (ctx->prefs.nsfw && highlights) {
     NSArray *filtered = [highlights filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(id item, NSDictionary *bindings) {
-      return !RFTrue(RFValueAtPath(item, @"post.isNsfw"));
+      if (!RFTrue(RFValueAtPath(item, @"post.isNsfw"))) return YES;
+      RFCount(RFStatNSFW, item);
+      return NO;
     }]];
     if (filtered.count != highlights.count) {
       root[@"highlightedPosts"] = filtered;
@@ -439,7 +472,7 @@ static BOOL RFFilterGeneric(NSDictionary *payload, const RFContext *ctx) {
 
     if (ctx->prefs.promoted)
       changed |= RFClearAdKeys(dict, @[ @"commentsPageAds", @"commentTreeAds", @"pdpCommentsAds" ]);
-    if (ctx->prefs.recommended) changed |= RFClearKeys(dict, @[ @"recommendations" ]);
+    if (ctx->prefs.recommended) changed |= RFClearKeys(dict, @[ @"recommendations" ], RFStatRecommended);
     changed |= RFFilterPostExtras(dict, ctx);
   }
   return changed;
@@ -797,6 +830,7 @@ NSData *RFFeedHidingFullTextMatches(NSData *feedData, NSData *detailsData, RFPre
     NSDictionary *post = RFDict(item);
     NSArray *matching = cards[RFString(post[@"id"]) ?: @""];
     if (!matching || !RFContentMatchesKeywords(post, keywords)) continue;
+    RFCount(RFStatKeywordPosts, post);
     for (NSMutableDictionary *card in matching) card[@"cells"] = @[];
     changed = YES;
   }

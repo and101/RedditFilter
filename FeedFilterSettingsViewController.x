@@ -3,6 +3,8 @@
 #import "FeedFilterSettingsViewController.h"
 #import "KeywordsViewController.h"
 #import "DebugMenu.h"
+#import "RFStats.h"
+#import "RFStatsViewController.h"
 #import "UpdateChecker.h"
 
 #ifndef RF_VERSION
@@ -351,6 +353,7 @@ static UIView *RFSectionView(UITableView *tableView, NSString *text, CGFloat hei
 #pragma mark - Sections
 
 typedef NS_ENUM(NSInteger, RFSection) {
+  RFSectionStats,
   RFSectionFilters,
   RFSectionCollapse,
   RFSectionRedgifs,
@@ -371,12 +374,12 @@ static BOOL RFHasSafariExtension(void) {
   return hasExtension;
 }
 
-// Filters, Collapsing, RedGIFs, Keywords, [Safari (with the extension)], About, Debug
+// Stats, Filters, Collapsing, RedGIFs, Keywords, [Safari (with the extension)], About, Debug
 static NSArray<NSNumber *> *RFSections(void) {
   static NSArray *sections;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
-    NSMutableArray *list = [@[ @(RFSectionFilters), @(RFSectionCollapse), @(RFSectionRedgifs), @(RFSectionKeywords) ] mutableCopy];
+    NSMutableArray *list = [@[ @(RFSectionStats), @(RFSectionFilters), @(RFSectionCollapse), @(RFSectionRedgifs), @(RFSectionKeywords) ] mutableCopy];
     if (RFHasSafariExtension()) [list addObject:@(RFSectionSafari)];
     [list addObject:@(RFSectionAbout)];
     [list addObject:@(RFSectionDebug)];
@@ -392,6 +395,7 @@ static RFSection RFSectionAt(NSInteger section) {
 
 static NSString *RFHeaderText(NSInteger section) {
   switch (RFSectionAt(section)) {
+    case RFSectionStats: return @"STATS";
     case RFSectionFilters: return @"TWEAKS";
     case RFSectionCollapse: return @"COLLAPSING COMMENTS";
     case RFSectionRedgifs: return @"REDGIFS";
@@ -405,6 +409,7 @@ static NSString *RFHeaderText(NSInteger section) {
 
 static NSString *RFFooterText(NSInteger section) {
   switch (RFSectionAt(section)) {
+    case RFSectionStats: return nil;
     case RFSectionFilters: return @"Filter posts and adjust how Reddit looks";
     case RFSectionCollapse:
       return @"With swipe to collapse off, tapping a comment collapses it as usual. "
@@ -439,6 +444,7 @@ static NSInteger RFToggleTagAt(NSIndexPath *indexPath) {
     case RFSectionKeywords: return indexPath.row > 0 ? kKeywordRowTag + indexPath.row - 1 : -1;
     case RFSectionAbout: return indexPath.row == kAboutUpdateRow ? kUpdateRowTag : -1;
     case RFSectionDebug: return indexPath.row == 0 ? kDiagnosticsRowTag : -1;
+    case RFSectionStats:
     case RFSectionSafari: return -1;
   }
   return -1;
@@ -498,6 +504,20 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
                        : count == 1 ? @"1 keyword"
                                     : [NSString stringWithFormat:@"%lu keywords", (unsigned long)count];
   return RFLinkCell(tableView, @"Keywords", subtitle, @"rpl3/search", @"text.magnifyingglass");
+}
+
+static UITableViewCell *RFStatsCell(UITableView *tableView) {
+  NSDictionary *stats = RFStatsSnapshot();
+  NSNumber *total = [stats[kRFStatsCounts] valueForKeyPath:@"@sum.self"];
+  NSNumber *today = stats[kRFStatsDays][RFStatsDayKey([NSDate date])] ?: @0;
+  NSString *title = total.unsignedLongLongValue == 0
+                        ? @"Nothing hidden yet"
+                        : [NSString stringWithFormat:@"%@ hidden", RFStatsFormattedCount(total.unsignedLongLongValue)];
+  NSString *subtitle = [NSString stringWithFormat:@"%@ \u00b7 %@ today", RFStatsSinceText(stats[kRFStatsSince]),
+                                                  RFStatsFormattedCount(today.unsignedLongLongValue)];
+  UITableViewCell *cell = RFLinkCell(tableView, title, subtitle, @"rpl3/statistics,rpl3/chart", @"chart.bar");
+  cell.accessibilityHint = @"Shows what each filter has hidden";
+  return cell;
 }
 
 static UITableViewCell *RFSafariCell(UITableView *tableView) {
@@ -570,7 +590,7 @@ static void RFShowSafariSetup(UIViewController *controller) {
 - (void)viewWillAppear:(BOOL)animated {
   %orig;
   // Refresh the keyword count after coming back from the Keywords screen
-  // (and the schema paths, which add up while the app runs).
+  // (and the stats and schema paths, which add up while the app runs).
   [self.tableView reloadData];
 }
 
@@ -581,6 +601,8 @@ static void RFShowSafariSetup(UIViewController *controller) {
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
   switch (RFSectionAt(section)) {
+    case RFSectionStats:
+      return 1;
     case RFSectionFilters:
       return kToggleRowCount;
     case RFSectionCollapse:
@@ -606,6 +628,7 @@ static void RFShowSafariSetup(UIViewController *controller) {
   if (section == RFSectionAbout && tag < 0) return RFAboutCell(tableView, RFAboutLinkIndex(indexPath.row));
   if (section == RFSectionKeywords && indexPath.row == 0) return RFKeywordsCell(tableView);
   if (section == RFSectionSafari) return RFSafariCell(tableView);
+  if (section == RFSectionStats) return RFStatsCell(tableView);
   if (section == RFSectionDebug && tag < 0) return [self debugCellForRow:indexPath.row - 1 inTableView:tableView];
   RFSettingsCell *cell = [tableView dequeueReusableCellWithIdentifier:kToggleCellID
                                                                    forIndexPath:indexPath];
@@ -681,6 +704,10 @@ static void RFShowSafariSetup(UIViewController *controller) {
     RFShowSafariSetup(self);
     return;
   }
+  if (RFSectionAt(indexPath.section) == RFSectionStats) {
+    [self.navigationController pushViewController:[RFStatsViewController new] animated:YES];
+    return;
+  }
   if (RFSectionAt(indexPath.section) != RFSectionAbout) return;
   if (indexPath.row == kAboutUpdateRow) {
     if (RFCheckingForUpdate(self)) return;
@@ -722,7 +749,9 @@ static void RFShowSafariSetup(UIViewController *controller) {
 
 %new
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
-  return RFSectionHeight(tableView, RFFooterText(section), NO, RFSectionAt(section) == RFSectionDebug ? 76.0 : 48.0);
+  RFSection kind = RFSectionAt(section);
+  CGFloat minimum = kind == RFSectionDebug ? 76.0 : kind == RFSectionStats ? 20.0 : 48.0;
+  return RFSectionHeight(tableView, RFFooterText(section), NO, minimum);
 }
 
 // ---------------------------------------------------------------------------
