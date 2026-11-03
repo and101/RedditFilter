@@ -3,8 +3,7 @@ Name: RedditFilter
 Version: 1.0.0
 Architecture: iphoneos-arm
 Description: Filter out unwanted content from your Reddit feed
-Depiction: https://level3tjg.me/repo/depictions/?p=com.level3tjg.redditfilter
-Maintainer: level3tjg
+Maintainer: and101
 Author: level3tjg
 Section: Tweaks
 Depends: mobilesubstrate (>= 0.9.5000)

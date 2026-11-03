@@ -2,3 +2,7 @@
 .build/
 packages/
 .DS_Store
+.local/
+# clang --analyze output; RedditFilter.plist is the tweak's filter and stays
+/*.plist
+!/RedditFilter.plist
