@@ -97,13 +97,11 @@ Filters unwanted content from the Reddit app: promoted posts, recommendations, N
 
 ## Logging in
 
-Reddit rejects the app's normal username and password login when the app is sideloaded, so RedditFilter logs in on reddit.com for you instead:
+Log in as usual: **I already have an account** (or **Log in**) → **Use email or username**, then type your username and password. To add another account, open the account switcher → **Add account** → **Log in**.
 
-1. Open the login screen: **I already have an account** (or **Log in**) → **Use email or username**. To add another account, open the account switcher → **Add account** → **Log in**.
-2. Type your username and password and tap **Continue** as usual.
-3. A reddit.com sheet opens, fills them in and logs in. It closes by itself once you're logged in. If Reddit asks for a 2FA code or a check, finish it in the sheet.
+When the app is sideloaded, Reddit can't check that the app is its own build, so RedditFilter tells it this iPhone can't do that check (as some devices can't), which Reddit accepts. If Reddit still turns the login down, a reddit.com sheet opens, fills in your username and password and logs in for you, closing by itself once you're in. If Reddit asks for a 2FA code or a check there, finish it in the sheet.
 
-Your password only goes to reddit.com, the same as logging in on the website.
+Your password only goes to Reddit, the same as logging in on the website.
 
 **Continue with Google** works from the app's own login screen.
 
