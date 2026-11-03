@@ -7,6 +7,7 @@
 #import "DebugMenu.h"
 #import "Preferences.h"
 #import "Redgifs.h"
+#import "UpdateChecker.h"
 
 // Browser login lives in LoginHelper.x, which isn't part of this test.
 NSString *RFPendingWebSession(void) { return nil; }
@@ -175,6 +176,22 @@ static NSDictionary *FetchRedgifs(NSArray<NSString *> *ids, BOOL hd) {
   return found;
 }
 
+// Checks GitHub for the latest release, as tapping "Check for updates" does. Its answer comes on the
+// main queue, so keep the main run loop going until then.
+static RFUpdateStatus FetchLatestRelease(void) {
+  __block BOOL done = NO;
+  __block RFUpdateStatus result = RFUpdateStatusFailed;
+  RFFetchLatestRelease(^(RFUpdateStatus status) {
+    result = status;
+    done = YES;
+  });
+  NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
+  while (!done && deadline.timeIntervalSinceNow > 0)
+    [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+  Check(done, @"The update check finishes");
+  return result;
+}
+
 int main(void) {
   @autoreleasepool {
     NSURLSessionConfiguration *config = NSURLSessionConfiguration.ephemeralSessionConfiguration;
@@ -326,6 +343,26 @@ int main(void) {
     Check([Edges(json)[0][@"node"][@"cells"] count] == 0, @"Still hide keyword posts when RedGIFs is slow");
     Check([Edges(json)[1][@"node"][@"cells"][1][@"media"][@"path"] isEqual:sound], @"Swap in the RedGIFs video too");
     Check(timing.seconds < 4.5 && timing.calls == 1, @"Wait for the slower of the two, not both in turn");
+
+    // Update check (built as RedditFilter 1.3.4). Pre-releases never come from /releases/latest.
+    __block NSArray *github = nil;
+    gRoute = ^NSArray *(NSString *operation, NSDictionary *body, NSURL *url) {
+      Check([url.absoluteString isEqualToString:@"https://api.github.com/repos/and101/RedditFilter/releases/latest"],
+            @"Ask GitHub for the latest release");
+      return github;
+    };
+    NSString *page = @"https://github.com/and101/RedditFilter/releases/tag/v2026.44.0-1.3.5";
+    github = @[ @200, @0.05, @{@"tag_name" : @"v2026.44.0-1.3.5", @"html_url" : page} ];
+    Check(FetchLatestRelease() == RFUpdateStatusAvailable, @"Report a newer release");
+    Check([RFAvailableUpdate() isEqual:@"1.3.5 for Reddit 2026.44.0"], @"Describe the newer release");
+    Check([RFUpdateURL().absoluteString isEqual:page], @"Link to the newer release's page");
+    github = @[ @200, @0.05, @{@"tag_name" : @"v2026.43.0-1.3.4", @"html_url" : @"https://github.com/x"} ];
+    Check(FetchLatestRelease() == RFUpdateStatusUpToDate && RFAvailableUpdate() == nil, @"Report being up to date");
+    github = @[ @403, @0.05, @{@"message" : @"API rate limit exceeded"} ];
+    Check(FetchLatestRelease() == RFUpdateStatusFailed, @"Report a GitHub error as a failed check");
+    Check(RFAvailableUpdate() == nil, @"Keep the last good answer after a failed check");
+    github = @[ @200, @0.05, @{@"tag_name" : @"nightly"} ];
+    Check(FetchLatestRelease() == RFUpdateStatusFailed, @"Ignore a tag that isn't a release");
 
     NSLog(@"All network pipeline tests passed.");
   }

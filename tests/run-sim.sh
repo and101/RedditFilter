@@ -16,7 +16,8 @@ flags="-target arm64-apple-ios16.0-simulator -fobjc-arc -I. -Iinclude -DREDDITFI
 "$THEOS/bin/logos.pl" -c generator=internal Tweak.xm >"$test_dir/Tweak.mm"
 xcrun --sdk iphonesimulator clang++ $flags -Wno-module-import-in-extern-c -c "$test_dir/Tweak.mm" -o "$test_dir/Tweak.o"
 xcrun --sdk iphonesimulator clang $flags -framework UIKit -framework Network -lc++ \
-  JSONFilter.m Redgifs.m tests/NetworkTests.m -x objective-c DebugMenu.x -x none "$test_dir/Tweak.o" \
+  -DRF_VERSION='"1.3.4"' JSONFilter.m Redgifs.m UpdateChecker.m RFVersion.m tests/NetworkTests.m \
+  -x objective-c DebugMenu.x -x none "$test_dir/Tweak.o" \
   -o "$test_dir/NetworkTests"
 xcrun simctl spawn "$device" "$test_dir/NetworkTests"
 

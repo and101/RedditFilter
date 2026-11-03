@@ -73,9 +73,11 @@ static const RFToggleRow kCollapseRows[] = {
 static const NSInteger kCollapseRowCount = sizeof(kCollapseRows) / sizeof(kCollapseRows[0]);
 
 // In the About section, between the RedditFilter and developer rows. Its switch tag follows kKeywordRows'.
+// Tapping the row checks now; the switch is for the daily check.
 static const RFToggleRow kUpdateRow = {kRedditFilterCheckUpdates, @"Check for updates",
-                                       @"Tell me when a new RedditFilter is out", @"rpl3/download,rpl3/notifications",
-                                       NO};
+                                       @"Tap to check now, or switch on to be told when one is out",
+                                       @"rpl3/download,rpl3/notifications", NO};
+static BOOL gCheckingForUpdate;
 static const NSInteger kKeywordRowTag = kToggleRowCount;
 static const NSInteger kUpdateRowTag = kKeywordRowTag + kKeywordRowCount;
 static const NSInteger kRedgifsRowTag = kUpdateRowTag + 1;
@@ -601,6 +603,10 @@ static void RFShowSafariSetup(UIViewController *controller) {
   RFDetailLabel(cell).text = row->subtitle;
   RFSetIcon(cell, row->icons, nil);
   RFSetToggleCellEnabled(cell, row);
+  BOOL updateRow = tag == kUpdateRowTag;
+  if (updateRow && gCheckingForUpdate) RFDetailLabel(cell).text = @"Checking\u2026";
+  cell.selectionStyle = updateRow ? UITableViewCellSelectionStyleDefault : UITableViewCellSelectionStyleNone;
+  cell.accessibilityHint = updateRow ? @"Checks for an update now" : nil;
 
   UISwitch *toggle = RFSwitch(cell);
   BOOL saved = [NSUserDefaults.standardUserDefaults boolForKey:row->key];
@@ -655,6 +661,21 @@ static void RFShowSafariSetup(UIViewController *controller) {
     return;
   }
   if (RFSectionAt(indexPath.section) != RFSectionAbout) return;
+  if (indexPath.row == kAboutUpdateRow) {
+    if (gCheckingForUpdate) return;
+    gCheckingForUpdate = YES;
+    NSInteger section = indexPath.section;
+    [tableView reloadRowsAtIndexPaths:@[ indexPath ] withRowAnimation:UITableViewRowAnimationNone];
+    __weak UITableView *weakTable = tableView;
+    RFCheckForUpdateNow(self, ^{
+      gCheckingForUpdate = NO;
+      // The RedditFilter row shows an update when there is one.
+      UITableView *table = weakTable;
+      if (table && section < table.numberOfSections) [table reloadSections:[NSIndexSet indexSetWithIndex:section]
+                                                           withRowAnimation:UITableViewRowAnimationNone];
+    });
+    return;
+  }
   NSInteger link = RFAboutLinkIndex(indexPath.row);
   if (link < 0 || link >= kAboutRowCount) return;
   // The RedditFilter row opens the new version's page when there's an update.

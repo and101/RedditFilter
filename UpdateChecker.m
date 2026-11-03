@@ -1,7 +1,8 @@
 // Update check: once a day, a few seconds after the app opens, asks GitHub for the latest
 // RedditFilter release and, if it's newer, shows an alert once for that release. A release is newer
 // if its RedditFilter version is, or if it's the same RedditFilter built for a later Reddit. Turned off with
-// "Check for updates" in RedditFilter settings. Pre-releases and drafts are never offered.
+// "Check for updates" in RedditFilter settings; tapping that row checks straight away. Pre-releases
+// and drafts are never offered.
 #import <UIKit/UIKit.h>
 #import "Preferences.h"
 #import "RFVersion.h"
@@ -115,22 +116,17 @@ static BOOL RFRecently(NSString *key, NSTimeInterval interval) {
   return [date isKindOfClass:NSDate.class] && -date.timeIntervalSinceNow < interval;
 }
 
-static void RFCheckForUpdate(void) {
+void RFFetchLatestRelease(void (^completion)(RFUpdateStatus status)) {
   NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
-  if (!RFChecksEnabled() || !RFVersionIsNewer(@RF_VERSION, @"0")) return;
-  if (RFRecently(kLastCheckKey, kCheckInterval) || RFRecently(kLastTryKey, kRetryInterval)) {
-    RFAlertIfNeeded();
-    return;
-  }
   [defaults setObject:[NSDate date] forKey:kLastTryKey];
-
   NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:kLatestReleaseURL]];
   request.timeoutInterval = 15;
   [request setValue:@"application/vnd.github+json" forHTTPHeaderField:@"Accept"];
   NSURLSession *session = [NSURLSession sessionWithConfiguration:NSURLSessionConfiguration.ephemeralSessionConfiguration];
   [[session dataTaskWithRequest:request
               completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-                NSDictionary *release = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+                NSInteger status = [response isKindOfClass:NSHTTPURLResponse.class] ? ((NSHTTPURLResponse *)response).statusCode : 0;
+                NSDictionary *release = data && status == 200 ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
                 NSString *tag = [release isKindOfClass:NSDictionary.class] ? release[@"tag_name"] : nil;
                 if (![tag isKindOfClass:NSString.class] || !RFTweakVersionFromTag(tag)) tag = nil;
                 NSString *page = [release isKindOfClass:NSDictionary.class] ? release[@"html_url"] : nil;
@@ -141,10 +137,76 @@ static void RFCheckForUpdate(void) {
                     if ([page isKindOfClass:NSString.class] && [page hasPrefix:@"https://github.com/"])
                       [defaults setObject:page forKey:kLatestPageKey];
                   }
-                  RFAlertIfNeeded();
+                  if (completion)
+                    completion(!tag ? RFUpdateStatusFailed
+                                    : RFAvailableTag() ? RFUpdateStatusAvailable : RFUpdateStatusUpToDate);
                 });
               }] resume];
   [session finishTasksAndInvalidate];
+}
+
+static void RFCheckForUpdate(void) {
+  if (!RFChecksEnabled() || !RFVersionIsNewer(@RF_VERSION, @"0")) return;
+  if (RFRecently(kLastCheckKey, kCheckInterval) || RFRecently(kLastTryKey, kRetryInterval)) {
+    RFAlertIfNeeded();
+    return;
+  }
+  RFFetchLatestRelease(^(RFUpdateStatus status) {
+    RFAlertIfNeeded();
+  });
+}
+
+void RFCheckForUpdateNow(UIViewController *presenter, void (^finished)(void)) {
+  __weak UIViewController *weakPresenter = presenter;
+  RFFetchLatestRelease(^(RFUpdateStatus status) {
+    NSString *latest = [NSUserDefaults.standardUserDefaults stringForKey:kLatestKey];
+    NSString *installed = RFDescribe(@RF_VERSION, RFInstalledRedditVersion());
+    NSString *tag = RFAvailableTag();
+    NSString *title, *message;
+    switch (status) {
+      case RFUpdateStatusAvailable:
+        title = [NSString stringWithFormat:@"RedditFilter %@ is available",
+                                           RFDescribe(RFTweakVersionFromTag(tag), RFRedditVersionFromTag(tag))];
+        message = [NSString stringWithFormat:@"You have %@. Download the new IPA from GitHub and sign it like before.",
+                                             installed];
+        break;
+      case RFUpdateStatusUpToDate:
+        title = @"You're up to date";
+        message = [NSString stringWithFormat:@"You have RedditFilter %@. The latest release is %@.", installed,
+                                             RFDescribe(RFTweakVersionFromTag(latest), RFRedditVersionFromTag(latest))];
+        break;
+      case RFUpdateStatusFailed:
+        title = @"Couldn't check for updates";
+        message = @"GitHub couldn't be reached. Check your connection and try again.";
+        break;
+    }
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
+                                                                   message:message
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+    if (status == RFUpdateStatusAvailable) {
+      [alert addAction:[UIAlertAction actionWithTitle:@"Not now" style:UIAlertActionStyleCancel handler:nil]];
+      [alert addAction:[UIAlertAction actionWithTitle:@"View"
+                                                style:UIAlertActionStyleDefault
+                                              handler:^(UIAlertAction *action) {
+                                                [UIApplication.sharedApplication openURL:RFUpdateURL()
+                                                                                 options:@{}
+                                                                       completionHandler:nil];
+                                              }]];
+    } else {
+      [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
+    }
+    UIViewController *target = weakPresenter.view.window ? weakPresenter : RFTopViewController();
+    while (target.presentedViewController && !target.presentedViewController.isBeingDismissed)
+      target = target.presentedViewController;
+    [target presentViewController:alert
+                         animated:YES
+                       completion:^{
+                         // Seen here, so the daily check doesn't tell them again.
+                         if (tag && alert.presentingViewController)
+                           [NSUserDefaults.standardUserDefaults setObject:tag forKey:kAlertedKey];
+                       }];
+    if (finished) finished();
+  });
 }
 
 __attribute__((constructor)) static void RFUpdateCheckerInit(void) {
