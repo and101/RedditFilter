@@ -227,12 +227,21 @@ static BOOL RFIsAPIHost(NSString *host) {
         NSObject *lock = [NSObject new];
         __block NSData *latest = data; // the page as far as it's got
         __block BOOL delivered = NO, deadlineSet = NO;
+        // Handed over where NSURLSession calls completion handlers (the delegate queue's dispatch
+        // queue), whichever step finished last.
+        NSOperationQueue *queue = session.delegateQueue;
+        dispatch_queue_t dispatchQueue = queue.underlyingQueue;
         void (^deliver)(NSData *) = ^(NSData *page) {
           @synchronized(lock) {
             if (delivered) return;
             delivered = YES;
           }
-          completionHandler(page, response, nil);
+          void (^hand)(void) = ^{
+            completionHandler(page, response, nil);
+          };
+          if (dispatchQueue) dispatch_async(dispatchQueue, hand);
+          else if (queue) [queue addOperationWithBlock:hand];
+          else hand();
         };
         void (^progress)(NSData *) = ^(NSData *page) {
           @synchronized(lock) {

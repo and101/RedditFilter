@@ -120,6 +120,10 @@ typedef struct {
 
 static NSString *gHost = @"gql-fed.reddit.com";
 
+// Marks the session's delegate queue, where NSURLSession calls completion handlers (on its dispatch
+// queue, not as operations), so the tests can tell a page arrived there.
+static char kRFDelegateQueueKey;
+
 // Loads a Home page the way the app does and returns what the app got. Waits `settle` seconds after
 // the page arrives to catch a second delivery.
 static NSDictionary *LoadHome(NSURLSession *session, NSTimeInterval settle, RFTiming *timing) {
@@ -135,16 +139,21 @@ static NSDictionary *LoadHome(NSURLSession *session, NSTimeInterval settle, RFTi
   __block NSData *page = nil;
   NSDate *start = [NSDate date];
   __block NSTimeInterval seconds = -1;
+  __block BOOL onDelegateQueue = NO;
   [[session dataTaskWithRequest:request
               completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
                 @synchronized(lock) {
                   if (++calls > 1) return;
                   seconds = -start.timeIntervalSinceNow;
                   page = data;
+                  onDelegateQueue = dispatch_get_specific(&kRFDelegateQueueKey) != NULL;
                 }
                 dispatch_semaphore_signal(arrived);
               }] resume];
   Check(dispatch_semaphore_wait(arrived, dispatch_time(DISPATCH_TIME_NOW, 30 * NSEC_PER_SEC)) == 0, @"The page arrives");
+  @synchronized(lock) {
+    Check(onDelegateQueue, [NSString stringWithFormat:@"Hand the page from %@ over on the session's delegate queue", gHost]);
+  }
   [NSThread sleepForTimeInterval:settle];
   @synchronized(lock) {
     timing->seconds = seconds;
@@ -170,6 +179,8 @@ int main(void) {
   @autoreleasepool {
     NSURLSessionConfiguration *config = NSURLSessionConfiguration.ephemeralSessionConfiguration;
     NSURLSession *session = [NSURLSession sessionWithConfiguration:config];
+    Check(session.delegateQueue.underlyingQueue != nil, @"The session's delegate queue has a dispatch queue");
+    dispatch_queue_set_specific(session.delegateQueue.underlyingQueue, &kRFDelegateQueueKey, &kRFDelegateQueueKey, NULL);
     RFTiming timing;
     NSArray *full = @[ @"t3_a", @"t3_b" ]; // no next page, so no top-up
 
