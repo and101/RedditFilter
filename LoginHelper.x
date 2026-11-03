@@ -38,7 +38,8 @@ void RFClearPendingWebSession(void) {
 
 #pragma mark - Browser
 
-@interface RFWebLoginViewController : UIViewController <WKNavigationDelegate, WKHTTPCookieStoreObserver>
+@interface RFWebLoginViewController
+    : UIViewController <WKNavigationDelegate, WKHTTPCookieStoreObserver, UIAdaptivePresentationControllerDelegate>
 @property(nonatomic, strong) WKWebView *webView;
 @property(nonatomic, copy) void (^completion)(NSString *session, NSString *username);
 @property(nonatomic, assign) BOOL finished;
@@ -83,6 +84,12 @@ void RFClearPendingWebSession(void) {
 - (void)cancel {
   self.finished = YES;
   [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+// Swiping the sheet away counts as cancelling, so a cookie or account check still on its way can't
+// log in after it's gone.
+- (void)presentationControllerDidDismiss:(UIPresentationController *)presentationController {
+  self.finished = YES;
 }
 
 - (void)cookiesDidChangeInCookieStore:(WKHTTPCookieStore *)cookieStore {
@@ -306,6 +313,7 @@ void RFStartBrowserLogin(UIViewController *viewController) {
   };
   UINavigationController *navigationController =
       [[UINavigationController alloc] initWithRootViewController:webLogin];
+  navigationController.presentationController.delegate = webLogin;
   [viewController presentViewController:navigationController animated:YES completion:nil];
 }
 
