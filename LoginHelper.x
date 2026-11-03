@@ -126,7 +126,6 @@ void RFClearPendingWebSession(void) {
   if (!self.popups) self.popups = [NSMutableArray array];
   [self.popups addObject:popup];
   [self.view addSubview:popup];
-  [self updateCloseButton];
   return popup;
 }
 
@@ -134,22 +133,6 @@ void RFClearPendingWebSession(void) {
   if (webView == self.webView) return;
   [webView removeFromSuperview];
   [self.popups removeObject:webView];
-  [self updateCloseButton];
-}
-
-// While a popup is showing, a Close button on the right takes the user back to the login page, in
-// case the popup doesn't close itself. Cancel still cancels the whole login.
-- (void)updateCloseButton {
-  self.navigationItem.rightBarButtonItem =
-      self.popups.count ? [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemClose
-                                                                        target:self
-                                                                        action:@selector(closePopup)]
-                        : nil;
-}
-
-- (void)closePopup {
-  WKWebView *popup = self.popups.lastObject;
-  if (popup) [self webViewDidClose:popup];
 }
 
 - (void)dealloc {
