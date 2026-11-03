@@ -356,11 +356,12 @@ int main(void) {
     Check(FetchLatestRelease() == RFUpdateStatusAvailable, @"Report a newer release");
     Check([RFAvailableUpdate() isEqual:@"1.3.5 for Reddit 2026.44.0"], @"Describe the newer release");
     Check([RFUpdateURL().absoluteString isEqual:page], @"Link to the newer release's page");
-    github = @[ @200, @0.05, @{@"tag_name" : @"v2026.43.0-1.3.4", @"html_url" : @"https://github.com/x"} ];
-    Check(FetchLatestRelease() == RFUpdateStatusUpToDate && RFAvailableUpdate() == nil, @"Report being up to date");
     github = @[ @403, @0.05, @{@"message" : @"API rate limit exceeded"} ];
     Check(FetchLatestRelease() == RFUpdateStatusFailed, @"Report a GitHub error as a failed check");
-    Check(RFAvailableUpdate() == nil, @"Keep the last good answer after a failed check");
+    Check([RFAvailableUpdate() isEqual:@"1.3.5 for Reddit 2026.44.0"] && [RFUpdateURL().absoluteString isEqual:page],
+          @"Keep the last good answer after a failed check");
+    github = @[ @200, @0.05, @{@"tag_name" : @"v2026.43.0-1.3.4", @"html_url" : @"https://github.com/x"} ];
+    Check(FetchLatestRelease() == RFUpdateStatusUpToDate && RFAvailableUpdate() == nil, @"Report being up to date");
     github = @[ @200, @0.05, @{@"tag_name" : @"nightly"} ];
     Check(FetchLatestRelease() == RFUpdateStatusFailed, @"Ignore a tag that isn't a release");
 
