@@ -253,6 +253,10 @@ static void TestPasswordLogin(NSURLSession *session) {
   reddit = @[ @400, @0.01, @{@"error" : @{@"params" : @{@"password" : @"INCORRECT"}}} ];
   answer = PasswordLogin(session, credentials, @"application/json");
   Check(answer.statusCode == 400 && gBrowserLogins == 0, @"Show Reddit's answer for a wrong password");
+  // What Reddit actually answers for a wrong username or password.
+  reddit = @[ @401, @0.01, @{@"error" : @{@"message" : @"unauthorized", @"id" : @"KWZcMt"}} ];
+  answer = PasswordLogin(session, credentials, @"application/json");
+  Check(answer.statusCode == 401 && gBrowserLogins == 0, @"Show Reddit's answer for an unauthorised login");
   reddit = @[ @429, @0.01, @{} ];
   answer = PasswordLogin(session, credentials, @"application/json");
   Check(answer.statusCode == 429 && gBrowserLogins == 0, @"Show Reddit's answer for too many tries");

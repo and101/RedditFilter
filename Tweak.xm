@@ -177,7 +177,9 @@ static NSHTTPURLResponse *RFLoginResponse(NSURL *url, NSString *session) {
 #if RF_SIDELOADED
 // Login notes for testing: field names, statuses and Reddit's error codes only, never what was typed.
 #if REDDITFILTER_DEBUG
-#define RFLoginLog(...) NSLog(__VA_ARGS__)
+#import <os/log.h>
+// os_log with public text, so the notes aren't shown as <private> on a device.
+#define RFLoginLog(...) os_log(OS_LOG_DEFAULT, "%{public}@", [NSString stringWithFormat:__VA_ARGS__])
 #else
 #define RFLoginLog(...) ((void)0)
 #endif
@@ -238,13 +240,14 @@ static BOOL RFLoginCredentials(NSURLRequest **request, NSString **username, NSSt
 // Whether logging in through reddit.com could get past Reddit refusing the app's password login.
 // Not when it's about the username or password themselves, or too many tries: reddit.com would only
 // say the same, so the app shows Reddit's answer. When unsure, try the browser.
+// A wrong username or password gets 401 {"error":{"message":"unauthorized"}}.
 static BOOL RFBrowserCanHelpWithLogin(NSInteger status, NSData *data) {
   if (status == 429) return NO;
   NSString *text = data ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding].lowercaseString : nil;
   if (!text.length) return YES;
   for (NSString *word in @[ @"captcha", @"attest", @"integrity" ])
     if ([text containsString:word]) return YES;
-  for (NSString *word in @[ @"password", @"identifier", @"username", @"credential", @"otp" ])
+  for (NSString *word in @[ @"unauthorized", @"password", @"identifier", @"username", @"credential", @"otp" ])
     if ([text containsString:word]) return NO;
   return YES;
 }
