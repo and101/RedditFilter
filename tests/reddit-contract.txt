@@ -43,6 +43,24 @@ ios_home_feed_defer_query
 # Browser login (Tweak.xm)
 /auth/v2/login/password
 /auth/v2/oauth/access-token/session
+# Browser login button on the login screens (LoginHelper.x)
+_TtC17AuthenticationKit19LoginViewController
+LoginWithPasswordViewModel
+# Feed posts, the "Videos for you" carousel and card-view RedGIFs videos (JSONFilter.m)
+SubredditPost
+PostCarousel
+VIDEO_RECOMMENDATIONS
+LegacyVideoCell
+MetadataCell
+mediaPath
+# Settings screen and its theme colours (FeedFilterSettingsViewController.x)
+BaseTableViewController
+associatePropertySetter:withThemePropertyGetter:
+bodyColor
+bodyTextColor
+metaTextColor
+contentStrong
+contentWeak
 
 [legacy]
 PopularFeedSdui
