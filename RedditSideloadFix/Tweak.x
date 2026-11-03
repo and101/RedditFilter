@@ -26,6 +26,7 @@ static void createDirectoryIfNotExists(NSURL *URL) {
 
 - (NSString *)bundleIdentifier {
   NSArray <NSNumber *>*addresses = NSThread.callStackReturnAddresses;
+  if (addresses.count < 3) return %orig;
   Dl_info info;
   if (dladdr((void *)[addresses[2] longLongValue], &info) == 0) return %orig;
   NSString *path = [NSString stringWithUTF8String:info.dli_fname];

@@ -265,7 +265,7 @@ static UIImage *RFIcon(NSString *iconNames, NSString *fallbackSymbol) {
   for (NSString *name in [iconNames componentsSeparatedByString:@","])
     if ((icon = [name isEqualToString:@"rf/wifi"] ? RFWiFiIcon() : iconWithName(name))) break;
   if (!icon && fallbackSymbol) icon = [UIImage systemImageNamed:fallbackSymbol];
-  if (!icon) return nil;
+  if (!icon || icon.size.width <= 0 || icon.size.height <= 0) return nil;
   CGFloat side = 20.0;
   CGFloat scale = MIN(side / icon.size.width, side / icon.size.height);
   CGSize size = CGSizeMake(icon.size.width * scale, icon.size.height * scale);

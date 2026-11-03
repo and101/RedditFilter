@@ -112,7 +112,7 @@ static UIImage *RFFindIcon(NSString *iconName) {
   for (CUICatalog *catalog in RFAssetCatalogs()) {
     Ivar bundleIvar = class_getInstanceVariable(object_getClass(catalog), "_bundle");
     NSBundle *bundle = bundleIvar ? object_getIvar(catalog, bundleIvar) : nil;
-    if (!bundle) continue;
+    if (!bundle || ![catalog respondsToSelector:@selector(allImageNames)]) continue;
     for (NSString *imageName in [catalog allImageNames]) {
       if (![imageName hasPrefix:iconName] ||
           (imageName.length != iconName.length && imageName.length != iconName.length + 3))
