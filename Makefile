@@ -32,6 +32,11 @@ $(TWEAK_NAME)_FRAMEWORKS = UIKit WebKit Network
 
 $(TWEAK_NAME)_CFLAGS += -DRF_VERSION='"$(RF_VERSION)"'
 
+# Sideloaded builds log in through the browser even from the app's own login form (LoginHelper.x)
+ifeq ($(SIDELOADED),1)
+  $(TWEAK_NAME)_CFLAGS += -DRF_SIDELOADED=1
+endif
+
 # Debug menu: off unless you build with DEBUG_MENU=1 (the GitHub build has a checkbox for it)
 ifeq ($(DEBUG_MENU),1)
   $(TWEAK_NAME)_CFLAGS += -DREDDITFILTER_DEBUG=1

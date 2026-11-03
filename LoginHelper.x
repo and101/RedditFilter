@@ -5,6 +5,10 @@
 //   exchanges it for its own token as it does after a normal login.
 // - Open login link: paste the link from Reddit's "Email me a login link" email and pass it to the
 //   app as if it had been opened from Mail.
+// - Sideloaded builds also do the browser login for the app's own form: when the user taps Log in,
+//   the username and password are filled in on reddit.com in the browser sheet, which submits them
+//   and closes itself once logged in (see RFBrowserLoginWithCredentials and the hook in Tweak.xm).
+//   The password stays in memory only, for as long as it takes to fill in the page.
 #import <UIKit/UIKit.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
@@ -43,13 +47,21 @@ void RFClearPendingWebSession(void) {
 @property(nonatomic, strong) WKWebView *webView;
 @property(nonatomic, copy) void (^completion)(NSString *session, NSString *username);
 @property(nonatomic, assign) BOOL finished;
+// Logged in: the sheet is closing to hand the session over.
+@property(nonatomic, assign) BOOL succeeded;
+// Called once if the sheet closes without logging in.
+@property(nonatomic, copy) void (^cancellation)(void);
+// Filled in on reddit.com/login and submitted once the page is ready. Cleared once used.
+@property(nonatomic, copy) NSString *prefillUsername;
+@property(nonatomic, copy) NSString *prefillPassword;
+@property(nonatomic, assign) BOOL autofillScheduled;
 @end
 
 @implementation RFWebLoginViewController
 
 - (void)viewDidLoad {
   [super viewDidLoad];
-  self.title = @"Log in with browser";
+  self.title = self.prefillPassword ? @"Log in" : @"Log in with browser";
   self.view.backgroundColor = UIColor.systemBackgroundColor;
   self.navigationItem.leftBarButtonItem =
       [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCancel
@@ -83,7 +95,70 @@ void RFClearPendingWebSession(void) {
 
 - (void)cancel {
   self.finished = YES;
-  [self dismissViewControllerAnimated:YES completion:nil];
+  [self dismissViewControllerAnimated:YES completion:^{
+    [self reportCancellation];
+  }];
+}
+
+- (void)reportCancellation {
+  self.prefillPassword = nil;
+  if (self.succeeded) return;
+  void (^cancellation)(void) = self.cancellation;
+  self.cancellation = nil;
+  if (cancellation) cancellation();
+}
+
+#pragma mark Filling in the page
+
+// Fills reddit.com's username and password fields and taps Log In. The fields are web components
+// that only appear once the page has set itself up, so this returns 'waiting' until they're there.
+static NSString *const kAutofillScript =
+    @"const field = (name) => {"
+    @"  const host = document.querySelector(`faceplate-text-input[name='${name}']`);"
+    @"  return host && host.shadowRoot && host.shadowRoot.querySelector('input');"
+    @"};"
+    @"const username = field('username'), password = field('password');"
+    @"if (!username || !password) return 'waiting';"
+    @"for (const [input, value] of [[username, user], [password, pass]]) {"
+    @"  input.focus();"
+    @"  input.value = value;"
+    @"  input.dispatchEvent(new Event('input', {bubbles: true, composed: true}));"
+    @"  input.dispatchEvent(new Event('change', {bubbles: true, composed: true}));"
+    @"  input.blur();"
+    @"}"
+    @"await new Promise((resolve) => setTimeout(resolve, 400));"
+    @"const button = document.querySelector('faceplate-form#login button.login') ||"
+    @"               document.querySelector('auth-flow-login button.login');"
+    @"if (!button) return 'filled';"
+    @"button.click();"
+    @"return 'submitted';";
+
+- (void)autofillWithAttemptsLeft:(NSInteger)attemptsLeft {
+  if (self.finished || !self.prefillPassword) return;
+  __weak RFWebLoginViewController *weakSelf = self;
+  [self.webView callAsyncJavaScript:kAutofillScript
+                          arguments:@{@"user" : self.prefillUsername ?: @"", @"pass" : self.prefillPassword}
+                            inFrame:nil
+                     inContentWorld:WKContentWorld.defaultClientWorld
+                  completionHandler:^(id result, NSError *error) {
+                    RFWebLoginViewController *strongSelf = weakSelf;
+                    if (!strongSelf) return;
+                    if ([result isEqual:@"waiting"] || error) {
+                      if (attemptsLeft <= 0) {
+                        // Leave the page for the user to fill in.
+                        strongSelf.prefillPassword = nil;
+                        return;
+                      }
+                      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
+                                     dispatch_get_main_queue(), ^{
+                                       [weakSelf autofillWithAttemptsLeft:attemptsLeft - 1];
+                                     });
+                      return;
+                    }
+                    // Filled in (and submitted, unless the button wasn't found). From here on the
+                    // user can see the page and finish anything it asks for, such as a 2FA code.
+                    strongSelf.prefillPassword = nil;
+                  }];
 }
 
 // Swiping the sheet away counts as cancelling, so a cookie or account check still on its way can't
@@ -103,6 +178,7 @@ void RFClearPendingWebSession(void) {
 
 - (void)presentationControllerDidDismiss:(UIPresentationController *)presentationController {
   self.finished = YES;
+  [self reportCancellation];
 }
 
 - (void)cookiesDidChangeInCookieStore:(WKHTTPCookieStore *)cookieStore {
@@ -111,6 +187,12 @@ void RFClearPendingWebSession(void) {
 
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
   [self checkForSession];
+  // reddit.com/login first loads a short check page, then the login page itself; start filling in
+  // after the first load and keep trying for a while.
+  if (self.prefillPassword && !self.autofillScheduled) {
+    self.autofillScheduled = YES;
+    [self autofillWithAttemptsLeft:40];
+  }
 }
 
 - (void)checkForSession {
@@ -139,6 +221,8 @@ void RFClearPendingWebSession(void) {
                NSString *username = [result isKindOfClass:NSString.class] ? result : nil;
                if (!username.length) return;
                self.finished = YES;
+               self.succeeded = YES;
+               self.prefillPassword = nil;
                void (^completion)(NSString *, NSString *) = self.completion;
                [self dismissViewControllerAnimated:YES
                                         completion:^{
@@ -329,6 +413,46 @@ void RFStartBrowserLogin(UIViewController *viewController) {
       [[UINavigationController alloc] initWithRootViewController:webLogin];
   navigationController.presentationController.delegate = webLogin;
   [viewController presentViewController:navigationController animated:YES completion:nil];
+}
+
+static UIViewController *topViewController(void) {
+  UIWindow *window = nil;
+  for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+    if (![scene isKindOfClass:UIWindowScene.class] || scene.activationState != UISceneActivationStateForegroundActive)
+      continue;
+    for (UIWindow *candidate in ((UIWindowScene *)scene).windows)
+      if (candidate.isKeyWindow) window = candidate;
+    if (!window) window = ((UIWindowScene *)scene).windows.firstObject;
+    if (window) break;
+  }
+  UIViewController *top = window.rootViewController;
+  while (top.presentedViewController && !top.presentedViewController.isBeingDismissed)
+    top = top.presentedViewController;
+  return top;
+}
+
+// The app's own Log in button: log in with the same username and password in the browser sheet,
+// which fills them in and submits them itself. Calls completion on the main queue with the session,
+// or nil if the sheet couldn't be shown or the user closed it.
+void RFBrowserLoginWithCredentials(NSString *username, NSString *password, void (^completion)(NSString *session)) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    UIViewController *presenter = topViewController();
+    if (!presenter) return completion(nil);
+    [presenter.view endEditing:YES];
+    RFWebLoginViewController *webLogin = [RFWebLoginViewController new];
+    webLogin.prefillUsername = username;
+    webLogin.prefillPassword = password;
+    webLogin.completion = ^(NSString *session, NSString *loggedInAs) {
+      completion(session);
+    };
+    webLogin.cancellation = ^{
+      completion(nil);
+    };
+    UINavigationController *navigationController =
+        [[UINavigationController alloc] initWithRootViewController:webLogin];
+    navigationController.presentationController.delegate = webLogin;
+    [presenter presentViewController:navigationController animated:YES completion:nil];
+  });
 }
 
 %hook UIViewController

@@ -158,6 +158,68 @@ static const double kRFExtraStepsDeadline = 5.0;
 
 extern "C" NSString *RFPendingWebSession(void);
 extern "C" void RFClearPendingWebSession(void);
+extern "C" void RFBrowserLoginWithCredentials(NSString *username, NSString *password,
+                                              void (^completion)(NSString *session));
+
+// Reddit's answer to a password login, as if it had accepted it and set this session cookie.
+static NSHTTPURLResponse *RFLoginResponse(NSURL *url, NSString *session) {
+  return [[NSHTTPURLResponse alloc]
+       initWithURL:url
+        statusCode:200
+       HTTPVersion:@"HTTP/1.1"
+      headerFields:@{
+        @"Content-Type" : @"application/json",
+        @"Set-Cookie" : [NSString stringWithFormat:@"reddit_session=%@; Domain=.reddit.com; Path=/; Secure; HttpOnly",
+                                                   session],
+      }];
+}
+
+#if RF_SIDELOADED
+// The username and password from the app's password login request, or NO if they aren't there.
+// A streamed body is read into *request so it can still be sent if they aren't.
+static BOOL RFLoginCredentials(NSURLRequest **request, NSString **username, NSString **password) {
+  NSData *body = (*request).HTTPBody;
+  if (!body && (*request).HTTPBodyStream) {
+    NSMutableData *read = [NSMutableData data];
+    NSInputStream *stream = (*request).HTTPBodyStream;
+    uint8_t buffer[4096];
+    [stream open];
+    for (NSInteger n; (n = [stream read:buffer maxLength:sizeof buffer]) > 0;) [read appendBytes:buffer length:n];
+    [stream close];
+    NSMutableURLRequest *copy = [*request mutableCopy];
+    copy.HTTPBodyStream = nil;
+    copy.HTTPBody = read;
+    *request = copy;
+    body = read;
+  }
+  if (!body.length) return NO;
+  NSDictionary *fields = nil;
+  id json = [NSJSONSerialization JSONObjectWithData:body options:0 error:nil];
+  if ([json isKindOfClass:NSDictionary.class]) {
+    fields = json;
+  } else {
+    NSURLComponents *form = [NSURLComponents new];
+    form.percentEncodedQuery = [[NSString alloc] initWithData:body encoding:NSUTF8StringEncoding];
+    NSMutableDictionary *parsed = [NSMutableDictionary dictionary];
+    for (NSURLQueryItem *item in form.queryItems)
+      if (item.value) parsed[item.name] = item.value;
+    fields = parsed;
+  }
+  id user = nil;
+  for (NSString *key in @[ @"username", @"identifier", @"email", @"login" ])
+    if ((user = fields[key])) break;
+  id pass = fields[@"password"];
+  if (![user isKindOfClass:NSString.class] || ![pass isKindOfClass:NSString.class] || ![user length] ||
+      ![pass length]) {
+    // Field names only, never their values.
+    NSLog(@"[RedditFilter] Password login request without a username and password: %@", fields.allKeys);
+    return NO;
+  }
+  *username = user;
+  *password = pass;
+  return YES;
+}
+#endif
 
 // Reddit's API hosts: gql-fed, oauth, and cf.gql-fed, the Cloudflare route that the ios_graphql_uri_v2
 // experiment moves some users onto.
@@ -179,16 +241,7 @@ static BOOL RFIsAPIHost(NSString *host) {
   NSString *webSession = RFPendingWebSession();
   if (webSession && completionHandler && ([host isEqualToString:@"reddit.com"] || [host hasSuffix:@".reddit.com"])) {
     if ([request.URL.path isEqualToString:@"/auth/v2/login/password"]) {
-      NSHTTPURLResponse *response = [[NSHTTPURLResponse alloc]
-           initWithURL:request.URL
-            statusCode:200
-           HTTPVersion:@"HTTP/1.1"
-          headerFields:@{
-            @"Content-Type" : @"application/json",
-            @"Set-Cookie" : [NSString
-                stringWithFormat:@"reddit_session=%@; Domain=.reddit.com; Path=/; Secure; HttpOnly",
-                                 webSession],
-          }];
+      NSHTTPURLResponse *response = RFLoginResponse(request.URL, webSession);
       return %orig([NSURLRequest requestWithURL:[NSURL URLWithString:@"data:application/json,%7B%7D"]],
                    ^(NSData *data, NSURLResponse *_, NSError *error) {
                      completionHandler([@"{}" dataUsingEncoding:NSUTF8StringEncoding], response, nil);
@@ -202,6 +255,35 @@ static BOOL RFIsAPIHost(NSString *host) {
         completionHandler(data, response, error);
       });
   }
+
+#if RF_SIDELOADED
+  // Sideloaded, Reddit rejects the app's own password login. Log in with the same username and
+  // password in the browser sheet instead (LoginHelper.x), and answer the app with that session.
+  if (!webSession && completionHandler && [request.URL.path isEqualToString:@"/auth/v2/login/password"] &&
+      ([host isEqualToString:@"reddit.com"] || [host hasSuffix:@".reddit.com"])) {
+    NSString *username, *password;
+    if (!RFLoginCredentials(&request, &username, &password)) return %orig(request, completionHandler);
+    NSURL *url = request.URL;
+    NSOperationQueue *queue = self.delegateQueue;
+    return %orig([NSURLRequest requestWithURL:[NSURL URLWithString:@"data:application/json,%7B%7D"]],
+                 ^(NSData *data, NSURLResponse *_, NSError *error) {
+                   RFBrowserLoginWithCredentials(username, password, ^(NSString *session) {
+                     void (^answer)(void) = ^{
+                       if (session)
+                         completionHandler([@"{}" dataUsingEncoding:NSUTF8StringEncoding],
+                                           RFLoginResponse(url, session), nil);
+                       else
+                         completionHandler(nil, nil,
+                                           [NSError errorWithDomain:NSURLErrorDomain
+                                                               code:NSURLErrorCancelled
+                                                           userInfo:nil]);
+                     };
+                     if (queue) [queue addOperationWithBlock:answer];
+                     else answer();
+                   });
+                 });
+  }
+#endif
 
   // Debug builds: note GraphQL requests that would skip the filter, e.g. to a new Reddit address.
   if (!RFIsAPIHost(host) || !completionHandler) RF_RECORD_UNFILTERED(request, completionHandler != nil);
