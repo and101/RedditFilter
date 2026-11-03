@@ -654,7 +654,7 @@ NSData *RFMergedFeedPages(NSData *firstPage, NSData *nextPage) {
 
 static NSString *const kRFPostDetailsRequestKey = @"kRedditFilterPostDetailsRequest";
 
-// The app's request for full posts, minus the post IDs, as seen in Reddit 2026.43. Replaced by the
+// The app's request for full posts, minus the post IDs, as seen in Reddit 2026.44. Replaced by the
 // app's own request as soon as it makes one.
 static NSDictionary *RFDefaultPostDetailsRequest(void) {
   NSMutableDictionary *variables = [NSMutableDictionary dictionary];
@@ -676,7 +676,7 @@ static NSDictionary *RFDefaultPostDetailsRequest(void) {
     @"body" : @{
       @"extensions" : @{
         @"persistedQuery" :
-            @{@"sha256Hash" : @"d1229531c4120d3252591cc1e51ea3928cc068721f6c8b264a95183459f2fbd2", @"version" : @1}
+            @{@"sha256Hash" : @"2f76b78c53f3ecb611efea6057139ba52b6657700594efb78d159ca35a6b7d94", @"version" : @1}
       },
       @"operationName" : @"FeedPostDetailsByIds",
       @"variables" : variables,
