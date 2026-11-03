@@ -1,4 +1,4 @@
-# Reddit 2026.43.0 (671524). Regenerate with: tests/check-ipa.sh <ipa> --update
+# Reddit 2026.44.0 (673033). Regenerate with: tests/check-ipa.sh <ipa> --update
 [hosts]
 accounts.reddit.com
 ads-api.reddit.com
