@@ -1,0 +1,27 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check script syntax
+        run: |
+          git ls-files '*.sh' | while read -r script; do
+            echo "$script"
+            bash -n "$script"
+          done
+
+      # The simulator tests (tests/run-sim.sh) need Theos and a booted simulator, so they run locally.
+      - name: JSON filter and swipe-to-collapse tests
+        run: tests/run.sh
