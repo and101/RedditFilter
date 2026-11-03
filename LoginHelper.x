@@ -87,7 +87,20 @@ void RFClearPendingWebSession(void) {
 }
 
 // Swiping the sheet away counts as cancelling, so a cookie or account check still on its way can't
-// log in after it's gone.
+// log in after it's gone. The swipe can still be cancelled by dragging back, so it only counts once
+// the user lets go and the sheet carries on closing, not when the swipe starts.
+- (void)presentationControllerWillDismiss:(UIPresentationController *)presentationController {
+  id<UIViewControllerTransitionCoordinator> coordinator = presentationController.presentedViewController.transitionCoordinator;
+  if (!coordinator.isInteractive) {
+    self.finished = YES;
+    return;
+  }
+  __weak RFWebLoginViewController *weakSelf = self;
+  [coordinator notifyWhenInteractionChangesUsingBlock:^(id<UIViewControllerTransitionCoordinatorContext> context) {
+    if (!context.isCancelled) weakSelf.finished = YES;
+  }];
+}
+
 - (void)presentationControllerDidDismiss:(UIPresentationController *)presentationController {
   self.finished = YES;
 }
@@ -121,7 +134,8 @@ void RFClearPendingWebSession(void) {
                         inFrame:nil
                  inContentWorld:WKContentWorld.defaultClientWorld
               completionHandler:^(id result, NSError *error) {
-               if (self.finished) return;
+               // Not while the sheet is being swiped away either.
+               if (self.finished || self.navigationController.isBeingDismissed) return;
                NSString *username = [result isKindOfClass:NSString.class] ? result : nil;
                if (!username.length) return;
                self.finished = YES;
