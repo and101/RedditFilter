@@ -257,31 +257,36 @@ static BOOL RFIsAPIHost(NSString *host) {
   }
 
 #if RF_SIDELOADED
-  // Sideloaded, Reddit rejects the app's own password login. Log in with the same username and
-  // password in the browser sheet instead (LoginHelper.x), and answer the app with that session.
+  // Sideloaded, Reddit may reject the app's own password login. Send it as usual, and if Reddit turns
+  // it down, log in with the same username and password in the browser sheet (LoginHelper.x) and
+  // answer the app with that session instead.
   if (!webSession && completionHandler && [request.URL.path isEqualToString:@"/auth/v2/login/password"] &&
       ([host isEqualToString:@"reddit.com"] || [host hasSuffix:@".reddit.com"])) {
     NSString *username, *password;
     if (!RFLoginCredentials(&request, &username, &password)) return %orig(request, completionHandler);
     NSURL *url = request.URL;
     NSOperationQueue *queue = self.delegateQueue;
-    return %orig([NSURLRequest requestWithURL:[NSURL URLWithString:@"data:application/json,%7B%7D"]],
-                 ^(NSData *data, NSURLResponse *_, NSError *error) {
-                   RFBrowserLoginWithCredentials(username, password, ^(NSString *session) {
-                     void (^answer)(void) = ^{
-                       if (session)
-                         completionHandler([@"{}" dataUsingEncoding:NSUTF8StringEncoding],
-                                           RFLoginResponse(url, session), nil);
-                       else
-                         completionHandler(nil, nil,
-                                           [NSError errorWithDomain:NSURLErrorDomain
-                                                               code:NSURLErrorCancelled
-                                                           userInfo:nil]);
-                     };
-                     if (queue) [queue addOperationWithBlock:answer];
-                     else answer();
-                   });
-                 });
+    return %orig(request, ^(NSData *data, NSURLResponse *response, NSError *error) {
+      NSInteger status = [response isKindOfClass:NSHTTPURLResponse.class] ? ((NSHTTPURLResponse *)response).statusCode : 0;
+      // Logged in, or the connection failed and the browser wouldn't do any better.
+      if (error || status < 400 || status >= 500) {
+        NSLog(@"[RedditFilter] Password login: %ld", (long)status);
+        return completionHandler(data, response, error);
+      }
+      id json = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+      id reason = [json isKindOfClass:NSDictionary.class] ? json[@"error"] : nil;
+      NSLog(@"[RedditFilter] Password login refused (%ld): %@; trying the browser", (long)status, reason);
+      RFBrowserLoginWithCredentials(username, password, ^(NSString *session) {
+        void (^answer)(void) = ^{
+          if (session)
+            completionHandler([@"{}" dataUsingEncoding:NSUTF8StringEncoding], RFLoginResponse(url, session), nil);
+          else
+            completionHandler(data, response, error); // closed: show Reddit's own answer
+        };
+        if (queue) [queue addOperationWithBlock:answer];
+        else answer();
+      });
+    });
   }
 #endif
 

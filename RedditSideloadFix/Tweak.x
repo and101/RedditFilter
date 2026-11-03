@@ -1,3 +1,4 @@
+#import <DeviceCheck/DeviceCheck.h>
 #import <Foundation/Foundation.h>
 #import <dlfcn.h>
 #import <mach-o/dyld.h>
@@ -161,6 +162,49 @@ static void initSideloadedFixes() {
   %init(SideloadedFixes);
 }
 
+// App Attest and DeviceCheck prove to Reddit that the app is its own build, signed by its own team.
+// A re-signed app can only prove it's someone else's, and Reddit refuses to log that in. Devices
+// that can't do App Attest at all are still allowed, so report it as unsupported on this one.
+static NSError *deviceCheckUnsupported(void) {
+  return [NSError errorWithDomain:DCErrorDomain code:DCErrorFeatureUnsupported userInfo:nil];
+}
+
+%group AttestFixes
+
+%hook DCAppAttestService
+- (BOOL)isSupported {
+  return NO;
+}
+- (void)generateKeyWithCompletionHandler:(void (^)(NSString *, NSError *))completionHandler {
+  if (completionHandler) completionHandler(nil, deviceCheckUnsupported());
+}
+- (void)attestKey:(NSString *)keyId
+     clientDataHash:(NSData *)clientDataHash
+  completionHandler:(void (^)(NSData *, NSError *))completionHandler {
+  if (completionHandler) completionHandler(nil, deviceCheckUnsupported());
+}
+- (void)generateAssertion:(NSString *)keyId
+           clientDataHash:(NSData *)clientDataHash
+        completionHandler:(void (^)(NSData *, NSError *))completionHandler {
+  if (completionHandler) completionHandler(nil, deviceCheckUnsupported());
+}
+%end
+
+%hook DCDevice
+- (BOOL)isSupported {
+  return NO;
+}
+- (void)generateTokenWithCompletionHandler:(void (^)(NSData *, NSError *))completionHandler {
+  if (completionHandler) completionHandler(nil, deviceCheckUnsupported());
+}
+%end
+
+%end
+
+static void initAttestFixes(void) {
+  %init(AttestFixes);
+}
+
 static NSString *originalBundleIdentifier;
 
 static void recaptcha_hook(id self, SEL _cmd, id arg) {
@@ -209,4 +253,5 @@ static void initRecaptchaFix() {
   %init;
   initSideloadedFixes();
   initRecaptchaFix();
+  initAttestFixes();
 }
