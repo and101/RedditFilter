@@ -39,6 +39,13 @@ Filters unwanted content from the Reddit app: promoted posts, recommendations, N
 
 <sub>Screenshots use a made-up community, post and users.</sub>
 
+## New in 1.3.5
+
+**Rebuilt for Reddit 2026.44.0.** The IPA now contains Reddit 2026.44.0 (earlier releases contained 2026.43.0). Install it over your current RedditFilter as usual; your settings and accounts carry over.
+
+- **Check for updates now**: tap **Check for updates** under About to check GitHub straight away. It tells you whether an update is available, you're up to date, or it couldn't check. The switch still turns the daily check on or off.
+- **Fixes**: full-text keyword checks work on Reddit 2026.44 from the first launch. Swiping the **Log in with browser** sheet away now cancels that login; dragging it down and letting it spring back doesn't. Rows with an arrow in RedditFilter settings use the full width for their text. Look-alike sites such as evilredgifs.com are no longer treated as RedGIFs. Pages that wait for the full-text check, RedGIFs or the next page now reach Reddit the same way as any other response, and a few unexpected values from Reddit or iOS no longer risk a crash.
+
 ## New in 1.3.4
 
 - **Swipe haptics**: a light vibration when your swipe reaches Collapse or Collapse thread. On by default; turn it off under **Collapsing comments**.
