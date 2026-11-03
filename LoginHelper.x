@@ -43,7 +43,8 @@ void RFClearPendingWebSession(void) {
 #pragma mark - Browser
 
 @interface RFWebLoginViewController
-    : UIViewController <WKNavigationDelegate, WKHTTPCookieStoreObserver, UIAdaptivePresentationControllerDelegate>
+    : UIViewController <WKNavigationDelegate, WKUIDelegate, WKHTTPCookieStoreObserver,
+                        UIAdaptivePresentationControllerDelegate>
 @property(nonatomic, strong) WKWebView *webView;
 @property(nonatomic, copy) void (^completion)(NSString *session, NSString *username);
 @property(nonatomic, assign) BOOL finished;
@@ -55,6 +56,8 @@ void RFClearPendingWebSession(void) {
 @property(nonatomic, copy) NSString *prefillUsername;
 @property(nonatomic, copy) NSString *prefillPassword;
 @property(nonatomic, assign) BOOL autofillScheduled;
+// Windows the page opened, such as Continue with Google or Apple, shown on top of it.
+@property(nonatomic, strong) NSMutableArray<WKWebView *> *popups;
 @end
 
 @implementation RFWebLoginViewController
@@ -90,6 +93,7 @@ void RFClearPendingWebSession(void) {
   self.webView = [[WKWebView alloc] initWithFrame:self.view.bounds configuration:configuration];
   self.webView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
   self.webView.navigationDelegate = self;
+  self.webView.UIDelegate = self;
   self.webView.customUserAgent =
       [NSString stringWithFormat:@"Mozilla/5.0 (iPhone; CPU iPhone OS %@ like Mac OS X) "
                                  @"AppleWebKit/605.1.15 (KHTML, like Gecko) Version/%@ Mobile/15E148 "
@@ -103,6 +107,32 @@ void RFClearPendingWebSession(void) {
   [configuration.websiteDataStore.httpCookieStore addObserver:self];
   [self.view addSubview:self.webView];
   [self.webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:kWebLoginURL]]];
+}
+
+#pragma mark Popups
+
+// Continue with Google and Continue with Apple sign in in a new window, which reports back to the
+// login page when it closes. Show it on top of the page and remove it when it closes.
+- (WKWebView *)webView:(WKWebView *)webView
+    createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
+               forNavigationAction:(WKNavigationAction *)navigationAction
+                    windowFeatures:(WKWindowFeatures *)windowFeatures {
+  if (self.finished) return nil;
+  WKWebView *popup = [[WKWebView alloc] initWithFrame:self.view.bounds configuration:configuration];
+  popup.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+  popup.customUserAgent = self.webView.customUserAgent;
+  popup.UIDelegate = self;
+  popup.navigationDelegate = self;
+  if (!self.popups) self.popups = [NSMutableArray array];
+  [self.popups addObject:popup];
+  [self.view addSubview:popup];
+  return popup;
+}
+
+- (void)webViewDidClose:(WKWebView *)webView {
+  if (webView == self.webView) return;
+  [webView removeFromSuperview];
+  [self.popups removeObject:webView];
 }
 
 - (void)dealloc {
@@ -205,7 +235,7 @@ static NSString *const kAutofillScript =
   [self checkForSession];
   // reddit.com/login first loads a short check page, then the login page itself; start filling in
   // after the first load and keep trying for a while.
-  if (self.prefillPassword && !self.autofillScheduled) {
+  if (webView == self.webView && self.prefillPassword && !self.autofillScheduled) {
     self.autofillScheduled = YES;
     [self autofillWithAttemptsLeft:40];
   }
