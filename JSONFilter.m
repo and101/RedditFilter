@@ -808,7 +808,8 @@ NSData *RFFeedHidingFullTextMatches(NSData *feedData, NSData *detailsData, RFPre
 // "https://www.redgifs.com/watch/<id>" (or /ifr/<id>) -> "<id>"
 static NSString *RFRedgifsId(NSString *link) {
   NSURL *url = link ? [NSURL URLWithString:link] : nil;
-  if (![url.host.lowercaseString hasSuffix:@"redgifs.com"]) return nil;
+  NSString *host = url.host.lowercaseString;
+  if (![host isEqualToString:@"redgifs.com"] && ![host hasSuffix:@".redgifs.com"]) return nil;
   NSArray *parts = url.pathComponents;
   NSUInteger index = [parts indexOfObjectPassingTest:^BOOL(NSString *part, NSUInteger i, BOOL *stop) {
     return [part isEqualToString:@"watch"] || [part isEqualToString:@"ifr"];

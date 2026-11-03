@@ -253,6 +253,12 @@ int main(void) {
     Check([redgifsIds isEqual:(@[@"jovialrewardingenglishsetter", @"scientificsupportivelark"])],
           @"Find each RedGIFs video Reddit streams, once");
     Check(RFRedgifsIds(Data(Feed(keywordCards))) == nil, @"No RedGIFs, nothing to look up");
+    NSDictionary *lookalikes = @{@"data": @{@"postsInfoByIds": @[
+      RedgifsPost(@"t3_a", @"https://evilredgifs.com/watch/lookalikeone"),
+      RedgifsPost(@"t3_b", @"https://redgifs.com.example.net/watch/lookaliketwo"),
+      RedgifsPost(@"t3_c", @"https://redgifs.com/watch/barehost"),
+    ]}};
+    Check([RFRedgifsIds(Data(lookalikes)) isEqual:@[@"barehost"]], @"Only RedGIFs' own addresses count as RedGIFs");
     NSString *sound = @"https://media.redgifs.com/JovialRewardingEnglishsetter.mp4";
     NSDictionary *swapped = [NSJSONSerialization JSONObjectWithData:RFRedgifsResponse(Data(redgifsDetails), @{@"jovialrewardingenglishsetter": sound}) options:0 error:NULL];
     NSArray *swappedPosts = swapped[@"data"][@"postsInfoByIds"];
