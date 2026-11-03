@@ -510,11 +510,21 @@ void RFBrowserLoginWithCredentials(NSString *username, NSString *password, void 
         [[UINavigationController alloc] initWithRootViewController:webLogin];
     navigationController.presentationController.delegate = webLogin;
     activeCredentialsLogin = webLogin;
-    [presenter presentViewController:navigationController animated:YES completion:nil];
-    // UIKit quietly skips a presentation it can't make, such as while another screen is still
-    // animating in or out. Answer then, so the app's login doesn't wait forever.
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-      if (navigationController.presentingViewController || webLogin.finished) return;
+    __block BOOL shown = NO, gaveUp = NO;
+    [presenter presentViewController:navigationController
+                            animated:YES
+                          completion:^{
+                            shown = YES;
+                            // Shown too late, after the app was already answered: it would only sit
+                            // there, so close it.
+                            if (gaveUp) [navigationController dismissViewControllerAnimated:YES completion:nil];
+                          }];
+    // UIKit holds a presentation back while another screen is still animating in or out, and skips
+    // one it can't make at all. Only give up when it still hasn't shown after a while, so the app's
+    // login doesn't wait forever.
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+      if (shown || webLogin.finished) return;
+      gaveUp = YES;
       webLogin.finished = YES;
       webLogin.prefillPassword = nil;
       answer(nil);

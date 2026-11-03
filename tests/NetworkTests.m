@@ -270,11 +270,16 @@ static void TestPasswordLogin(NSURLSession *session) {
   Check(answer.statusCode == 200 &&
             [[answer valueForHTTPHeaderField:@"Set-Cookie"] hasPrefix:@"reddit_session=browser-session;"],
         @"Answer the app with the browser's session");
+  // What Reddit actually answers when the app's attestation is refused: also 401 unauthorized, but
+  // the reCAPTCHA token is named, so it isn't taken for a wrong password.
+  reddit = @[ @401, @0.01, @{@"error" : @{@"message" : @"unauthorized", @"params" : @{@"recaptcha_token" : @"INVALID"}, @"id" : @"cQ3qdR"}} ];
+  answer = PasswordLogin(session, credentials, @"application/json");
+  Check(gBrowserLogins == 2 && answer.statusCode == 200, @"Log in through the browser when the attestation is refused");
 
   // Browser closed without logging in: the app gets Reddit's own answer.
   gBrowserSession = nil;
   answer = PasswordLogin(session, credentials, @"application/json");
-  Check(gBrowserLogins == 2 && answer.statusCode == 400, @"Show Reddit's answer when the browser is closed");
+  Check(gBrowserLogins == 3 && answer.statusCode == 401, @"Show Reddit's answer when the browser is closed");
 
   // A form body: + is a space.
   gBrowserSession = @"browser-session";

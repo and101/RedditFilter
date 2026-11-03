@@ -240,7 +240,8 @@ static BOOL RFLoginCredentials(NSURLRequest **request, NSString **username, NSSt
 // Whether logging in through reddit.com could get past Reddit refusing the app's password login.
 // Not when it's about the username or password themselves, or too many tries: reddit.com would only
 // say the same, so the app shows Reddit's answer. When unsure, try the browser.
-// A wrong username or password gets 401 {"error":{"message":"unauthorized"}}.
+// A wrong username or password gets 401 {"error":{"message":"unauthorized"}}; a refused attestation
+// gets the same plus "params":{"recaptcha_token":"INVALID"}, so check for captcha first.
 static BOOL RFBrowserCanHelpWithLogin(NSInteger status, NSData *data) {
   if (status == 429) return NO;
   NSString *text = data ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding].lowercaseString : nil;
