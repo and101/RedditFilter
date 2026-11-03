@@ -153,7 +153,11 @@ static void RFApplyTheme(UIView *view, SEL setter, SEL themeGetter) {
 - (void)showDisclosure:(BOOL)show;
 @end
 
-@implementation RFSettingsCell
+@implementation RFSettingsCell {
+  // The text ends before the switch, or before the arrow on rows that show one instead.
+  NSLayoutConstraint *_labelsBeforeSwitch;
+  NSLayoutConstraint *_labelsBeforeDisclosure;
+}
 - (instancetype)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)identifier {
   self = [super initWithStyle:style reuseIdentifier:identifier];
   if (!self) return nil;
@@ -190,6 +194,8 @@ static void RFApplyTheme(UIView *view, SEL setter, SEL themeGetter) {
     view.translatesAutoresizingMaskIntoConstraints = NO;
     [self.contentView addSubview:view];
   }
+  _labelsBeforeSwitch = [labels.trailingAnchor constraintEqualToAnchor:_accessorySwitch.leadingAnchor constant:-12];
+  _labelsBeforeDisclosure = [labels.trailingAnchor constraintEqualToAnchor:_disclosure.leadingAnchor constant:-12];
   // Native Settings: 20pt edge inset, 24pt icon, text at 56pt, 63pt two-line rows.
   [NSLayoutConstraint activateConstraints:@[
     [_rowIcon.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:20],
@@ -197,7 +203,7 @@ static void RFApplyTheme(UIView *view, SEL setter, SEL themeGetter) {
     [_rowIcon.heightAnchor constraintEqualToConstant:24],
     [_rowIcon.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
     [labels.leadingAnchor constraintEqualToAnchor:_rowIcon.trailingAnchor constant:12],
-    [labels.trailingAnchor constraintEqualToAnchor:_accessorySwitch.leadingAnchor constant:-12],
+    _labelsBeforeSwitch,
     [labels.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
     [labels.topAnchor constraintGreaterThanOrEqualToAnchor:self.contentView.topAnchor constant:10],
     [labels.bottomAnchor constraintLessThanOrEqualToAnchor:self.contentView.bottomAnchor constant:-10],
@@ -215,6 +221,9 @@ static void RFApplyTheme(UIView *view, SEL setter, SEL themeGetter) {
 - (void)showDisclosure:(BOOL)show {
   self.accessorySwitch.hidden = show;
   self.disclosure.hidden = !show;
+  // Deactivate first so the two never conflict.
+  (show ? _labelsBeforeSwitch : _labelsBeforeDisclosure).active = NO;
+  (show ? _labelsBeforeDisclosure : _labelsBeforeSwitch).active = YES;
   self.selectionStyle = show ? UITableViewCellSelectionStyleDefault : UITableViewCellSelectionStyleNone;
 }
 @end
