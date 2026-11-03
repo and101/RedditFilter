@@ -306,8 +306,10 @@ static BOOL RFIsAPIHost(NSString *host) {
         RFLoginLog(@"[RedditFilter] Password login: %ld", (long)status);
         return completionHandler(data, response, error);
       }
+#if REDDITFILTER_DEBUG
       id json = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
-      id reason = [json isKindOfClass:NSDictionary.class] ? json[@"error"] : nil;
+      id reason = [json isKindOfClass:NSDictionary.class] ? json[@"error"] : nil; // for the login notes
+#endif
       // A wrong password, for one: the app shows Reddit's own message.
       if (!RFBrowserCanHelpWithLogin(status, data)) {
         RFLoginLog(@"[RedditFilter] Password login refused (%ld): %@", (long)status, reason);
