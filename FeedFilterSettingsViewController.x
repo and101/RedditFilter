@@ -213,8 +213,11 @@ static void RFApplyTheme(UIView *view, SEL setter, SEL themeGetter) {
     [_disclosure.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-20],
     [_disclosure.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
   ]];
-  [_accessorySwitch setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
-  [_accessorySwitch setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
+  // The switch and the arrow keep their own size, so the text takes up the rest of the row.
+  for (UIView *view in @[_accessorySwitch, _disclosure]) {
+    [view setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
+    [view setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
+  }
   self.selectionStyle = UITableViewCellSelectionStyleNone;
   return self;
 }
