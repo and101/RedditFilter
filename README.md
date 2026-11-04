@@ -39,6 +39,15 @@ Filters unwanted content from the Reddit app: promoted posts, recommendations, N
 
 <sub>Screenshots use a made-up community, post and users.</sub>
 
+## New in 1.3.6
+
+- **Log in from the app's own login screen**: on sideloaded installs, type your username and password into Reddit's normal login form and it logs you in, with no browser step. Sideloaded apps can't pass Reddit's check that the app is its own build, so RedditFilter tells Reddit this iPhone can't do that check, as some devices can't, and Reddit accepts that. **If Reddit turns this down, you don't need to do anything.** A reddit.com sheet opens by itself, fills in the username and password you just typed, logs in and closes once you're in. If Reddit asks for a 2FA code or a check, finish it in the sheet. A wrong password or too many tries still shows Reddit's usual message, and closing the sheet takes you back to the login screen.
+- **Swipe to collapse has its own page**: all the swipe options now live on one page under **Collapsing comments**. **Swipe left** is on by default. Turn on **Swipe right** to collapse with a right swipe too, while swiping from the screen edge still goes back. Turn on both to collapse either way, or turn off **Swipe left** so that swiping left only moves to the next post. Your swipe setting carries over.
+- **Extra cards**: turn this off to hide suggested communities, promos, surveys and post carousels from your feeds. Videos for you keeps its own switch.
+- **Stats**: a new section at the top of RedditFilter settings shows how much has been hidden, in total, today and by filter. It stays on your device, and you can reset it at any time.
+- **Diagnostics**: turn this on at the end of the settings to see whether RedditFilter still finds the posts and ads in Reddit's responses, and whether any new kind of card has appeared in your feeds. Tap **Share report** to copy or send it with a bug report. The report has no usernames or post text. Nothing is shared unless you choose to, and it's cleared when Reddit closes or you turn it off.
+- **Fixes**: Keyword checks now read the full text of posts in the Following feed, not just the title and preview. The **Log in with browser** sheet closes reddit.com's cookie banner by itself, opens the **Continue with Google** and **Continue with Apple** windows, and no longer gets stuck if it appears late. RedditFilter only fills in your password on reddit.com, and keeps it in memory only until it's been used.
+
 ## New in 1.3.5
 
 **Rebuilt for Reddit 2026.44.0.** The IPA now contains Reddit 2026.44.0 (earlier releases contained 2026.43.0). Install it over your current RedditFilter as usual; your settings and accounts carry over.
