@@ -7,6 +7,12 @@ static const CGFloat kRFCollapseVelocity = 500.0;
 static const CGFloat kRFHorizontalRatio = 1.4;
 static const CGFloat kRFThreadMinimumDistance = 120.0;
 static const CGFloat kRFThreadWidthFraction = 0.35;
+// Right swipes starting this close to the left of the screen stay as Reddit's back gesture.
+static const CGFloat kRFBackEdgeWidth = 24.0;
+
+CGPoint RFMirroredSwipeVector(CGPoint vector) {
+  return CGPointMake(-vector.x, vector.y);
+}
 
 // UIKit asks shouldBegin after only a few points of movement. Use the current
 // direction there; the deliberate short/long distance checks happen at the end.
@@ -18,6 +24,13 @@ BOOL RFHasLeftSwipeDirection(CGPoint translation, CGPoint velocity) {
   BOOL movedLeft = translation.x < 0 && dx >= dy * 1.05;
   BOOL movingLeft = velocity.x < 0 && vx >= vy * 1.05;
   return movedLeft || movingLeft;
+}
+
+NSInteger RFSwipeDirectionToClaim(CGPoint translation, CGPoint velocity, CGFloat startX, BOOL rightToo,
+                                  BOOL rightOnly) {
+  if (RFHasLeftSwipeDirection(translation, velocity)) return rightToo && rightOnly ? 0 : -1;
+  if (!rightToo || startX < kRFBackEdgeWidth) return 0;
+  return RFHasLeftSwipeDirection(RFMirroredSwipeVector(translation), RFMirroredSwipeVector(velocity)) ? 1 : 0;
 }
 
 BOOL RFShouldCollapseForSwipe(CGPoint translation, CGPoint velocity) {

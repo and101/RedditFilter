@@ -59,20 +59,30 @@ static const RFToggleRow kRedgifsRows[] = {
 };
 static const NSInteger kRedgifsRowCount = sizeof(kRedgifsRows) / sizeof(kRedgifsRows[0]);
 
-// In the Collapsing section. Their switch tags follow kRedgifsRows'.
+// In the Collapsing section, after the row that opens Swipe to collapse. Their switch tags follow kRedgifsRows'.
 static const RFToggleRow kCollapseRows[] = {
+    {kRedditFilterAutoCollapseAutoMod, @"AutoMod", @"Auto collapse AutoMod comments", @"rpl3/mod,icon_mod", NO},
+};
+static const NSInteger kCollapseRowCount = sizeof(kCollapseRows) / sizeof(kCollapseRows[0]);
+
+// The Swipe to collapse page. Their switch tags follow kDiagnosticsRow's.
+static const RFToggleRow kSwipeRows[] = {
     {kRedditFilterSwipeToCollapse, @"Swipe to collapse",
-     @"Swipe a comment left to collapse it, or swipe further to collapse the whole thread",
+     @"Swipe a comment to collapse it, or swipe further to collapse the whole thread",
      @"rpl3/swipeLeft,rpl3/comment,icon_comment", NO},
+    {kRedditFilterSwipeRightToCollapse, @"Swipe right too",
+     @"Swipe right to collapse as well. Swiping from the screen edge still goes back",
+     @"rpl3/swipeRight,rpl3/comment,icon_comment", NO, kRedditFilterSwipeToCollapse},
+    {kRedditFilterSwipeRightOnly, @"Swipe right only", @"Swiping left only moves to the next post",
+     @"rpl3/swipeRight,rpl3/comment,icon_comment", NO, kRedditFilterSwipeRightToCollapse},
     {kRedditFilterSwipeCollapseHaptics, @"Swipe haptics",
      @"Vibrate when your swipe reaches Collapse or Collapse thread", @"rpl3/swipeLeft,rpl3/comment,icon_comment", NO,
      kRedditFilterSwipeToCollapse},
     {kRedditFilterTapToCollapse, @"Tap to collapse too",
      @"Tap a comment to collapse it, or long press to collapse the whole thread", @"rpl3/comment,icon_comment", NO,
      kRedditFilterSwipeToCollapse},
-    {kRedditFilterAutoCollapseAutoMod, @"AutoMod", @"Auto collapse AutoMod comments", @"rpl3/mod,icon_mod", NO},
 };
-static const NSInteger kCollapseRowCount = sizeof(kCollapseRows) / sizeof(kCollapseRows[0]);
+static const NSInteger kSwipeRowCount = sizeof(kSwipeRows) / sizeof(kSwipeRows[0]);
 
 // In the About section, between the RedditFilter and developer rows. Its switch tag follows kKeywordRows'.
 // Tapping the row checks now; the switch is for the daily check.
@@ -100,6 +110,7 @@ static const RFToggleRow kDiagnosticsRow = {kRedditFilterDiagnostics, @"Diagnost
                                             @"Reddit's responses",
                                             @"rpl3/bug,icon_bug", NO};
 static const NSInteger kDiagnosticsRowTag = kCollapseRowTag + kCollapseRowCount;
+static const NSInteger kSwipeRowTag = kDiagnosticsRowTag + 1;
 
 static const RFToggleRow *RFToggleRowForKey(NSString *key) {
   for (NSInteger i = 0; i < kToggleRowCount; i++)
@@ -110,6 +121,8 @@ static const RFToggleRow *RFToggleRowForKey(NSString *key) {
     if ([kRedgifsRows[i].key isEqualToString:key]) return &kRedgifsRows[i];
   for (NSInteger i = 0; i < kCollapseRowCount; i++)
     if ([kCollapseRows[i].key isEqualToString:key]) return &kCollapseRows[i];
+  for (NSInteger i = 0; i < kSwipeRowCount; i++)
+    if ([kSwipeRows[i].key isEqualToString:key]) return &kSwipeRows[i];
   if ([kDiagnosticsRow.key isEqualToString:key]) return &kDiagnosticsRow;
   return [kUpdateRow.key isEqualToString:key] ? &kUpdateRow : NULL;
 }
@@ -122,6 +135,8 @@ static const RFToggleRow *RFToggleRowForTag(NSInteger tag) {
   if (redgifsRow >= 0 && redgifsRow < kRedgifsRowCount) return &kRedgifsRows[redgifsRow];
   NSInteger collapseRow = tag - kCollapseRowTag;
   if (collapseRow >= 0 && collapseRow < kCollapseRowCount) return &kCollapseRows[collapseRow];
+  NSInteger swipeRow = tag - kSwipeRowTag;
+  if (swipeRow >= 0 && swipeRow < kSwipeRowCount) return &kSwipeRows[swipeRow];
   if (tag == kUpdateRowTag) return &kUpdateRow;
   if (tag == kDiagnosticsRowTag) return &kDiagnosticsRow;
   return NULL;
@@ -356,6 +371,7 @@ typedef NS_ENUM(NSInteger, RFSection) {
   RFSectionStats,
   RFSectionFilters,
   RFSectionCollapse,
+  RFSectionSwipe,
   RFSectionRedgifs,
   RFSectionKeywords,
   RFSectionSafari,
@@ -374,8 +390,15 @@ static BOOL RFHasSafariExtension(void) {
   return hasExtension;
 }
 
+// The same screen class shows the Swipe to collapse page, with only that section.
+static char kRFSwipePageKey;
+static BOOL RFIsSwipePage(id settings) {
+  return [objc_getAssociatedObject(settings, &kRFSwipePageKey) boolValue];
+}
+
 // Stats, Filters, Collapsing, RedGIFs, Keywords, [Safari (with the extension)], About, Debug
-static NSArray<NSNumber *> *RFSections(void) {
+static NSArray<NSNumber *> *RFSections(id settings) {
+  if (RFIsSwipePage(settings)) return @[ @(RFSectionSwipe) ];
   static NSArray *sections;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
@@ -388,16 +411,17 @@ static NSArray<NSNumber *> *RFSections(void) {
   return sections;
 }
 
-static RFSection RFSectionAt(NSInteger section) {
-  NSArray<NSNumber *> *sections = RFSections();
+static RFSection RFSectionAt(id settings, NSInteger section) {
+  NSArray<NSNumber *> *sections = RFSections(settings);
   return section >= 0 && section < (NSInteger)sections.count ? sections[section].integerValue : RFSectionAbout;
 }
 
-static NSString *RFHeaderText(NSInteger section) {
-  switch (RFSectionAt(section)) {
+static NSString *RFHeaderText(id settings, NSInteger section) {
+  switch (RFSectionAt(settings, section)) {
     case RFSectionStats: return @"STATS";
     case RFSectionFilters: return @"TWEAKS";
     case RFSectionCollapse: return @"COLLAPSING COMMENTS";
+    case RFSectionSwipe: return nil;
     case RFSectionRedgifs: return @"REDGIFS";
     case RFSectionKeywords: return @"KEYWORDS";
     case RFSectionSafari: return @"SAFARI";
@@ -407,13 +431,15 @@ static NSString *RFHeaderText(NSInteger section) {
   return nil;
 }
 
-static NSString *RFFooterText(NSInteger section) {
-  switch (RFSectionAt(section)) {
+static NSString *RFFooterText(id settings, NSInteger section) {
+  switch (RFSectionAt(settings, section)) {
     case RFSectionStats: return nil;
     case RFSectionFilters: return @"Filter posts and adjust how Reddit looks";
     case RFSectionCollapse:
       return @"With swipe to collapse off, tapping a comment collapses it as usual. "
              @"A collapsed comment always opens with a tap.";
+    case RFSectionSwipe:
+      return @"Swiping a collapsed comment or the post itself still moves between posts or goes back.";
     case RFSectionRedgifs:
       return @"Plays RedGIFs' own videos, which have sound. Your device connects to RedGIFs directly. "
              @"If RedGIFs can't be reached, Reddit's silent version plays. "
@@ -436,10 +462,11 @@ static NSString *RFFooterText(NSInteger section) {
 }
 
 // The switch tag of the row at this position, or -1 for rows without a switch.
-static NSInteger RFToggleTagAt(NSIndexPath *indexPath) {
-  switch (RFSectionAt(indexPath.section)) {
+static NSInteger RFToggleTagAt(id settings, NSIndexPath *indexPath) {
+  switch (RFSectionAt(settings, indexPath.section)) {
     case RFSectionFilters: return indexPath.row;
-    case RFSectionCollapse: return kCollapseRowTag + indexPath.row;
+    case RFSectionCollapse: return indexPath.row > 0 ? kCollapseRowTag + indexPath.row - 1 : -1;
+    case RFSectionSwipe: return kSwipeRowTag + indexPath.row;
     case RFSectionRedgifs: return kRedgifsRowTag + indexPath.row;
     case RFSectionKeywords: return indexPath.row > 0 ? kKeywordRowTag + indexPath.row - 1 : -1;
     case RFSectionAbout: return indexPath.row == kAboutUpdateRow ? kUpdateRowTag : -1;
@@ -520,6 +547,19 @@ static UITableViewCell *RFStatsCell(UITableView *tableView) {
   return cell;
 }
 
+// Opens the Swipe to collapse page, and says what that page is set to.
+static UITableViewCell *RFSwipeCell(UITableView *tableView) {
+  NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+  NSString *subtitle = @"Off";
+  if ([defaults boolForKey:kRedditFilterSwipeToCollapse]) {
+    BOOL right = [defaults boolForKey:kRedditFilterSwipeRightToCollapse];
+    subtitle = !right                                          ? @"On, swiping left"
+               : [defaults boolForKey:kRedditFilterSwipeRightOnly] ? @"On, swiping right"
+                                                                   : @"On, swiping left or right";
+  }
+  return RFLinkCell(tableView, @"Swipe to collapse", subtitle, @"rpl3/swipeLeft,rpl3/comment,icon_comment", nil);
+}
+
 static UITableViewCell *RFSafariCell(UITableView *tableView) {
   return RFLinkCell(tableView, @"Open Reddit links here", @"Set up the RedditFilter Safari extension",
                     @"rpl3/link,icon_link", @"safari");
@@ -553,7 +593,7 @@ static void RFShowSafariSetup(UIViewController *controller) {
 
 - (void)viewDidLoad {
   %orig;
-  self.title = @"RedditFilter";
+  self.title = RFIsSwipePage(self) ? @"Swipe to collapse" : @"RedditFilter";
   Class toggleCellClass = RFSettingsCell.class;
   [self.tableView registerClass:toggleCellClass forCellReuseIdentifier:kToggleCellID];
   [self.tableView registerClass:toggleCellClass forCellReuseIdentifier:kLinkCellID];
@@ -596,17 +636,19 @@ static void RFShowSafariSetup(UIViewController *controller) {
 
 %new
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-  return RFSections().count;
+  return RFSections(self).count;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-  switch (RFSectionAt(section)) {
+  switch (RFSectionAt(self, section)) {
     case RFSectionStats:
       return 1;
     case RFSectionFilters:
       return kToggleRowCount;
     case RFSectionCollapse:
-      return kCollapseRowCount;
+      return 1 + kCollapseRowCount; // Swipe to collapse, then the switches
+    case RFSectionSwipe:
+      return kSwipeRowCount;
     case RFSectionRedgifs:
       return kRedgifsRowCount;
     case RFSectionKeywords:
@@ -623,10 +665,11 @@ static void RFShowSafariSetup(UIViewController *controller) {
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-  RFSection section = RFSectionAt(indexPath.section);
-  NSInteger tag = RFToggleTagAt(indexPath);
+  RFSection section = RFSectionAt(self, indexPath.section);
+  NSInteger tag = RFToggleTagAt(self, indexPath);
   if (section == RFSectionAbout && tag < 0) return RFAboutCell(tableView, RFAboutLinkIndex(indexPath.row));
   if (section == RFSectionKeywords && indexPath.row == 0) return RFKeywordsCell(tableView);
+  if (section == RFSectionCollapse && indexPath.row == 0) return RFSwipeCell(tableView);
   if (section == RFSectionSafari) return RFSafariCell(tableView);
   if (section == RFSectionStats) return RFStatsCell(tableView);
   if (section == RFSectionDebug && tag < 0) return [self debugCellForRow:indexPath.row - 1 inTableView:tableView];
@@ -687,7 +730,7 @@ static void RFShowSafariSetup(UIViewController *controller) {
 
   // Refresh every dependent row, as a chain (Prefer SD, then on mobile data) can change further down.
   for (NSIndexPath *indexPath in self.tableView.indexPathsForVisibleRows) {
-    const RFToggleRow *other = RFToggleRowForTag(RFToggleTagAt(indexPath));
+    const RFToggleRow *other = RFToggleRowForTag(RFToggleTagAt(self, indexPath));
     if (other && other->requires)
       RFSetToggleCellEnabled((RFSettingsCell *)[self.tableView cellForRowAtIndexPath:indexPath], other);
   }
@@ -696,19 +739,25 @@ static void RFShowSafariSetup(UIViewController *controller) {
 %new
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
   [tableView deselectRowAtIndexPath:indexPath animated:YES];
-  if (RFSectionAt(indexPath.section) == RFSectionKeywords && indexPath.row == 0) {
+  if (RFSectionAt(self, indexPath.section) == RFSectionKeywords && indexPath.row == 0) {
     [self.navigationController pushViewController:[RFKeywordsViewController new] animated:YES];
     return;
   }
-  if (RFSectionAt(indexPath.section) == RFSectionSafari) {
+  if (RFSectionAt(self, indexPath.section) == RFSectionCollapse && indexPath.row == 0) {
+    UIViewController *page = [(FeedFilterSettingsViewController *)[self.class alloc] initWithStyle:UITableViewStyleGrouped];
+    objc_setAssociatedObject(page, &kRFSwipePageKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [self.navigationController pushViewController:page animated:YES];
+    return;
+  }
+  if (RFSectionAt(self, indexPath.section) == RFSectionSafari) {
     RFShowSafariSetup(self);
     return;
   }
-  if (RFSectionAt(indexPath.section) == RFSectionStats) {
+  if (RFSectionAt(self, indexPath.section) == RFSectionStats) {
     [self.navigationController pushViewController:[RFStatsViewController new] animated:YES];
     return;
   }
-  if (RFSectionAt(indexPath.section) != RFSectionAbout) return;
+  if (RFSectionAt(self, indexPath.section) != RFSectionAbout) return;
   if (indexPath.row == kAboutUpdateRow) {
     if (RFCheckingForUpdate(self)) return;
     RFSetCheckingForUpdate(self, YES);
@@ -734,24 +783,24 @@ static void RFShowSafariSetup(UIViewController *controller) {
 
 %new
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
-  return RFSectionView(tableView, RFHeaderText(section), [self tableView:tableView heightForHeaderInSection:section], YES);
+  return RFSectionView(tableView, RFHeaderText(self, section), [self tableView:tableView heightForHeaderInSection:section], YES);
 }
 
 %new
 - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
-  return RFSectionHeight(tableView, RFHeaderText(section), YES, 26.0);
+  return RFSectionHeight(tableView, RFHeaderText(self, section), YES, 26.0);
 }
 
 %new
 - (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
-  return RFSectionView(tableView, RFFooterText(section), [self tableView:tableView heightForFooterInSection:section], NO);
+  return RFSectionView(tableView, RFFooterText(self, section), [self tableView:tableView heightForFooterInSection:section], NO);
 }
 
 %new
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
-  RFSection kind = RFSectionAt(section);
+  RFSection kind = RFSectionAt(self, section);
   CGFloat minimum = kind == RFSectionDebug ? 76.0 : kind == RFSectionStats ? 20.0 : 48.0;
-  return RFSectionHeight(tableView, RFFooterText(section), NO, minimum);
+  return RFSectionHeight(tableView, RFFooterText(self, section), NO, minimum);
 }
 
 // ---------------------------------------------------------------------------

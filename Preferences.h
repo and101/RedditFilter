@@ -9,6 +9,8 @@
 #define kRedditFilterSwipeToCollapse @"kRedditFilterSwipeToCollapse"
 #define kRedditFilterSwipeCollapseHaptics @"kRedditFilterSwipeCollapseHaptics"
 #define kRedditFilterTapToCollapse @"kRedditFilterTapToCollapse" // with swipe on, keep tap and long press too
+#define kRedditFilterSwipeRightToCollapse @"kRedditFilterSwipeRightToCollapse" // with swipe on, right swipes collapse too
+#define kRedditFilterSwipeRightOnly @"kRedditFilterSwipeRightOnly" // with right swipes on, left swipes stop collapsing
 #define kRedditFilterVideosForYou @"kRedditFilterVideosForYou"
 #define kRedditFilterKeywords @"kRedditFilterKeywords" // array of strings
 #define kRedditFilterKeywordComments @"kRedditFilterKeywordComments"

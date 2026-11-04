@@ -18,6 +18,21 @@ int main(void) {
     Check(!RFHasLeftSwipeDirection(CGPointZero, CGPointMake(200, 0)),
           @"A rightward initial velocity should not begin");
 
+    Check(RFSwipeDirectionToClaim(CGPointMake(-4, 0), CGPointZero, 200, NO, NO) == -1, @"A left swipe is claimed");
+    Check(RFSwipeDirectionToClaim(CGPointMake(-4, 0), CGPointZero, 5, YES, NO) == -1, @"The edge only matters to right swipes");
+    Check(RFSwipeDirectionToClaim(CGPointMake(4, 0), CGPointZero, 200, NO, NO) == 0, @"Right swipes stay Reddit's by default");
+    Check(RFSwipeDirectionToClaim(CGPointMake(4, 0), CGPointZero, 200, YES, NO) == 1, @"Swipe right too claims a right swipe");
+    Check(RFSwipeDirectionToClaim(CGPointZero, CGPointMake(200, 0), 200, YES, NO) == 1, @"A rightward velocity is enough");
+    Check(RFSwipeDirectionToClaim(CGPointMake(4, 0), CGPointZero, 23, YES, NO) == 0, @"A swipe from the edge still goes back");
+    Check(RFSwipeDirectionToClaim(CGPointMake(4, 0), CGPointZero, 24, YES, NO) == 1, @"Just past the edge collapses");
+    Check(RFSwipeDirectionToClaim(CGPointMake(2, 4), CGPointZero, 200, YES, NO) == 0, @"A vertical drag is never claimed");
+    Check(RFSwipeDirectionToClaim(CGPointMake(-4, 0), CGPointZero, 200, YES, YES) == 0, @"Swipe right only leaves left swipes");
+    Check(RFSwipeDirectionToClaim(CGPointMake(4, 0), CGPointZero, 200, YES, YES) == 1, @"Swipe right only keeps right swipes");
+    Check(RFSwipeDirectionToClaim(CGPointMake(4, 0), CGPointZero, 5, YES, YES) == 0, @"Swipe right only keeps the edge for back");
+    Check(RFSwipeDirectionToClaim(CGPointMake(-4, 0), CGPointZero, 200, NO, YES) == -1, @"Swipe right only needs Swipe right too");
+    Check(RFShouldCollapseForSwipe(RFMirroredSwipeVector(CGPointMake(60, 2)), CGPointZero),
+          @"A mirrored right swipe follows the left swipe rules");
+
     Check(RFShouldCollapseForSwipe(CGPointMake(-60, 8), CGPointZero), @"A far left swipe should collapse");
     Check(RFShouldCollapseForSwipe(CGPointMake(-18, 2), CGPointMake(-700, 0)), @"A left flick should collapse");
     Check(!RFShouldCollapseForSwipe(CGPointMake(60, 2), CGPointZero), @"A right swipe should not collapse");

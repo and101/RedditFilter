@@ -39,7 +39,9 @@ extern "C" void RFReloadPreferences(void) {
                        [defaults boolForKey:kRedditFilterColoredCommentsApollo]);
   RFSetSwipeCollapse([defaults boolForKey:kRedditFilterSwipeToCollapse],
                      [defaults boolForKey:kRedditFilterTapToCollapse],
-                     [defaults boolForKey:kRedditFilterSwipeCollapseHaptics]);
+                     [defaults boolForKey:kRedditFilterSwipeCollapseHaptics],
+                     [defaults boolForKey:kRedditFilterSwipeRightToCollapse],
+                     [defaults boolForKey:kRedditFilterSwipeRightOnly]);
 }
 
 #pragma mark - Helpers shared with the settings screen
@@ -536,6 +538,8 @@ BOOL RFCleanCachedExperiments(void) {
     kRedditFilterSwipeToCollapse : @NO,
     kRedditFilterSwipeCollapseHaptics : @YES,
     kRedditFilterTapToCollapse : @NO,
+    kRedditFilterSwipeRightToCollapse : @NO,
+    kRedditFilterSwipeRightOnly : @NO,
     kRedditFilterVideosForYou : @NO,
     kRedditFilterKeywordComments : @NO,
     kRedditFilterKeywordCommentReplies : @YES,

@@ -13,6 +13,8 @@
 static BOOL gSwipeCollapseEnabled;
 static BOOL gTapCollapseEnabled = YES;
 static BOOL gSwipeCollapseHapticsEnabled = YES;
+static BOOL gSwipeRightCollapseEnabled;
+static BOOL gSwipeRightOnly;
 static NSHashTable<UIView *> *gSwipeCollapseCards;
 static NSHashTable<UIGestureRecognizer *> *gDisabledHeaderRecognizers;
 static const void *kRFSwipeCollapseRecognizerKey = &kRFSwipeCollapseRecognizerKey;
@@ -20,6 +22,8 @@ static const void *kRFSwipeCollapseSuppressedPagersKey = &kRFSwipeCollapseSuppre
 static const void *kRFSwipeCollapseRevealKey = &kRFSwipeCollapseRevealKey;
 static const void *kRFSwipeCollapseHandledKey = &kRFSwipeCollapseHandledKey;
 static const void *kRFSwipeCollapseStageKey = &kRFSwipeCollapseStageKey;
+static const void *kRFSwipeCollapseStartXKey = &kRFSwipeCollapseStartXKey;
+static const void *kRFSwipeCollapseDirectionKey = &kRFSwipeCollapseDirectionKey;
 
 static BOOL RFClassNameContains(UIView *view, NSString *needle) {
   return [NSStringFromClass(view.class) containsString:needle];
@@ -203,6 +207,7 @@ static UIView *RFMovingViewForCard(UIView *card) {
 @property (nonatomic, strong) UIImageView *icon;
 @property (nonatomic, strong) UILabel *label;
 @property (nonatomic) BOOL thread;
+@property (nonatomic) BOOL onLeft; // the card moved right, so the space is on its left
 @end
 
 @implementation RFSwipeCollapseReveal
@@ -243,7 +248,13 @@ static UIView *RFMovingViewForCard(UIView *card) {
   [self applyThread];
 }
 
-// Icon and label sit just inside the right edge, level with the comment's
+- (void)setOnLeft:(BOOL)onLeft {
+  if (_onLeft == onLeft) return;
+  _onLeft = onLeft;
+  [self setNeedsLayout];
+}
+
+// Icon and label sit just inside the screen edge, level with the comment's
 // header, so they stay on screen for long comments.
 - (void)layoutSubviews {
   [super layoutSubviews];
@@ -251,7 +262,7 @@ static UIView *RFMovingViewForCard(UIView *card) {
   CGFloat centreY = MIN(height / 2.0, 40.0);
   CGSize labelSize = [self.label sizeThatFits:CGSizeMake(110, 40)];
   CGFloat columnWidth = MAX(28.0, labelSize.width);
-  CGFloat centreX = width - 16.0 - columnWidth / 2.0;
+  CGFloat centreX = self.onLeft ? 16.0 + columnWidth / 2.0 : width - 16.0 - columnWidth / 2.0;
   self.icon.frame = CGRectMake(centreX - 11, centreY - 18, 22, 22);
   self.label.frame = CGRectMake(centreX - columnWidth / 2.0, centreY + 6, columnWidth, labelSize.height);
 }
@@ -279,9 +290,10 @@ static void RFSetCardOffset(UIView *card, CGFloat dx, BOOL thread) {
   moving.layer.sublayerTransform = CATransform3DMakeTranslation(dx, 0, 0);
   if (reveal) {
     reveal.frame = reveal.superview.bounds;
-    reveal.hidden = dx >= 0;
+    reveal.hidden = dx == 0;
     reveal.thread = thread;
-    reveal.alpha = MIN(1.0, -dx / 48.0);
+    reveal.onLeft = dx > 0;
+    reveal.alpha = MIN(1.0, fabs(dx) / 48.0);
   }
   [CATransaction commit];
 }
@@ -322,20 +334,24 @@ static BOOL RFIsPagerPan(UIGestureRecognizer *recognizer) {
          [name containsString:@"UIScrollViewPagingSwipeGestureRecognizer"];
 }
 
-// Wait until the first small movement proves this is a left swipe before
-// temporarily disabling scrolling and post paging. This leaves rightward and
-// vertical gestures entirely to Reddit's existing recognizers.
-static void RFSuppressPagerRecognizersForSwipe(UIView *card, UIPanGestureRecognizer *swipe) {
+// Wait until the first small movement proves this is a swipe to collapse before
+// temporarily disabling scrolling and post paging. This leaves every other
+// gesture entirely to Reddit's existing recognizers. A right swipe also has to
+// hold off going back, which is several pans on the navigation views above.
+static void RFSuppressPagerRecognizersForSwipe(UIView *card, UIPanGestureRecognizer *swipe, BOOL right) {
   NSHashTable<UIGestureRecognizer *> *suppressed =
       objc_getAssociatedObject(swipe, kRFSwipeCollapseSuppressedPagersKey);
   if (suppressed) return;
   suppressed = [NSHashTable weakObjectsHashTable];
   objc_setAssociatedObject(swipe, kRFSwipeCollapseSuppressedPagersKey, suppressed,
                            OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-  for (UIView *ancestor = card.superview; ancestor; ancestor = ancestor.superview) {
-    if (![ancestor isKindOfClass:UIScrollView.class]) continue;
+  for (UIView *ancestor = card.superview; ancestor && ![ancestor isKindOfClass:UIWindow.class];
+       ancestor = ancestor.superview) {
+    BOOL scrollView = [ancestor isKindOfClass:UIScrollView.class];
     for (UIGestureRecognizer *recognizer in ancestor.gestureRecognizers) {
-      if (recognizer == swipe || !RFIsPagerPan(recognizer) || !recognizer.enabled) continue;
+      if (recognizer == swipe || !recognizer.enabled) continue;
+      BOOL pager = scrollView && RFIsPagerPan(recognizer);
+      if (!pager && !(right && [recognizer isKindOfClass:UIPanGestureRecognizer.class])) continue;
       recognizer.enabled = NO;
       [suppressed addObject:recognizer];
     }
@@ -521,22 +537,29 @@ static UIImpactFeedbackGenerator *RFSwipeCollapseHaptics(void) {
     return !RFShouldBlockCommentTextTouch(gestureRecognizer.view, gestureRecognizer, touch);
   if (![gestureRecognizer isKindOfClass:UIPanGestureRecognizer.class] || !gSwipeCollapseEnabled) return NO;
   UIView *card = gestureRecognizer.view;
+  objc_setAssociatedObject(gestureRecognizer, kRFSwipeCollapseStartXKey, @([touch locationInView:nil].x),
+                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
   return !RFTouchBelongsToOwnHorizontalGesture(touch.view, card) && RFExpandedHeaderInCard(card) != nil;
 }
 
-// Only leftward swipes on an expanded comment are claimed. Rightward and
-// vertical ones, and every swipe on a collapsed comment (which has no
-// recognizer), stay with Reddit: scrolling and moving between posts.
+// Leftward swipes on an expanded comment are claimed unless Swipe right only is
+// on, and rightward ones with Swipe right too on, unless they start at the
+// screen's left edge. All other swipes, and every swipe on a collapsed comment
+// (which has no recognizer), stay with Reddit: scrolling, moving between posts,
+// going back.
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
   if (gestureRecognizer.view != nil && RFIsCommentTextSlice(gestureRecognizer.view)) return YES; // the text's long press
   if (![gestureRecognizer isKindOfClass:UIPanGestureRecognizer.class] || !gSwipeCollapseEnabled)
     return NO;
   UIPanGestureRecognizer *swipe = (UIPanGestureRecognizer *)gestureRecognizer;
   UIView *card = swipe.view;
-  BOOL shouldBegin = RFHasLeftSwipeDirection([swipe translationInView:card], [swipe velocityInView:card]) &&
-                     RFExpandedHeaderInCard(card) != nil;
+  CGFloat startX = [objc_getAssociatedObject(swipe, kRFSwipeCollapseStartXKey) doubleValue];
+  NSInteger direction = RFSwipeDirectionToClaim([swipe translationInView:card], [swipe velocityInView:card], startX,
+                                                gSwipeRightCollapseEnabled, gSwipeRightOnly);
+  BOOL shouldBegin = direction != 0 && RFExpandedHeaderInCard(card) != nil;
   if (shouldBegin) {
-    RFSuppressPagerRecognizersForSwipe(card, swipe);
+    objc_setAssociatedObject(swipe, kRFSwipeCollapseDirectionKey, @(direction), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    RFSuppressPagerRecognizersForSwipe(card, swipe, direction > 0);
     RFRestorePagersIfSwipeNeverBegan(swipe, 10);
   }
   return shouldBegin;
@@ -545,6 +568,14 @@ static UIImpactFeedbackGenerator *RFSwipeCollapseHaptics(void) {
 - (void)handleSwipe:(UIPanGestureRecognizer *)swipe {
   UIView *card = swipe.view;
   CGFloat width = CGRectGetWidth(card.bounds);
+  // The rules below read a right swipe as its mirror image: a left swipe.
+  BOOL right = [objc_getAssociatedObject(swipe, kRFSwipeCollapseDirectionKey) integerValue] > 0;
+  CGPoint translation = [swipe translationInView:card];
+  CGPoint velocity = [swipe velocityInView:card];
+  if (right) {
+    translation = RFMirroredSwipeVector(translation);
+    velocity = RFMirroredSwipeVector(velocity);
+  }
 
   if (swipe.state == UIGestureRecognizerStateBegan) {
     objc_setAssociatedObject(swipe, kRFSwipeCollapseHandledKey, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -553,7 +584,6 @@ static UIImpactFeedbackGenerator *RFSwipeCollapseHaptics(void) {
   }
 
   if (swipe.state == UIGestureRecognizerStateBegan || swipe.state == UIGestureRecognizerStateChanged) {
-    CGPoint translation = [swipe translationInView:card];
     // The card follows the finger, with resistance past the whole-thread distance.
     CGFloat limit = RFThreadCollapseDistance(width);
     CGFloat dx = MIN(0.0, translation.x);
@@ -564,7 +594,7 @@ static UIImpactFeedbackGenerator *RFSwipeCollapseHaptics(void) {
       UIView *header = RFExpandedHeaderInCard(card);
       thread = header && !RFIsRootCommentCard(card, header);
     }
-    RFSetCardOffset(card, dx, thread);
+    RFSetCardOffset(card, right ? -dx : dx, thread);
     // One tap of feedback as the swipe passes Collapse, and one more at Collapse
     // thread. Moving back below a threshold lets it fire again.
     NSInteger stage = RFSwipeCollapseStage(translation, width, thread);
@@ -589,8 +619,6 @@ static UIImpactFeedbackGenerator *RFSwipeCollapseHaptics(void) {
   if ([objc_getAssociatedObject(swipe, kRFSwipeCollapseHandledKey) boolValue]) return;
   objc_setAssociatedObject(swipe, kRFSwipeCollapseHandledKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-  CGPoint translation = [swipe translationInView:card];
-  CGPoint velocity = [swipe velocityInView:card];
   if (RFShouldCollapseThreadForSwipe(translation, width)) {
     RFCollapseRootForHeader(header);
   } else if (RFShouldCollapseForSwipe(translation, velocity)) {
@@ -698,13 +726,15 @@ static void RFPrepareSwipeCollapseHeader(UIView *header) {
   [gSwipeCollapseCards addObject:card];
 }
 
-void RFSetSwipeCollapse(BOOL enabled, BOOL tapToo, BOOL haptics) {
+void RFSetSwipeCollapse(BOOL enabled, BOOL tapToo, BOOL haptics, BOOL rightToo, BOOL rightOnly) {
   if (![NSThread isMainThread]) {
-    dispatch_async(dispatch_get_main_queue(), ^{ RFSetSwipeCollapse(enabled, tapToo, haptics); });
+    dispatch_async(dispatch_get_main_queue(), ^{ RFSetSwipeCollapse(enabled, tapToo, haptics, rightToo, rightOnly); });
     return;
   }
   BOOL tapChanged = gTapCollapseEnabled != tapToo;
   gSwipeCollapseHapticsEnabled = haptics;
+  gSwipeRightCollapseEnabled = rightToo;
+  gSwipeRightOnly = rightOnly;
   gTapCollapseEnabled = tapToo;
   if (!enabled || tapToo) RFRestoreAllHeaderRecognizers();
   if (gSwipeCollapseEnabled == enabled) {
@@ -758,5 +788,7 @@ void RFSetSwipeCollapse(BOOL enabled, BOOL tapToo, BOOL haptics) {
   NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
   RFSetSwipeCollapse([defaults boolForKey:kRedditFilterSwipeToCollapse],
                      [defaults boolForKey:kRedditFilterTapToCollapse],
-                     [defaults boolForKey:kRedditFilterSwipeCollapseHaptics]);
+                     [defaults boolForKey:kRedditFilterSwipeCollapseHaptics],
+                     [defaults boolForKey:kRedditFilterSwipeRightToCollapse],
+                     [defaults boolForKey:kRedditFilterSwipeRightOnly]);
 }
