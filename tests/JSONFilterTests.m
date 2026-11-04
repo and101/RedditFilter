@@ -122,22 +122,23 @@ int main(void) {
       Card(@{@"__typename": @"MerchandisingUnitCell", @"id": @"m"}),
       Card(@{@"__typename": @"FeedSurvey", @"id": @"s"}),
       @{@"__typename": @"PostCarousel", @"id": @"t", @"type": @"TRENDING"},
+      @{@"__typename": @"CarouselCommunityRecommendationsFeedUnit", @"id": @"c", @"communityRecommendations": @[@{@"subreddit": @{}}]},
       extraVideos, plainCard,
     ]);
     NSArray *extraEdges = Filter(extraFeed, @"HomeFeedSdui", extraCards)[@"data"][@"homeV3"][@"elements"][@"edges"];
-    for (NSUInteger i = 0; i < 4; i++) {
+    for (NSUInteger i = 0; i < 5; i++) {
       Check([extraEdges[i][@"node"][@"__typename"] isEqual:@"CellGroup"] && [extraEdges[i][@"node"][@"cells"] count] == 0,
             @"Swap an extra card for an empty one");
-      Check(extraEdges.count == 6 && [extraEdges[i][@"node"][@"id"] length] > 0, @"Keep the feed's length and an ID");
+      Check(extraEdges.count == 7 && [extraEdges[i][@"node"][@"id"] length] > 0, @"Keep the feed's length and an ID");
     }
-    Check([extraEdges[4][@"node"][@"__typename"] isEqual:@"PostCarousel"], @"Videos for you keeps its own switch");
-    Check([extraEdges[5][@"node"] isEqual:plainCard], @"Keep posts");
+    Check([extraEdges[5][@"node"][@"__typename"] isEqual:@"PostCarousel"], @"Videos for you keeps its own switch");
+    Check([extraEdges[6][@"node"] isEqual:plainCard], @"Keep posts");
     Check([Filter(extraFeed, @"HomeFeedSdui", off) isEqual:extraFeed], @"Keep extra cards with the filter off");
     NSDictionary *mixedCard = @{@"__typename": @"CellGroup", @"id": @"mixed", @"cells": @[
       @{@"__typename": @"ClassicCell"}, @{@"__typename": @"ActionCell"}, @{@"__typename": @"FeedSurvey", @"id": @"s2"}]};
     Check([Filter(Feed(@[mixedCard]), @"HomeFeedSdui", extraCards) isEqual:Feed(@[mixedCard])], @"A card with a post in it stays");
     NSArray *followingEdges = Filter(extraFeed, @"FollowingFeed", extraCards)[@"data"][@"homeV3"][@"elements"][@"edges"];
-    Check([followingEdges[0][@"node"][@"cells"] count] == 0 && [followingEdges[5][@"node"] isEqual:plainCard], @"Filter the Following feed too");
+    Check([followingEdges[0][@"node"][@"cells"] count] == 0 && [followingEdges[6][@"node"] isEqual:plainCard], @"Filter the Following feed too");
 
     // A card and the same post's details count once
     RFStatsReset();
@@ -158,13 +159,27 @@ int main(void) {
     NSDictionary *newCard = @{@"__typename": @"CellGroup", @"cells": @[@{@"__typename": @"ShinyNewCell"}, @{@"__typename": @"MarginCell"}]};
     NSDictionary *adCard = @{@"__typename": @"CellGroup", @"adPayload": @{@"id": @"a"}, @"cells": @[@{@"__typename": @"ShinyAdCell"}]};
     Filter(Feed(@[postCard, adCard, newCard, Card(@{@"__typename": @"FeedSurvey"}), extraVideos,
+                  @{@"__typename": @"PostCarousel", @"type": @"TRENDING"},
                   @{@"__typename": @"PostPreviewComponent", @"post": @{}}]), @"FollowingFeed", off);
-    Filter(Feed(@[@{@"__typename": @"DevvitDailyCollectionFeedElement"}]), @"GamesFeedSdui", off);
+    for (NSString *op in @[@"GamesFeedSdui", @"ProfileFeedSdui", @"SubredditFeedSdui", @"Unknown"])
+      Filter(Feed(@[@{@"__typename": @"OwnCardOfThisPage"}]), op, off);
     NSArray *cardLines = feedCardsRow()[kRFDebugFeedCards];
     Check(cardLines.count == 3, @"Only the cards that aren't posts or ads are listed");
     Check([cardLines[0] hasPrefix:@"? ShinyNewCell"] && [cardLines[0] containsString:@"FollowingFeed"], @"An unknown card comes first, with its feed");
     Check([[cardLines componentsJoinedByString:@"|"] containsString:@"\u2713 FeedSurvey"], @"A known card is marked");
-    Check([[cardLines componentsJoinedByString:@"|"] containsString:@"\u2713 PostCarousel VIDEO_RECOMMENDATIONS"], @"Carousels name their type");
+    Check([[cardLines componentsJoinedByString:@"|"] containsString:@"\u2713 PostCarousel TRENDING"], @"Carousels name their type");
+    Check(![[cardLines componentsJoinedByString:@"|"] containsString:@"VIDEO_RECOMMENDATIONS"], @"Videos for you has its own switch");
+    Check(![[cardLines componentsJoinedByString:@"|"] containsString:@"OwnCardOfThisPage"], @"Only the Home tabs are listed");
+    NSDictionary *secretFeed = @{@"data": @{@"homeV4": @{@"elements": @{@"edges": @"no longer a list", @"author": @"secret_user"}}}};
+    Filter(secretFeed, @"HomeFeedSdui", off);
+    NSString *report = [[RFSchemaDebug shared] reportText];
+    Check([report containsString:@"not recognised: ShinyNewCell"] && [report containsString:@"known: FeedSurvey"], @"The report lists the cards");
+    Check([report containsString:@"HomeFeedSdui: MISS"] && [report containsString:@"expected: data.homeV3.elements.edges"], @"The report shows a miss");
+    Check([report containsString:@"PopularFeedSdui: untested"], @"The report shows untested paths");
+    NSString *capturedJSON = nil;
+    for (NSDictionary *row in [[RFSchemaDebug shared] snapshot]) capturedJSON = capturedJSON ?: row[kRFDebugFailedJSON];
+    Check([capturedJSON containsString:@"secret_user"], @"A failed response is captured for Copy JSON");
+    Check(![report containsString:@"secret_user"], @"The report never includes captured JSON");
     RFSetDiagnosticsEnabled(NO);
     Check([feedCardsRow()[kRFDebugFeedCards] count] == 0, @"Turning Diagnostics off clears the list");
     Filter(Feed(@[newCard]), @"HomeFeedSdui", off);

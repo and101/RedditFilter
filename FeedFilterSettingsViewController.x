@@ -458,8 +458,8 @@ static NSString *RFFooterText(id settings, NSInteger section) {
                @"into your bug report.";
       return @"✓ found · ✗ not found where expected (RedditFilter searches the whole response instead). "
              @"Tap Copy on a ✗ row for the new location, or Copy JSON for the response, which can include "
-             @"usernames and post text. Nothing leaves your device unless you copy it, and it's cleared when "
-             @"Reddit closes or you turn this off.";
+             @"usernames and post text. Share report never includes that JSON. Nothing leaves your device "
+             @"unless you copy or share it, and it's cleared when Reddit closes or you turn this off.";
     case RFSectionAbout: return @"Based on original work from level3tjg and NicholasBly";
   }
   return nil;
@@ -604,6 +604,7 @@ static void RFKeepOneSwipeSide(UITableView *tableView, NSString *changedKey, BOO
 - (void)rfCopyDiscoveredPath:(UIButton *)sender;
 - (void)rfCopyFailedJSON:(UIButton *)sender;
 - (void)rfResetCounters:(UIButton *)sender;
+- (void)rfShareReport:(UIButton *)sender;
 @end
 
 %subclass FeedFilterSettingsViewController : BaseTableViewController
@@ -673,8 +674,8 @@ static void RFKeepOneSwipeSide(UITableView *tableView, NSString *changedKey, BOO
     case RFSectionSafari:
       return 1;
     case RFSectionDebug:
-      // The switch, then while it's on one row per tracked schema path and a "reset" row.
-      return 1 + (RFDiagnosticsEnabled() ? [[RFSchemaDebug shared] snapshot].count + 1 : 0);
+      // The switch, then while it's on one row per tracked schema path, a "share" row and a "reset" row.
+      return 1 + (RFDiagnosticsEnabled() ? [[RFSchemaDebug shared] snapshot].count + 2 : 0);
     case RFSectionAbout:
       return kAboutRowCount + 1; // plus "Check for updates"
   }
@@ -847,8 +848,23 @@ static void RFKeepOneSwipeSide(UITableView *tableView, NSString *changedKey, BOO
 
   NSArray<NSDictionary *> *snapshot = [[RFSchemaDebug shared] snapshot];
   
+  // Trailing "share" row.
+  if (row == (NSInteger)snapshot.count) {
+    cell.textLabel.textColor = [UIColor systemBlueColor];
+    cell.textLabel.text = @"Share report";
+    cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
+    cell.detailTextLabel.text = @"Copy or send what's listed above, with no usernames or post text";
+    UIButton *shareButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    [shareButton setTitle:@"Share" forState:UIControlStateNormal];
+    shareButton.titleLabel.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightSemibold];
+    [shareButton addTarget:self action:@selector(rfShareReport:) forControlEvents:UIControlEventTouchUpInside];
+    [shareButton sizeToFit];
+    cell.accessoryView = shareButton;
+    return cell;
+  }
+
   // Trailing "reset" row.
-  if (row >= (NSInteger)snapshot.count) {
+  if (row > (NSInteger)snapshot.count) {
     cell.textLabel.textColor = [UIColor systemBlueColor];
     cell.textLabel.text = @"Reset counters";
     cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
@@ -883,16 +899,22 @@ static void RFKeepOneSwipeSide(UITableView *tableView, NSString *changedKey, BOO
   }
   NSArray<NSString *> *feedCards = record[kRFDebugFeedCards];
   if (feedCards) {
-    BOOL unknown = [feedCards.firstObject hasPrefix:@"?"];
     cell.textLabel.textColor = [UIColor labelColor];
     cell.textLabel.text = record[kRFDebugOp];
     if (feedCards.count == 0) {
       cell.detailTextLabel.text = @"\u2713 only posts and ads so far";
       cell.detailTextLabel.textColor = [UIColor systemGreenColor];
     } else {
-      NSString *note = unknown ? @"? Extra cards doesn't know these yet" : @"\u2713 Extra cards can hide these";
-      cell.detailTextLabel.text = [NSString stringWithFormat:@"%@\n%@", note, [feedCards componentsJoinedByString:@"\n"]];
-      cell.detailTextLabel.textColor = unknown ? [UIColor systemOrangeColor] : [UIColor systemGreenColor];
+      NSMutableArray<NSString *> *known = [NSMutableArray array], *unknown = [NSMutableArray array];
+      for (NSString *line in feedCards)
+        [[line hasPrefix:@"?"] ? unknown : known addObject:[line substringFromIndex:2]];
+      NSMutableArray<NSString *> *groups = [NSMutableArray array];
+      if (known.count)
+        [groups addObject:[@"Extra cards can hide:\n" stringByAppendingString:[known componentsJoinedByString:@"\n"]]];
+      if (unknown.count)
+        [groups addObject:[@"Not recognised, worth reporting:\n" stringByAppendingString:[unknown componentsJoinedByString:@"\n"]]];
+      cell.detailTextLabel.text = [groups componentsJoinedByString:@"\n\n"];
+      cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
     }
     return cell;
   }
@@ -993,6 +1015,19 @@ static void RFKeepOneSwipeSide(UITableView *tableView, NSString *changedKey, BOO
                    [weakSender sizeToFit];
                  });
 }
+%new
+- (void)rfShareReport:(UIButton *)sender {
+  NSString *reddit = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"unknown";
+  NSString *report = [NSString stringWithFormat:@"RedditFilter %s, Reddit %@, iOS %@\n\n%@", RF_VERSION, reddit,
+                                                UIDevice.currentDevice.systemVersion,
+                                                [[RFSchemaDebug shared] reportText]];
+  UIActivityViewController *share = [[UIActivityViewController alloc] initWithActivityItems:@[ report ]
+                                                                      applicationActivities:nil];
+  share.popoverPresentationController.sourceView = sender; // needed on iPad
+  share.popoverPresentationController.sourceRect = sender.bounds;
+  [self presentViewController:share animated:YES completion:nil];
+}
+
 %new
 - (void)rfResetCounters:(UIButton *)sender {
   [[RFSchemaDebug shared] reset];

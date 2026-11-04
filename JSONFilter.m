@@ -283,7 +283,10 @@ static BOOL RFIsExtraFeedCardType(NSString *type) {
   static NSSet *types;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
-    types = [NSSet setWithArray:@[ @"CommunityRecommendationsUnitCell", @"MerchandisingUnitCell", @"FeedSurvey" ]];
+    types = [NSSet setWithArray:@[
+      @"CarouselCommunityRecommendationsFeedUnit", @"CommunityRecommendationsUnitCell", @"MerchandisingUnitCell",
+      @"FeedSurvey"
+    ]];
   });
   return type && [types containsObject:type];
 }
@@ -640,11 +643,13 @@ static NSMutableDictionary *RFFeedElements(NSDictionary *json);
 // Diagnostics: notes the feed cards that aren't posts or ads, so a card that wasn't hidden can be
 // named in a bug report.
 static void RFRecordFeedCards(NSDictionary *json, NSString *operation) {
-  if ([operation isEqualToString:@"GamesFeedSdui"]) return; // the Games tab is all cards like these
+  // Only the three Home tabs: the Games tab, profiles and communities have cards of their own.
+  if (![@[ @"HomeFeedSdui", @"FollowingFeed", @"PopularFeedSdui" ] containsObject:operation ?: @""]) return;
   for (id edge in RFArray(RFFeedElements(json)[@"edges"])) {
     NSDictionary *node = RFDict(RFDict(edge)[@"node"]);
     NSString *type = RFString(node[@"__typename"]);
     if (!type || [type isEqualToString:@"AdPost"] || [type isEqualToString:@"PostPreviewComponent"]) continue;
+    if (RFIsVideosForYou(node)) continue; // has its own switch
     if ([type isEqualToString:@"PostCarousel"]) {
       NSString *name = [NSString stringWithFormat:@"PostCarousel %@", RFString(node[@"type"]) ?: @"(no type)"];
       [[RFSchemaDebug shared] recordFeedCardType:name known:YES operation:operation];

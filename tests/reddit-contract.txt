@@ -23,6 +23,7 @@ AdPost
 CellGroup
 RelatedAnswersFeedUnit
 CommunityRecommendationsUnitCell
+CarouselCommunityRecommendationsFeedUnit
 MerchandisingUnitCell
 FeedSurvey
 isScoreHidden

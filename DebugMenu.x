@@ -186,7 +186,7 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
   }];
   NSMutableArray *lines = [NSMutableArray array];
   for (NSString *type in types)
-    [lines addObject:[NSString stringWithFormat:@"%@ %@ \u00b7 %@ \u00b7 last %@",
+    [lines addObject:[NSString stringWithFormat:@"%@ %@ \u00b7 %@ \u00b7 %@",
                                                 [_feedCards[type][@"known"] boolValue] ? @"\u2713" : @"?", type,
                                                 _feedCards[type][@"count"], _feedCards[type][@"op"]]];
   return lines;
@@ -216,6 +216,35 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
     result = out;
   });
   return result;
+}
+
+- (NSString *)reportText {
+  NSMutableArray<NSString *> *lines = [NSMutableArray array];
+  for (NSDictionary *record in [self snapshot]) {
+    NSString *op = record[kRFDebugOp];
+    NSArray<NSString *> *unfiltered = record[kRFDebugUnfiltered];
+    NSArray<NSString *> *feedCards = record[kRFDebugFeedCards];
+    NSInteger hits = [record[kRFDebugHits] integerValue], misses = [record[kRFDebugMisses] integerValue];
+    if (unfiltered) {
+      [lines addObject:[NSString stringWithFormat:@"%@: %@", op, unfiltered.count ? @"" : @"none"]];
+      for (NSString *line in unfiltered) [lines addObject:[@"  " stringByAppendingString:line]];
+    } else if (feedCards) {
+      [lines addObject:[NSString stringWithFormat:@"%@: %@", op, feedCards.count ? @"" : @"none"]];
+      for (NSString *line in feedCards)
+        [lines addObject:[NSString stringWithFormat:@"  %@ %@", [line hasPrefix:@"?"] ? @"not recognised:" : @"known:",
+                                                    [line substringFromIndex:2]]];
+    } else if (![record[kRFDebugSeen] boolValue]) {
+      [lines addObject:[NSString stringWithFormat:@"%@: untested", op]];
+    } else if ([record[kRFDebugLastResolved] boolValue]) {
+      [lines addObject:[NSString stringWithFormat:@"%@: OK, %ld hits, %ld misses", op, (long)hits, (long)misses]];
+    } else {
+      [lines addObject:[NSString stringWithFormat:@"%@: MISS, %ld hits, %ld misses", op, (long)hits, (long)misses]];
+      [lines addObject:[@"  expected: " stringByAppendingString:record[kRFDebugExpected] ?: @""]];
+      if ([record[kRFDebugDiscovered] length])
+        [lines addObject:[@"  found at: " stringByAppendingString:record[kRFDebugDiscovered]]];
+    }
+  }
+  return [lines componentsJoinedByString:@"\n"];
 }
 
 - (void)reset {

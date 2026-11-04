@@ -61,7 +61,7 @@ extern NSString *const kRFDebugFailedJSON;    // NSString  captured JSON on fail
 extern NSString *const kRFDebugUnfiltered;    // NSArray   on the unfiltered-requests row only:
                                               //           one line per address, most requests first
 extern NSString *const kRFDebugFeedCards;     // NSArray   on the feed cards row only: one line per card type,
-                                              //           "?" first for ones Extra cards doesn't know
+                                              //           starting "? " if Extra cards can't hide it, else "\u2713 "
 
 @interface RFSchemaDebug : NSObject
 
@@ -90,6 +90,10 @@ extern NSString *const kRFDebugFeedCards;     // NSArray   on the feed cards row
 // Called for each feed card that isn't a post or an ad. `known` means Extra cards can hide it.
 // Keeps a short list of types, so nothing in the card itself is stored. Thread-safe.
 - (void)recordFeedCardType:(NSString *)type known:(BOOL)known operation:(NSString *)operation;
+
+// What -snapshot shows, as plain text for a bug report. It holds operation names, schema paths,
+// Reddit addresses and card types only: captured JSON is never included. Thread-safe.
+- (NSString *)reportText;
 
 // Zero all counters and clear discovered paths (re-arm the probes).
 - (void)reset;
