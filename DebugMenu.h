@@ -54,6 +54,7 @@ extern NSString *const kRFDebugOp;            // NSString  operation name
 extern NSString *const kRFDebugExpected;      // NSString  hardcoded schema path
 extern NSString *const kRFDebugHits;          // NSNumber  times the path resolved
 extern NSString *const kRFDebugMisses;        // NSNumber  times the path was nil
+extern NSString *const kRFDebugErrors;        // NSNumber  times Reddit answered with an error instead
 extern NSString *const kRFDebugDiscovered;    // NSString  auto-found path (or absent)
 extern NSString *const kRFDebugLastResolved;  // NSNumber  BOOL, last probe outcome
 extern NSString *const kRFDebugSeen;          // NSNumber  BOOL, any traffic observed

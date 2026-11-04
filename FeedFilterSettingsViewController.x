@@ -456,7 +456,7 @@ static NSString *RFFooterText(id settings, NSInteger section) {
       if (!RFDiagnosticsEnabled())
         return @"Turn on if posts or ads come back, then use Reddit for a minute and copy what's shown here "
                @"into your bug report.";
-      return @"✓ found · ✗ not found where expected (RedditFilter searches the whole response instead). "
+      return @"✓ found · ✗ not found where expected (RedditFilter tries the usual places instead). "
              @"Tap Copy on a ✗ row for the new location, or Copy JSON for the response, which can include "
              @"usernames and post text. Share report never includes that JSON. Nothing leaves your device "
              @"unless you copy or share it, and it's cleared when Reddit closes or you turn this off.";
@@ -925,6 +925,7 @@ static void RFKeepOneSwipeSide(UITableView *tableView, NSString *changedKey, BOO
   NSInteger misses = [record[kRFDebugMisses] integerValue];
   BOOL seen = [record[kRFDebugSeen] boolValue];
   BOOL lastResolved = [record[kRFDebugLastResolved] boolValue];
+  NSInteger redditErrors = [record[kRFDebugErrors] integerValue];
 
   cell.textLabel.textColor = [UIColor labelColor];
   cell.textLabel.text = op;
@@ -940,7 +941,13 @@ static void RFKeepOneSwipeSide(UITableView *tableView, NSString *changedKey, BOO
     if (misses > 0)
       detail = [detail stringByAppendingFormat:@"  (recovered after %ld miss%@)",
                                                (long)misses, misses == 1 ? @"" : @"es"];
+    if (redditErrors > 0)
+      detail = [detail stringByAppendingFormat:@" \u00b7 %ld Reddit error%@", (long)redditErrors,
+                                               redditErrors == 1 ? @"" : @"s"];
     detailColor = [UIColor systemGreenColor];
+  } else if (misses == 0) {
+    detail = [NSString stringWithFormat:@"only Reddit errors so far \u00b7 %ld", (long)redditErrors];
+    detailColor = [UIColor secondaryLabelColor];
   } else {
     detail = [NSString stringWithFormat:@"\u2717 MISS \u00b7 %ld miss%@ \u00b7 fallback active",
                                         (long)misses, misses == 1 ? @"" : @"es"];

@@ -170,6 +170,22 @@ int main(void) {
     Check([[cardLines componentsJoinedByString:@"|"] containsString:@"\u2713 PostCarousel TRENDING"], @"Carousels name their type");
     Check(![[cardLines componentsJoinedByString:@"|"] containsString:@"VIDEO_RECOMMENDATIONS"], @"Videos for you has its own switch");
     Check(![[cardLines componentsJoinedByString:@"|"] containsString:@"OwnCardOfThisPage"], @"Only the Home tabs are listed");
+    NSDictionary *(^adsRow)(void) = ^NSDictionary *{
+      for (NSDictionary *row in [[RFSchemaDebug shared] snapshot])
+        if ([row[kRFDebugOp] isEqual:@"PdpCommentsAds"]) return row;
+      return nil;
+    };
+    NSDictionary *adsError = @{@"data": @{@"postInfoById": @{@"__typename": @"SubredditPost"}}, @"errors": @[@{@"message": @"Internal error"}]};
+    Filter(adsError, @"PdpCommentsAds", ads);
+    Check([adsRow()[kRFDebugErrors] integerValue] == 1 && [adsRow()[kRFDebugMisses] integerValue] == 0, @"A Reddit error isn't a miss");
+    Check(adsRow()[kRFDebugDiscovered] == nil, @"A Reddit error isn't a new location");
+    Check([[[RFSchemaDebug shared] reportText] containsString:@"PdpCommentsAds: only Reddit errors so far, 1 Reddit error"], @"The report says it was an error");
+    Filter(Post(@{@"pdpCommentsAds": @{@"adPosts": @[]}}), @"PdpCommentsAds", ads);
+    Check([[[RFSchemaDebug shared] reportText] containsString:@"PdpCommentsAds: OK, 1 hits, 0 misses, 1 Reddit error"], @"Errors stay visible after a hit");
+    [[RFSchemaDebug shared] reset];
+    Filter(@{@"data": @{@"postInfoById": @{@"__typename": @"SubredditPost"}}, @"errors": @[]}, @"PdpCommentsAds", ads);
+    Check([adsRow()[kRFDebugMisses] integerValue] == 1 && ![adsRow()[kRFDebugDiscovered] isEqual:@"errors"], @"A real miss still counts, and errors is never the new location");
+    Filter(Feed(@[newCard, Card(@{@"__typename": @"FeedSurvey"})]), @"HomeFeedSdui", off);
     NSDictionary *secretFeed = @{@"data": @{@"homeV4": @{@"elements": @{@"edges": @"no longer a list", @"author": @"secret_user"}}}};
     Filter(secretFeed, @"HomeFeedSdui", off);
     NSString *report = [[RFSchemaDebug shared] reportText];

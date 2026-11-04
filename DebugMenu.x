@@ -18,6 +18,7 @@ NSString *const kRFDebugOp = @"op";
 NSString *const kRFDebugExpected = @"expected";
 NSString *const kRFDebugHits = @"hits";
 NSString *const kRFDebugMisses = @"misses";
+NSString *const kRFDebugErrors = @"errors";
 NSString *const kRFDebugDiscovered = @"discovered";
 NSString *const kRFDebugLastResolved = @"lastResolved";
 NSString *const kRFDebugSeen = @"seen";
@@ -93,6 +94,7 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
     kRFDebugExpected : expected,
     kRFDebugHits : @0,
     kRFDebugMisses : @0,
+    kRFDebugErrors : @0,
     kRFDebugLastResolved : @NO,
     kRFDebugSeen : @NO,
   } mutableCopy];
@@ -105,10 +107,17 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
               signature:(RFSchemaSig)signature {
   if (operation.length == 0) return;
 
+  // An error instead of the data says nothing about where the data lives now.
+  id errors = [json isKindOfClass:NSDictionary.class] ? json[@"errors"] : nil;
+  BOOL redditError = !resolved && [errors isKindOfClass:NSArray.class] && [errors count] > 0;
+
   __block BOOL needsDiscovery = NO;
   dispatch_sync(_queue, ^{
     NSMutableDictionary *record = _records[operation];
-    if (record) {
+    if (record && redditError) {
+      record[kRFDebugSeen] = @YES;
+      record[kRFDebugErrors] = @([record[kRFDebugErrors] integerValue] + 1);
+    } else if (record) {
         // 1. Update the stats so it no longer says "untested"
         record[kRFDebugSeen] = @YES;
         record[kRFDebugLastResolved] = @(resolved);
@@ -225,6 +234,8 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
     NSArray<NSString *> *unfiltered = record[kRFDebugUnfiltered];
     NSArray<NSString *> *feedCards = record[kRFDebugFeedCards];
     NSInteger hits = [record[kRFDebugHits] integerValue], misses = [record[kRFDebugMisses] integerValue];
+    NSInteger errors = [record[kRFDebugErrors] integerValue];
+    NSString *errorNote = errors ? [NSString stringWithFormat:@", %ld Reddit error%@", (long)errors, errors == 1 ? @"" : @"s"] : @"";
     if (unfiltered) {
       [lines addObject:[NSString stringWithFormat:@"%@: %@", op, unfiltered.count ? @"" : @"none"]];
       for (NSString *line in unfiltered) [lines addObject:[@"  " stringByAppendingString:line]];
@@ -236,9 +247,11 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
     } else if (![record[kRFDebugSeen] boolValue]) {
       [lines addObject:[NSString stringWithFormat:@"%@: untested", op]];
     } else if ([record[kRFDebugLastResolved] boolValue]) {
-      [lines addObject:[NSString stringWithFormat:@"%@: OK, %ld hits, %ld misses", op, (long)hits, (long)misses]];
+      [lines addObject:[NSString stringWithFormat:@"%@: OK, %ld hits, %ld misses%@", op, (long)hits, (long)misses, errorNote]];
+    } else if (!misses) {
+      [lines addObject:[NSString stringWithFormat:@"%@: only Reddit errors so far%@", op, errorNote]];
     } else {
-      [lines addObject:[NSString stringWithFormat:@"%@: MISS, %ld hits, %ld misses", op, (long)hits, (long)misses]];
+      [lines addObject:[NSString stringWithFormat:@"%@: MISS, %ld hits, %ld misses%@", op, (long)hits, (long)misses, errorNote]];
       [lines addObject:[@"  expected: " stringByAppendingString:record[kRFDebugExpected] ?: @""]];
       if ([record[kRFDebugDiscovered] length])
         [lines addObject:[@"  found at: " stringByAppendingString:record[kRFDebugDiscovered]]];
@@ -253,6 +266,7 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
       NSMutableDictionary *record = _records[op];
       record[kRFDebugHits] = @0;
       record[kRFDebugMisses] = @0;
+      record[kRFDebugErrors] = @0;
       record[kRFDebugLastResolved] = @NO;
       record[kRFDebugSeen] = @NO;
       [record removeObjectForKey:kRFDebugDiscovered];
@@ -360,6 +374,7 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
     if ([value isKindOfClass:NSDictionary.class]) {
       [(NSDictionary *)value enumerateKeysAndObjectsUsingBlock:^(id childKey, id childValue, BOOL *stop) {
         if (![childKey isKindOfClass:NSString.class]) return;
+        if (!path.length && [childKey isEqualToString:@"errors"]) return; // Reddit's errors, never its data
         NSString *childPath = path.length
                                   ? [NSString stringWithFormat:@"%@.%@", path, childKey]
                                   : (NSString *)childKey;
