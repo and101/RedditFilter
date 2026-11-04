@@ -13,8 +13,8 @@
 static BOOL gSwipeCollapseEnabled;
 static BOOL gTapCollapseEnabled = YES;
 static BOOL gSwipeCollapseHapticsEnabled = YES;
+static BOOL gSwipeLeftCollapseEnabled = YES;
 static BOOL gSwipeRightCollapseEnabled;
-static BOOL gSwipeRightOnly;
 static NSHashTable<UIView *> *gSwipeCollapseCards;
 static NSHashTable<UIGestureRecognizer *> *gDisabledHeaderRecognizers;
 static const void *kRFSwipeCollapseRecognizerKey = &kRFSwipeCollapseRecognizerKey;
@@ -542,11 +542,10 @@ static UIImpactFeedbackGenerator *RFSwipeCollapseHaptics(void) {
   return !RFTouchBelongsToOwnHorizontalGesture(touch.view, card) && RFExpandedHeaderInCard(card) != nil;
 }
 
-// Leftward swipes on an expanded comment are claimed unless Swipe right only is
-// on, and rightward ones with Swipe right too on, unless they start at the
-// screen's left edge. All other swipes, and every swipe on a collapsed comment
-// (which has no recognizer), stay with Reddit: scrolling, moving between posts,
-// going back.
+// Swipes on an expanded comment are claimed in the directions switched on,
+// except rightward ones that start at the screen's left edge. All other swipes,
+// and every swipe on a collapsed comment (which has no recognizer), stay with
+// Reddit: scrolling, moving between posts, going back.
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
   if (gestureRecognizer.view != nil && RFIsCommentTextSlice(gestureRecognizer.view)) return YES; // the text's long press
   if (![gestureRecognizer isKindOfClass:UIPanGestureRecognizer.class] || !gSwipeCollapseEnabled)
@@ -555,7 +554,7 @@ static UIImpactFeedbackGenerator *RFSwipeCollapseHaptics(void) {
   UIView *card = swipe.view;
   CGFloat startX = [objc_getAssociatedObject(swipe, kRFSwipeCollapseStartXKey) doubleValue];
   NSInteger direction = RFSwipeDirectionToClaim([swipe translationInView:card], [swipe velocityInView:card], startX,
-                                                gSwipeRightCollapseEnabled, gSwipeRightOnly);
+                                                gSwipeLeftCollapseEnabled, gSwipeRightCollapseEnabled);
   BOOL shouldBegin = direction != 0 && RFExpandedHeaderInCard(card) != nil;
   if (shouldBegin) {
     objc_setAssociatedObject(swipe, kRFSwipeCollapseDirectionKey, @(direction), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -726,15 +725,15 @@ static void RFPrepareSwipeCollapseHeader(UIView *header) {
   [gSwipeCollapseCards addObject:card];
 }
 
-void RFSetSwipeCollapse(BOOL enabled, BOOL tapToo, BOOL haptics, BOOL rightToo, BOOL rightOnly) {
+void RFSetSwipeCollapse(BOOL enabled, BOOL tapToo, BOOL haptics, BOOL left, BOOL right) {
   if (![NSThread isMainThread]) {
-    dispatch_async(dispatch_get_main_queue(), ^{ RFSetSwipeCollapse(enabled, tapToo, haptics, rightToo, rightOnly); });
+    dispatch_async(dispatch_get_main_queue(), ^{ RFSetSwipeCollapse(enabled, tapToo, haptics, left, right); });
     return;
   }
   BOOL tapChanged = gTapCollapseEnabled != tapToo;
   gSwipeCollapseHapticsEnabled = haptics;
-  gSwipeRightCollapseEnabled = rightToo;
-  gSwipeRightOnly = rightOnly;
+  gSwipeLeftCollapseEnabled = left;
+  gSwipeRightCollapseEnabled = right;
   gTapCollapseEnabled = tapToo;
   if (!enabled || tapToo) RFRestoreAllHeaderRecognizers();
   if (gSwipeCollapseEnabled == enabled) {
@@ -789,6 +788,6 @@ void RFSetSwipeCollapse(BOOL enabled, BOOL tapToo, BOOL haptics, BOOL rightToo, 
   RFSetSwipeCollapse([defaults boolForKey:kRedditFilterSwipeToCollapse],
                      [defaults boolForKey:kRedditFilterTapToCollapse],
                      [defaults boolForKey:kRedditFilterSwipeCollapseHaptics],
-                     [defaults boolForKey:kRedditFilterSwipeRightToCollapse],
-                     [defaults boolForKey:kRedditFilterSwipeRightOnly]);
+                     [defaults boolForKey:kRedditFilterSwipeLeftToCollapse],
+                     [defaults boolForKey:kRedditFilterSwipeRightToCollapse]);
 }

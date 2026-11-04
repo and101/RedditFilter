@@ -68,13 +68,12 @@ static const NSInteger kCollapseRowCount = sizeof(kCollapseRows) / sizeof(kColla
 // The Swipe to collapse page. Their switch tags follow kDiagnosticsRow's.
 static const RFToggleRow kSwipeRows[] = {
     {kRedditFilterSwipeToCollapse, @"Swipe to collapse",
-     @"Swipe a comment to collapse it, or swipe further to collapse the whole thread",
+     @"Swipe left by default. Swipe further to collapse the whole thread",
      @"rpl3/swipeLeft,rpl3/comment,icon_comment", NO},
-    {kRedditFilterSwipeRightToCollapse, @"Swipe right too",
-     @"Swipe right to collapse as well. Swiping from the screen edge still goes back",
+    {kRedditFilterSwipeLeftToCollapse, @"Swipe left", @"Off, swiping left only moves to the next post",
+     @"rpl3/swipeLeft,rpl3/comment,icon_comment", NO, kRedditFilterSwipeToCollapse},
+    {kRedditFilterSwipeRightToCollapse, @"Swipe right", @"Swiping from the screen edge still goes back",
      @"rpl3/swipeRight,rpl3/comment,icon_comment", NO, kRedditFilterSwipeToCollapse},
-    {kRedditFilterSwipeRightOnly, @"Swipe right only", @"Swiping left only moves to the next post",
-     @"rpl3/swipeRight,rpl3/comment,icon_comment", NO, kRedditFilterSwipeRightToCollapse},
     {kRedditFilterSwipeCollapseHaptics, @"Swipe haptics",
      @"Vibrate when your swipe reaches Collapse or Collapse thread", @"rpl3/swipeLeft,rpl3/comment,icon_comment", NO,
      kRedditFilterSwipeToCollapse},
@@ -439,7 +438,8 @@ static NSString *RFFooterText(id settings, NSInteger section) {
       return @"With swipe to collapse off, tapping a comment collapses it as usual. "
              @"A collapsed comment always opens with a tap.";
     case RFSectionSwipe:
-      return @"Swiping a collapsed comment or the post itself still moves between posts or goes back.";
+      return @"Turn on Swipe left and Swipe right to collapse either way. Swiping a collapsed comment or "
+             @"the post itself still moves between posts or goes back.";
     case RFSectionRedgifs:
       return @"Plays RedGIFs' own videos, which have sound. Your device connects to RedGIFs directly. "
              @"If RedGIFs can't be reached, Reddit's silent version plays. "
@@ -553,9 +553,9 @@ static UITableViewCell *RFSwipeCell(UITableView *tableView) {
   NSString *subtitle = @"Off";
   if ([defaults boolForKey:kRedditFilterSwipeToCollapse]) {
     BOOL right = [defaults boolForKey:kRedditFilterSwipeRightToCollapse];
-    subtitle = !right                                          ? @"On, swiping left"
-               : [defaults boolForKey:kRedditFilterSwipeRightOnly] ? @"On, swiping right"
-                                                                   : @"On, swiping left or right";
+    subtitle = !right ? @"On, swiping left"
+               : [defaults boolForKey:kRedditFilterSwipeLeftToCollapse] ? @"On, swiping left or right"
+                                                                        : @"On, swiping right";
   }
   return RFLinkCell(tableView, @"Swipe to collapse", subtitle, @"rpl3/swipeLeft,rpl3/comment,icon_comment", nil);
 }
@@ -578,6 +578,19 @@ static void RFShowSafariSetup(UIViewController *controller) {
                 preferredStyle:UIAlertControllerStyleAlert];
   [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
   [controller presentViewController:alert animated:YES completion:nil];
+}
+
+// Swiping needs a side, so turning off the only one on moves it to the other.
+static void RFKeepOneSwipeSide(UITableView *tableView, NSString *changedKey, BOOL on) {
+  NSString *other = [changedKey isEqualToString:kRedditFilterSwipeLeftToCollapse]    ? kRedditFilterSwipeRightToCollapse
+                    : [changedKey isEqualToString:kRedditFilterSwipeRightToCollapse] ? kRedditFilterSwipeLeftToCollapse
+                                                                                     : nil;
+  NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+  if (!other || on || [defaults boolForKey:other]) return;
+  [defaults setBool:YES forKey:other];
+  for (UITableViewCell *cell in tableView.visibleCells)
+    if ([cell.accessibilityLabel isEqualToString:RFToggleRowForKey(other)->title])
+      [RFSwitch((RFSettingsCell *)cell) setOn:YES animated:YES];
 }
 
 // Declarations for the Debug section's helpers so the call sites below are typed.
@@ -707,6 +720,7 @@ static void RFShowSafariSetup(UIViewController *controller) {
   if (!row) return;
   BOOL filterOn = row->switchOnMeansShow ? !sender.on : sender.on;
   [NSUserDefaults.standardUserDefaults setBool:filterOn forKey:row->key];
+  RFKeepOneSwipeSide(self.tableView, row->key, filterOn);
   RFReloadPreferences();
 
   // Some accounts are in a Reddit experiment that loads Home ads where the filter can't see them.

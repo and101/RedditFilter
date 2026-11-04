@@ -6,9 +6,8 @@ extern "C" {
 #endif
 
 // tapToo keeps Reddit's tap and long press on expanded comments while swipe is on.
-// rightToo also collapses on right swipes that don't start at the screen's left edge.
-// rightOnly leaves left swipes to Reddit, and needs rightToo.
-void RFSetSwipeCollapse(BOOL enabled, BOOL tapToo, BOOL haptics, BOOL rightToo, BOOL rightOnly);
+// left and right say which swipes collapse. Right swipes that start at the screen's left edge never do.
+void RFSetSwipeCollapse(BOOL enabled, BOOL tapToo, BOOL haptics, BOOL left, BOOL right);
 
 // Pure gesture/label rules, kept separate so their edge cases can be tested.
 // The collapse rules below are written for left swipes; mirror a right swipe to use them.
@@ -16,8 +15,7 @@ CGPoint RFMirroredSwipeVector(CGPoint vector);
 BOOL RFHasLeftSwipeDirection(CGPoint translation, CGPoint velocity);
 // -1 for a left swipe to claim, 1 for a right one, 0 to leave it with Reddit.
 // startX is where the finger first touched, in screen points.
-NSInteger RFSwipeDirectionToClaim(CGPoint translation, CGPoint velocity, CGFloat startX, BOOL rightToo,
-                                  BOOL rightOnly);
+NSInteger RFSwipeDirectionToClaim(CGPoint translation, CGPoint velocity, CGFloat startX, BOOL left, BOOL right);
 BOOL RFShouldCollapseForSwipe(CGPoint translation, CGPoint velocity);
 BOOL RFShouldCollapseThreadForSwipe(CGPoint translation, CGFloat headerWidth);
 CGFloat RFThreadCollapseDistance(CGFloat headerWidth);

@@ -40,8 +40,8 @@ extern "C" void RFReloadPreferences(void) {
   RFSetSwipeCollapse([defaults boolForKey:kRedditFilterSwipeToCollapse],
                      [defaults boolForKey:kRedditFilterTapToCollapse],
                      [defaults boolForKey:kRedditFilterSwipeCollapseHaptics],
-                     [defaults boolForKey:kRedditFilterSwipeRightToCollapse],
-                     [defaults boolForKey:kRedditFilterSwipeRightOnly]);
+                     [defaults boolForKey:kRedditFilterSwipeLeftToCollapse],
+                     [defaults boolForKey:kRedditFilterSwipeRightToCollapse]);
 }
 
 #pragma mark - Helpers shared with the settings screen
@@ -538,8 +538,8 @@ BOOL RFCleanCachedExperiments(void) {
     kRedditFilterSwipeToCollapse : @NO,
     kRedditFilterSwipeCollapseHaptics : @YES,
     kRedditFilterTapToCollapse : @NO,
+    kRedditFilterSwipeLeftToCollapse : @YES,
     kRedditFilterSwipeRightToCollapse : @NO,
-    kRedditFilterSwipeRightOnly : @NO,
     kRedditFilterVideosForYou : @NO,
     kRedditFilterKeywordComments : @NO,
     kRedditFilterKeywordCommentReplies : @YES,

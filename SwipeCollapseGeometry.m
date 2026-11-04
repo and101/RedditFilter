@@ -26,10 +26,9 @@ BOOL RFHasLeftSwipeDirection(CGPoint translation, CGPoint velocity) {
   return movedLeft || movingLeft;
 }
 
-NSInteger RFSwipeDirectionToClaim(CGPoint translation, CGPoint velocity, CGFloat startX, BOOL rightToo,
-                                  BOOL rightOnly) {
-  if (RFHasLeftSwipeDirection(translation, velocity)) return rightToo && rightOnly ? 0 : -1;
-  if (!rightToo || startX < kRFBackEdgeWidth) return 0;
+NSInteger RFSwipeDirectionToClaim(CGPoint translation, CGPoint velocity, CGFloat startX, BOOL left, BOOL right) {
+  if (RFHasLeftSwipeDirection(translation, velocity)) return left ? -1 : 0;
+  if (!right || startX < kRFBackEdgeWidth) return 0;
   return RFHasLeftSwipeDirection(RFMirroredSwipeVector(translation), RFMirroredSwipeVector(velocity)) ? 1 : 0;
 }
 
