@@ -111,6 +111,30 @@ int main(void) {
       @{@"post": @{@"isNsfw": @YES}}, @{@"post": @{@"isNsfw": @NO}}, NSNull.null
     ]}}};
     Check([Filter(highlights, @"Unknown", nsfw)[@"data"][@"subredditInfoByName"][@"highlightedPosts"] count] == 2, @"Filter NSFW highlights only");
+
+    // Extra feed cards
+    RFPrefs extraCards = {.extraCards = YES};
+    NSDictionary *plainCard = Card(@{@"__typename": @"ClassicCell"});
+    NSDictionary *extraVideos = @{@"__typename": @"PostCarousel", @"id": @"v", @"type": @"VIDEO_RECOMMENDATIONS"};
+    NSDictionary *extraFeed = Feed(@[
+      @{@"__typename": @"CommunityRecommendationsUnitCell", @"id": @"r", @"communityRecommendations": @[@{@"id": @"x"}]},
+      Card(@{@"__typename": @"MerchandisingUnitCell", @"id": @"m"}),
+      Card(@{@"__typename": @"FeedSurvey", @"id": @"s"}),
+      @{@"__typename": @"PostCarousel", @"id": @"t", @"type": @"TRENDING"},
+      extraVideos, plainCard,
+    ]);
+    NSArray *extraEdges = Filter(extraFeed, @"HomeFeedSdui", extraCards)[@"data"][@"homeV3"][@"elements"][@"edges"];
+    for (NSUInteger i = 0; i < 4; i++) {
+      Check([extraEdges[i][@"node"][@"__typename"] isEqual:@"CellGroup"] && [extraEdges[i][@"node"][@"cells"] count] == 0,
+            @"Swap an extra card for an empty one");
+      Check(extraEdges.count == 6 && [extraEdges[i][@"node"][@"id"] length] > 0, @"Keep the feed's length and an ID");
+    }
+    Check([extraEdges[4][@"node"][@"__typename"] isEqual:@"PostCarousel"], @"Videos for you keeps its own switch");
+    Check([extraEdges[5][@"node"] isEqual:plainCard], @"Keep posts");
+    Check([Filter(extraFeed, @"HomeFeedSdui", off) isEqual:extraFeed], @"Keep extra cards with the filter off");
+    NSArray *subredditCards = Filter(@{@"data": @{@"subredditV3": @{@"elements": @{@"edges": @[@{@"node": @{@"__typename": @"PostCarousel", @"id": @"t"}}]}}}},
+                                     @"SubredditFeedSdui", extraCards)[@"data"][@"subredditV3"][@"elements"][@"edges"];
+    Check([subredditCards[0][@"node"][@"__typename"] isEqual:@"CellGroup"], @"Filter other feeds too");
     Check([Filter(highlights, @"Unknown", off) isEqual:highlights], @"Disabled filter preserves highlights");
     RFPrefs videos = {.videosForYou = YES};
     NSDictionary *videoCarousel = @{@"__typename": @"PostCarousel", @"type": @"VIDEO_RECOMMENDATIONS",

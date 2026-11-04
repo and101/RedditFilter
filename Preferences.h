@@ -12,6 +12,7 @@
 #define kRedditFilterSwipeLeftToCollapse @"kRedditFilterSwipeLeftToCollapse" // with swipe on, left swipes collapse
 #define kRedditFilterSwipeRightToCollapse @"kRedditFilterSwipeRightToCollapse" // with swipe on, right swipes collapse
 #define kRedditFilterVideosForYou @"kRedditFilterVideosForYou"
+#define kRedditFilterExtraCards @"kRedditFilterExtraCards" // hide suggestion, promo and survey cards in feeds
 #define kRedditFilterKeywords @"kRedditFilterKeywords" // array of strings
 #define kRedditFilterKeywordComments @"kRedditFilterKeywordComments"
 #define kRedditFilterKeywordCommentReplies @"kRedditFilterKeywordCommentReplies"

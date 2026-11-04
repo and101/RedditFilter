@@ -34,7 +34,7 @@ static id RFValueAtPath(id root, NSString *path) {
 }
 
 BOOL RFPrefsAnyEnabled(RFPrefs p) {
-  return p.promoted || p.recommended || p.nsfw || p.awards || p.scores || p.automod || p.videosForYou || p.keywords ||
+  return p.promoted || p.recommended || p.nsfw || p.awards || p.scores || p.automod || p.videosForYou || p.extraCards || p.keywords ||
          p.redgifsDirect;
 }
 
@@ -274,6 +274,29 @@ static BOOL RFIsVideosForYou(id node) {
          [RFString(carousel[@"type"]) isEqualToString:@"VIDEO_RECOMMENDATIONS"];
 }
 
+// Feed cards that aren't posts: suggested communities, promos and surveys. They can be the feed
+// element itself or a cell of an otherwise empty card. Other carousels of posts count too; Videos
+// for you has its own switch.
+static BOOL RFIsExtraFeedCardType(NSString *type) {
+  static NSSet *types;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    types = [NSSet setWithArray:@[ @"CommunityRecommendationsUnitCell", @"MerchandisingUnitCell", @"FeedSurvey" ]];
+  });
+  return type && [types containsObject:type];
+}
+
+static BOOL RFIsExtraFeedCard(id node) {
+  NSDictionary *card = RFDict(node);
+  NSString *type = RFString(card[@"__typename"]);
+  if (RFIsExtraFeedCardType(type)) return YES;
+  if ([type isEqualToString:@"PostCarousel"]) return !RFIsVideosForYou(card);
+  if (![type isEqualToString:@"CellGroup"]) return NO;
+  for (id cell in RFArray(card[@"cells"]))
+    if (RFIsExtraFeedCardType(RFString(RFDict(cell)[@"__typename"]))) return YES;
+  return NO;
+}
+
 // Some feed cards hold the whole post, title and full text included.
 static BOOL RFIsKeywordPostPreview(id node, const RFContext *ctx) {
   NSDictionary *preview = RFDict(node);
@@ -301,8 +324,9 @@ static BOOL RFFilterEdges(NSArray *edges, const RFContext *ctx) {
   for (id edge in edges) {
     NSMutableDictionary *wrapper = RFMutableDict(edge);
     BOOL videos = wrapper && ctx->prefs.videosForYou && RFIsVideosForYou(wrapper[@"node"]);
-    if (videos || (wrapper && RFIsKeywordPostPreview(wrapper[@"node"], ctx))) {
-      RFCount(videos ? RFStatVideosForYou : RFStatKeywordPosts, wrapper[@"node"]);
+    BOOL extra = wrapper && ctx->prefs.extraCards && RFIsExtraFeedCard(wrapper[@"node"]);
+    if (videos || extra || (wrapper && RFIsKeywordPostPreview(wrapper[@"node"], ctx))) {
+      RFCount(videos ? RFStatVideosForYou : extra ? RFStatExtraCards : RFStatKeywordPosts, wrapper[@"node"]);
       wrapper[@"node"] = RFEmptyCard(wrapper[@"node"]);
       changed = YES;
       continue;

@@ -15,6 +15,7 @@ typedef NS_ENUM(NSInteger, RFStat) {
   RFStatNSFW,            // NSFW posts
   RFStatKeywordPosts,    // posts that mention a keyword
   RFStatKeywordComments, // comments that mention a keyword, and replies hidden with them
+  RFStatExtraCards,      // suggestion, promo and survey cards in feeds
   RFStatCount
 };
 

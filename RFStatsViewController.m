@@ -29,6 +29,7 @@ static const RFStatInfo kRFStatInfo[RFStatCount] = {
     [RFStatNSFW] = {@"NSFW Posts", @"eye.slash.fill"},
     [RFStatKeywordPosts] = {@"Posts with Keywords", @"text.magnifyingglass"},
     [RFStatKeywordComments] = {@"Comments with Keywords", @"bubble.left.and.bubble.right.fill"},
+    [RFStatExtraCards] = {@"Extra Feed Cards", @"rectangle.stack.fill"},
 };
 
 static UIColor *RFStatColor(RFStat stat) {
@@ -40,6 +41,7 @@ static UIColor *RFStatColor(RFStat stat) {
     case RFStatNSFW: return UIColor.systemRedColor;
     case RFStatKeywordPosts: return UIColor.systemTealColor;
     case RFStatKeywordComments: return UIColor.systemGreenColor;
+    case RFStatExtraCards: return UIColor.systemIndigoColor;
     case RFStatCount: break;
   }
   return UIColor.systemGrayColor;

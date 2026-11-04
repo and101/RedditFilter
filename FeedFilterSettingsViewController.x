@@ -28,6 +28,8 @@ static const RFToggleRow kToggleRows[] = {
     {kRedditFilterNSFW, @"NSFW", @"Show NSFW posts", @"rpl3/nsfw,icon_nsfw_outline,icon_nsfw", YES},
     {kRedditFilterVideosForYou, @"Videos for you", @"Show the video carousel in your feed",
      @"rpl3/video,icon_video,icon_play", YES},
+    {kRedditFilterExtraCards, @"Extra cards", @"Show suggested communities, promos and surveys in your feed",
+     @"rpl3/community,rpl3/communities,icon_community", YES},
     {kRedditFilterAwards, @"Awards", @"Show awards on posts and comments",
      @"rpl3/award,icon_gift_fill,icon_award,icon-award-outline", YES},
     {kRedditFilterScores, @"Scores", @"Show vote count on posts and comments", @"rpl3/upvote,icon_upvote", YES},

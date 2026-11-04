@@ -16,6 +16,7 @@ static NSString *const kRFStatsDefaultsKey = @"kRedditFilterStats";
 // Stored by name, so reordering RFStat never mixes up saved counts.
 static NSString *const kRFStatNames[RFStatCount] = {
     @"feedAds", @"commentAds", @"recommended", @"videosForYou", @"nsfw", @"keywordPosts", @"keywordComments",
+    @"extraCards",
 };
 static const NSUInteger kRFDaysKept = 30;
 static const NSUInteger kRFSeenLimit = 5000; // IDs remembered for counting once per launch

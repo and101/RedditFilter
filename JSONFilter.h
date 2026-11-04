@@ -14,6 +14,7 @@ typedef struct {
   BOOL scores;
   BOOL automod;
   BOOL videosForYou;
+  BOOL extraCards; // hide suggestion, promo and survey cards in feeds
   BOOL keywords; // YES when RFSetFilterKeywords was given at least one keyword
   BOOL keywordComments; // also hide comments that mention a keyword
   BOOL keywordCommentReplies; // ...and their replies. NO: leave a placeholder and keep the replies

@@ -22,6 +22,9 @@ adPayload
 AdPost
 CellGroup
 RelatedAnswersFeedUnit
+CommunityRecommendationsUnitCell
+MerchandisingUnitCell
+FeedSurvey
 isScoreHidden
 isAwardHidden
 isInitiallyCollapsed

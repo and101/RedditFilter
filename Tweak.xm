@@ -23,6 +23,7 @@ extern "C" void RFReloadPreferences(void) {
   prefs.scores = [defaults boolForKey:kRedditFilterScores];
   prefs.automod = [defaults boolForKey:kRedditFilterAutoCollapseAutoMod];
   prefs.videosForYou = [defaults boolForKey:kRedditFilterVideosForYou];
+  prefs.extraCards = [defaults boolForKey:kRedditFilterExtraCards];
   NSArray *keywords = [defaults arrayForKey:kRedditFilterKeywords];
   RFSetFilterKeywords(keywords);
   prefs.keywords = keywords.count > 0;
@@ -541,6 +542,7 @@ BOOL RFCleanCachedExperiments(void) {
     kRedditFilterSwipeLeftToCollapse : @YES,
     kRedditFilterSwipeRightToCollapse : @NO,
     kRedditFilterVideosForYou : @NO,
+    kRedditFilterExtraCards : @NO,
     kRedditFilterKeywordComments : @NO,
     kRedditFilterKeywordCommentReplies : @YES,
     kRedditFilterRedgifsDirect : @NO,
