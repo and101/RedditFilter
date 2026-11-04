@@ -40,10 +40,12 @@ BOOL RFPrefsAnyEnabled(RFPrefs p) {
 
 #pragma mark - Counting what's hidden
 
-// The ID of a post, comment or feed card, or of the node a { node: ... } wrapper holds.
+// The ID of a post, comment or feed card, or of the node a { node: ... } wrapper holds. A card's
+// groupId is its post's ID, so a card and the same post's details count once.
 static NSString *RFItemId(id item) {
   NSDictionary *dict = RFDict(item);
-  return RFString(dict[@"id"]) ?: RFString(RFDict(dict[@"node"])[@"id"]) ?: RFString(RFDict(dict[@"post"])[@"id"]);
+  return RFString(dict[@"groupId"]) ?: RFString(dict[@"id"]) ?: RFString(RFDict(dict[@"node"])[@"id"]) ?:
+         RFString(RFDict(dict[@"post"])[@"id"]);
 }
 
 static void RFCount(RFStat stat, id item) { RFStatsRecord(stat, RFItemId(item)); }
@@ -286,13 +288,21 @@ static BOOL RFIsExtraFeedCardType(NSString *type) {
   return type && [types containsObject:type];
 }
 
+// Every post card has an ActionCell, the row with the vote buttons.
+static BOOL RFCellsIncludePost(NSArray *cells) {
+  for (id cell in cells)
+    if ([RFString(RFDict(cell)[@"__typename"]) isEqualToString:@"ActionCell"]) return YES;
+  return NO;
+}
+
 static BOOL RFIsExtraFeedCard(id node) {
   NSDictionary *card = RFDict(node);
   NSString *type = RFString(card[@"__typename"]);
   if (RFIsExtraFeedCardType(type)) return YES;
   if ([type isEqualToString:@"PostCarousel"]) return !RFIsVideosForYou(card);
-  if (![type isEqualToString:@"CellGroup"]) return NO;
-  for (id cell in RFArray(card[@"cells"]))
+  NSArray *cells = RFArray(card[@"cells"]);
+  if (![type isEqualToString:@"CellGroup"] || RFCellsIncludePost(cells)) return NO;
+  for (id cell in cells)
     if (RFIsExtraFeedCardType(RFString(RFDict(cell)[@"__typename"]))) return YES;
   return NO;
 }
@@ -628,7 +638,7 @@ static NSSet<NSString *> *RFIgnoredOperations(void) {
 static NSMutableDictionary *RFFeedElements(NSDictionary *json);
 
 // Diagnostics: notes the feed cards that aren't posts or ads, so a card that wasn't hidden can be
-// named in a bug report. Every post card has an ActionCell, the row with the vote buttons.
+// named in a bug report.
 static void RFRecordFeedCards(NSDictionary *json, NSString *operation) {
   if ([operation isEqualToString:@"GamesFeedSdui"]) return; // the Games tab is all cards like these
   for (id edge in RFArray(RFFeedElements(json)[@"edges"])) {
@@ -646,9 +656,7 @@ static void RFRecordFeedCards(NSDictionary *json, NSString *operation) {
     }
     if (RFDict(node[@"adPayload"])) continue;
     NSArray *cells = RFArray(node[@"cells"]);
-    BOOL post = NO;
-    for (id cell in cells) post |= [RFString(RFDict(cell)[@"__typename"]) isEqualToString:@"ActionCell"];
-    if (post) continue;
+    if (RFCellsIncludePost(cells)) continue;
     for (id cell in cells) {
       NSString *cellType = RFString(RFDict(cell)[@"__typename"]);
       if ([cellType isEqualToString:@"MarginCell"]) continue;

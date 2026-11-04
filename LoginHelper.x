@@ -161,7 +161,12 @@ void RFClearPendingWebSession(void) {
 
 // Fills reddit.com's username and password fields and taps Log In. The fields are web components
 // that only appear once the page has set itself up, so this returns 'waiting' until they're there.
+// The address is checked here, right before filling in, so the password only ever goes into
+// reddit.com. Anywhere else, 'elsewhere' ends the autofill like any other final answer.
 static NSString *const kAutofillScript =
+    @"const site = location.hostname;"
+    @"if (location.protocol !== 'https:' || (site !== 'reddit.com' && !site.endsWith('.reddit.com')))"
+    @"  return 'elsewhere';"
     @"const field = (name) => {"
     @"  const host = document.querySelector(`faceplate-text-input[name='${name}']`);"
     @"  return host && host.shadowRoot && host.shadowRoot.querySelector('input');"

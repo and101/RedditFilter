@@ -133,8 +133,20 @@ int main(void) {
     Check([extraEdges[4][@"node"][@"__typename"] isEqual:@"PostCarousel"], @"Videos for you keeps its own switch");
     Check([extraEdges[5][@"node"] isEqual:plainCard], @"Keep posts");
     Check([Filter(extraFeed, @"HomeFeedSdui", off) isEqual:extraFeed], @"Keep extra cards with the filter off");
+    NSDictionary *mixedCard = @{@"__typename": @"CellGroup", @"id": @"mixed", @"cells": @[
+      @{@"__typename": @"ClassicCell"}, @{@"__typename": @"ActionCell"}, @{@"__typename": @"FeedSurvey", @"id": @"s2"}]};
+    Check([Filter(Feed(@[mixedCard]), @"HomeFeedSdui", extraCards) isEqual:Feed(@[mixedCard])], @"A card with a post in it stays");
     NSArray *followingEdges = Filter(extraFeed, @"FollowingFeed", extraCards)[@"data"][@"homeV3"][@"elements"][@"edges"];
     Check([followingEdges[0][@"node"][@"cells"] count] == 0 && [followingEdges[5][@"node"] isEqual:plainCard], @"Filter the Following feed too");
+
+    // A card and the same post's details count once
+    RFStatsReset();
+    NSDictionary *nsfwCard = @{@"__typename": @"CellGroup", @"id": @"ZGlmZmVyZW50", @"groupId": @"t3_same",
+                               @"cells": @[@{@"__typename": @"IndicatorsCell", @"indicators": @[@"NSFW"]}]};
+    Filter(Feed(@[nsfwCard]), @"HomeFeedSdui", nsfw);
+    Filter(@{@"data": @{@"postsInfoByIds": @[@{@"__typename": @"SubredditPost", @"id": @"t3_same", @"isNsfw": @YES}]}},
+           @"FeedPostDetailsByIds", nsfw);
+    Check([RFStatsSnapshot()[kRFStatsCounts][RFStatNSFW] integerValue] == 1, @"A card and its post's details count once");
 
     // Diagnostics lists the cards that aren't posts or ads
     NSDictionary *(^feedCardsRow)(void) = ^NSDictionary *{
