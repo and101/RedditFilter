@@ -1,5 +1,6 @@
 // Run on macOS: ./tests/run.sh
 #import <Foundation/Foundation.h>
+#import "DebugMenu.h"
 #import "JSONFilter.h"
 #import "RFStats.h"
 #import "RFVersion.h"
@@ -132,6 +133,30 @@ int main(void) {
     Check([extraEdges[4][@"node"][@"__typename"] isEqual:@"PostCarousel"], @"Videos for you keeps its own switch");
     Check([extraEdges[5][@"node"] isEqual:plainCard], @"Keep posts");
     Check([Filter(extraFeed, @"HomeFeedSdui", off) isEqual:extraFeed], @"Keep extra cards with the filter off");
+    NSArray *followingEdges = Filter(extraFeed, @"FollowingFeed", extraCards)[@"data"][@"homeV3"][@"elements"][@"edges"];
+    Check([followingEdges[0][@"node"][@"cells"] count] == 0 && [followingEdges[5][@"node"] isEqual:plainCard], @"Filter the Following feed too");
+
+    // Diagnostics lists the cards that aren't posts or ads
+    NSDictionary *(^feedCardsRow)(void) = ^NSDictionary *{
+      return [[RFSchemaDebug shared] snapshot].lastObject;
+    };
+    RFSetDiagnosticsEnabled(YES);
+    Check([feedCardsRow()[kRFDebugFeedCards] count] == 0, @"No feed cards listed yet");
+    NSDictionary *postCard = Card(@{@"__typename": @"ActionCell"});
+    NSDictionary *newCard = @{@"__typename": @"CellGroup", @"cells": @[@{@"__typename": @"ShinyNewCell"}, @{@"__typename": @"MarginCell"}]};
+    NSDictionary *adCard = @{@"__typename": @"CellGroup", @"adPayload": @{@"id": @"a"}, @"cells": @[@{@"__typename": @"ShinyAdCell"}]};
+    Filter(Feed(@[postCard, adCard, newCard, Card(@{@"__typename": @"FeedSurvey"}), extraVideos,
+                  @{@"__typename": @"PostPreviewComponent", @"post": @{}}]), @"FollowingFeed", off);
+    Filter(Feed(@[@{@"__typename": @"DevvitDailyCollectionFeedElement"}]), @"GamesFeedSdui", off);
+    NSArray *cardLines = feedCardsRow()[kRFDebugFeedCards];
+    Check(cardLines.count == 3, @"Only the cards that aren't posts or ads are listed");
+    Check([cardLines[0] hasPrefix:@"? ShinyNewCell"] && [cardLines[0] containsString:@"FollowingFeed"], @"An unknown card comes first, with its feed");
+    Check([[cardLines componentsJoinedByString:@"|"] containsString:@"\u2713 FeedSurvey"], @"A known card is marked");
+    Check([[cardLines componentsJoinedByString:@"|"] containsString:@"\u2713 PostCarousel VIDEO_RECOMMENDATIONS"], @"Carousels name their type");
+    RFSetDiagnosticsEnabled(NO);
+    Check([feedCardsRow()[kRFDebugFeedCards] count] == 0, @"Turning Diagnostics off clears the list");
+    Filter(Feed(@[newCard]), @"HomeFeedSdui", off);
+    Check([feedCardsRow()[kRFDebugFeedCards] count] == 0, @"Nothing is listed with Diagnostics off");
     NSArray *subredditCards = Filter(@{@"data": @{@"subredditV3": @{@"elements": @{@"edges": @[@{@"node": @{@"__typename": @"PostCarousel", @"id": @"t"}}]}}}},
                                      @"SubredditFeedSdui", extraCards)[@"data"][@"subredditV3"][@"elements"][@"edges"];
     Check([subredditCards[0][@"node"][@"__typename"] isEqual:@"CellGroup"], @"Filter other feeds too");
@@ -194,6 +219,11 @@ int main(void) {
     Check([[detailsRequest valueForHTTPHeaderField:@"X-APOLLO-OPERATION-NAME"] isEqual:@"FeedPostDetailsByIds"], @"Label the request");
     Check([detailsRequest.URL isEqual:feedRequest.URL], @"Use the feed's server");
     Check(RFPostDetailsRequest(feedRequest, Data(bodyFeed), off) == nil, @"No full-text check without keywords");
+    NSMutableURLRequest *followingRequest = [feedRequest mutableCopy];
+    [followingRequest setValue:@"FollowingFeed" forHTTPHeaderField:@"X-APOLLO-OPERATION-NAME"];
+    Check(RFPostDetailsRequest(followingRequest, Data(bodyFeed), keywords) != nil, @"Check the Following feed's full text too");
+    [followingRequest setValue:@"PostInfoById" forHTTPHeaderField:@"X-APOLLO-OPERATION-NAME"];
+    Check(RFPostDetailsRequest(followingRequest, Data(bodyFeed), keywords) == nil, @"Only feeds get a full-text check");
     Check(RFPostDetailsRequest(topUp, Data(bodyFeed), keywords) != nil, @"Check later pages too");
 
     NSDictionary *details = @{@"data": @{@"postsInfoByIds": @[

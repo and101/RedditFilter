@@ -881,6 +881,21 @@ static void RFKeepOneSwipeSide(UITableView *tableView, NSString *changedKey, BOO
     }
     return cell;
   }
+  NSArray<NSString *> *feedCards = record[kRFDebugFeedCards];
+  if (feedCards) {
+    BOOL unknown = [feedCards.firstObject hasPrefix:@"?"];
+    cell.textLabel.textColor = [UIColor labelColor];
+    cell.textLabel.text = record[kRFDebugOp];
+    if (feedCards.count == 0) {
+      cell.detailTextLabel.text = @"\u2713 only posts and ads so far";
+      cell.detailTextLabel.textColor = [UIColor systemGreenColor];
+    } else {
+      NSString *note = unknown ? @"? Extra cards doesn't know these yet" : @"\u2713 Extra cards can hide these";
+      cell.detailTextLabel.text = [NSString stringWithFormat:@"%@\n%@", note, [feedCards componentsJoinedByString:@"\n"]];
+      cell.detailTextLabel.textColor = unknown ? [UIColor systemOrangeColor] : [UIColor systemGreenColor];
+    }
+    return cell;
+  }
   NSString *op = record[kRFDebugOp];
   NSString *expected = record[kRFDebugExpected];
   NSString *discovered = record[kRFDebugDiscovered];

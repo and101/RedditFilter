@@ -67,6 +67,7 @@ contentWeak
 
 [legacy]
 PopularFeedSdui
+FollowingFeed
 popularV3
 commentsPageAds
 commentTreeAds

@@ -23,9 +23,13 @@ NSString *const kRFDebugLastResolved = @"lastResolved";
 NSString *const kRFDebugSeen = @"seen";
 NSString *const kRFDebugFailedJSON = @"failedJSON";
 NSString *const kRFDebugUnfiltered = @"unfiltered";
+NSString *const kRFDebugFeedCards = @"feedCards";
 
 // The row that lists GraphQL requests the filter let through. Always first.
 static NSString *const kRFUnfilteredRow = @"Unfiltered requests";
+// The row that lists feed cards that aren't posts or ads. Always last.
+static NSString *const kRFFeedCardsRow = @"Other feed cards";
+static const NSUInteger kRFMaxCardTypes = 30;
 
 // Bounds for discovery so a broken path can never turn into an expensive walk
 // on every response.
@@ -39,6 +43,8 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
   NSMutableDictionary<NSString *, NSMutableDictionary *> *_records;
   // Address (plus why, if not the address) -> { count, last operation }
   NSMutableDictionary<NSString *, NSMutableDictionary *> *_unfiltered;
+  // Card type -> { count, known, last operation }
+  NSMutableDictionary<NSString *, NSMutableDictionary *> *_feedCards;
 }
 
 + (instancetype)shared {
@@ -57,6 +63,7 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
     _order = [NSMutableArray array];
     _records = [NSMutableDictionary dictionary];
     _unfiltered = [NSMutableDictionary dictionary];
+    _feedCards = [NSMutableDictionary dictionary];
     [self seedOperation:kRFUnfilteredRow expected:@"no GraphQL requests to other Reddit addresses"];
 
     // Seed the known operations so the menu lists every path up front, even
@@ -64,9 +71,11 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
     // the hardcoded paths in JSONFilter.m.
     [self seedOperation:@"HomeFeedSdui" expected:@"data.homeV3.elements.edges"];
     [self seedOperation:@"PopularFeedSdui" expected:@"data.popularV3.elements.edges"];
+    [self seedOperation:@"FollowingFeed" expected:@"data.homeV3.elements.edges"];
     [self seedOperation:@"FeedPostDetailsByIds" expected:@"data.postsInfoByIds"];
     [self seedOperation:@"PostInfoById" expected:@"data.postInfoById.commentForest.trees"];
     [self seedOperation:@"PdpCommentsAds" expected:@"data.*.pdpCommentsAds"];
+    [self seedOperation:kRFFeedCardsRow expected:@"feed cards that aren't posts or ads"];
   }
   return self;
 }
@@ -154,6 +163,35 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
   });
 }
 
+- (void)recordFeedCardType:(NSString *)type known:(BOOL)known operation:(NSString *)operation {
+  if (!type.length) return;
+  dispatch_sync(_queue, ^{
+    NSMutableDictionary *entry = _feedCards[type];
+    if (!entry) {
+      if (_feedCards.count >= kRFMaxCardTypes) return;
+      entry = _feedCards[type] = [@{@"count" : @0} mutableCopy];
+    }
+    entry[@"count"] = @([entry[@"count"] integerValue] + 1);
+    entry[@"known"] = @(known);
+    entry[@"op"] = operation ?: @"";
+    _records[kRFFeedCardsRow][kRFDebugSeen] = @YES;
+  });
+}
+
+// Caller must be on _queue.
+- (NSArray<NSString *> *)feedCardLines {
+  NSArray *types = [_feedCards.allKeys sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
+    NSComparisonResult order = [_feedCards[a][@"known"] compare:_feedCards[b][@"known"]]; // unknown first
+    return order != NSOrderedSame ? order : [_feedCards[b][@"count"] compare:_feedCards[a][@"count"]];
+  }];
+  NSMutableArray *lines = [NSMutableArray array];
+  for (NSString *type in types)
+    [lines addObject:[NSString stringWithFormat:@"%@ %@ \u00b7 %@ \u00b7 last %@",
+                                                [_feedCards[type][@"known"] boolValue] ? @"\u2713" : @"?", type,
+                                                _feedCards[type][@"count"], _feedCards[type][@"op"]]];
+  return lines;
+}
+
 - (NSArray<NSDictionary *> *)snapshot {
   __block NSArray *result;
   dispatch_sync(_queue, ^{
@@ -172,6 +210,7 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
                                                       _unfiltered[key][@"op"]]];
         record[kRFDebugUnfiltered] = lines;
       }
+      if ([op isEqualToString:kRFFeedCardsRow]) record[kRFDebugFeedCards] = [self feedCardLines];
       [out addObject:[record copy]];
     }
     result = out;
@@ -191,6 +230,7 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
 	  [record removeObjectForKey:kRFDebugFailedJSON];
     }
     [_unfiltered removeAllObjects];
+    [_feedCards removeAllObjects];
   });
 }
 

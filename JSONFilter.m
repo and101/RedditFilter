@@ -514,6 +514,7 @@ typedef struct {
 static const RFFastPath kFastPaths[] = {
     {@"HomeFeedSdui", @"data.homeV3.elements.edges", RFSchemaSigEdges, YES},
     {@"PopularFeedSdui", @"data.popularV3.elements.edges", RFSchemaSigEdges, YES},
+    {@"FollowingFeed", @"data.homeV3.elements.edges", RFSchemaSigEdges, YES},
     {@"FeedPostDetailsByIds", @"data.postsInfoByIds", RFSchemaSigNodeArray, NO},
 };
 
@@ -624,6 +625,38 @@ static NSSet<NSString *> *RFIgnoredOperations(void) {
   return set;
 }
 
+static NSMutableDictionary *RFFeedElements(NSDictionary *json);
+
+// Diagnostics: notes the feed cards that aren't posts or ads, so a card that wasn't hidden can be
+// named in a bug report. Every post card has an ActionCell, the row with the vote buttons.
+static void RFRecordFeedCards(NSDictionary *json, NSString *operation) {
+  if ([operation isEqualToString:@"GamesFeedSdui"]) return; // the Games tab is all cards like these
+  for (id edge in RFArray(RFFeedElements(json)[@"edges"])) {
+    NSDictionary *node = RFDict(RFDict(edge)[@"node"]);
+    NSString *type = RFString(node[@"__typename"]);
+    if (!type || [type isEqualToString:@"AdPost"] || [type isEqualToString:@"PostPreviewComponent"]) continue;
+    if ([type isEqualToString:@"PostCarousel"]) {
+      NSString *name = [NSString stringWithFormat:@"PostCarousel %@", RFString(node[@"type"]) ?: @"(no type)"];
+      [[RFSchemaDebug shared] recordFeedCardType:name known:YES operation:operation];
+      continue;
+    }
+    if (![type isEqualToString:@"CellGroup"]) {
+      [[RFSchemaDebug shared] recordFeedCardType:type known:RFIsExtraFeedCardType(type) operation:operation];
+      continue;
+    }
+    if (RFDict(node[@"adPayload"])) continue;
+    NSArray *cells = RFArray(node[@"cells"]);
+    BOOL post = NO;
+    for (id cell in cells) post |= [RFString(RFDict(cell)[@"__typename"]) isEqualToString:@"ActionCell"];
+    if (post) continue;
+    for (id cell in cells) {
+      NSString *cellType = RFString(RFDict(cell)[@"__typename"]);
+      if ([cellType isEqualToString:@"MarginCell"]) continue;
+      [[RFSchemaDebug shared] recordFeedCardType:cellType known:RFIsExtraFeedCardType(cellType) operation:operation];
+    }
+  }
+}
+
 NSData *RFFilteredResponseData(NSData *data, NSString *operationName, RFPrefs prefs) {
   if (!data.length || [RFIgnoredOperations() containsObject:operationName]) return nil;
 
@@ -632,6 +665,8 @@ NSData *RFFilteredResponseData(NSData *data, NSString *operationName, RFPrefs pr
                                                                               error:NULL]);
   NSDictionary *payload = RFDict(json[@"data"]);
   if (!payload) return nil; // not GraphQL, or an error response like {"data": null}
+
+  if (RFDiagnosticsEnabled()) RFRecordFeedCards(json, operationName);
 
   RFContext ctx = {prefs, RFCurrentKeywords(prefs)};
   if (!RFFilterResponse(json, payload, operationName, &ctx)) return nil; // unchanged: skip re-encoding
@@ -812,7 +847,9 @@ static NSDictionary<NSString *, NSArray<NSMutableDictionary *> *> *RFVisibleFeed
 }
 
 NSURLRequest *RFPostDetailsRequest(NSURLRequest *feedRequest, NSData *feedData, RFPrefs prefs) {
-  if (!RFCurrentKeywords(prefs) || ![RFOperationName(feedRequest) hasSuffix:@"FeedSdui"] || !feedData.length)
+  NSString *operation = RFOperationName(feedRequest);
+  if (!RFCurrentKeywords(prefs) || !feedData.length ||
+      !([operation hasSuffix:@"FeedSdui"] || [operation isEqualToString:@"FollowingFeed"]))
     return nil;
   NSDictionary *json = RFDict([NSJSONSerialization JSONObjectWithData:feedData
                                                              options:NSJSONReadingMutableContainers

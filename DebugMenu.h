@@ -60,6 +60,8 @@ extern NSString *const kRFDebugSeen;          // NSNumber  BOOL, any traffic obs
 extern NSString *const kRFDebugFailedJSON;    // NSString  captured JSON on failure
 extern NSString *const kRFDebugUnfiltered;    // NSArray   on the unfiltered-requests row only:
                                               //           one line per address, most requests first
+extern NSString *const kRFDebugFeedCards;     // NSArray   on the feed cards row only: one line per card type,
+                                              //           "?" first for ones Extra cards doesn't know
 
 @interface RFSchemaDebug : NSObject
 
@@ -84,6 +86,10 @@ extern NSString *const kRFDebugUnfiltered;    // NSArray   on the unfiltered-req
 // Tweak.xm doesn't accept, like cf.gql-fed.reddit.com before 1.3.1, or one with no completion
 // handler. Thread-safe.
 - (void)recordUnfilteredRequest:(NSURLRequest *)request hasHandler:(BOOL)hasHandler;
+
+// Called for each feed card that isn't a post or an ad. `known` means Extra cards can hide it.
+// Keeps a short list of types, so nothing in the card itself is stored. Thread-safe.
+- (void)recordFeedCardType:(NSString *)type known:(BOOL)known operation:(NSString *)operation;
 
 // Zero all counters and clear discovered paths (re-arm the probes).
 - (void)reset;
