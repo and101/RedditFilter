@@ -5,6 +5,7 @@
 #import "ColoredComments.h"
 #import "DebugMenu.h"
 #import "JSONFilter.h"
+#import "LinkPanel.h"
 #import "Preferences.h"
 #import "Redgifs.h"
 #import "SwipeCollapse.h"
@@ -42,6 +43,7 @@ extern "C" void RFReloadPreferences(void) {
   if (prefs.redgifsDirect && prefs.redgifsHD && prefs.redgifsHDWiFiOnly) RFRedgifsOnWiFi();
   RFSetColoredComments([defaults boolForKey:kRedditFilterColoredComments],
                        [defaults boolForKey:kRedditFilterColoredCommentsApollo]);
+  RFSetHideLinkPanel([defaults boolForKey:kRedditFilterHideLinkPanel]);
   RFSetSwipeCollapse([defaults boolForKey:kRedditFilterSwipeToCollapse],
                      [defaults boolForKey:kRedditFilterTapToCollapse],
                      [defaults boolForKey:kRedditFilterSwipeCollapseHaptics],
@@ -574,6 +576,7 @@ BOOL RFCleanCachedExperiments(void) {
     kRedditFilterRedgifsHDWiFiOnly : @YES,
     kRedditFilterColoredComments : @NO,
     kRedditFilterColoredCommentsApollo : @NO,
+    kRedditFilterHideLinkPanel : @NO,
     kRedditFilterCheckUpdates : @YES,
   }];
   RFReloadPreferences();

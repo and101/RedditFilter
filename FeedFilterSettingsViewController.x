@@ -29,7 +29,7 @@ typedef NS_ENUM(NSInteger, RFToggleTag) {
   RFPromoted, RFRecommended, RFNSFW, RFVideos, RFExtraCards,
   RFAwards, RFScores, RFColoured, RFApollo, RFKeywordComments, RFKeywordReplies,
   RFUpdates, RFDirect, RFSD, RFMobileSD, RFAutoMod, RFDiagnostics,
-  RFSwipe, RFLeft, RFRight, RFHaptics, RFTap,
+  RFSwipe, RFLeft, RFRight, RFHaptics, RFTap, RFLinkPanel,
 };
 static const RFToggleRow kToggleRows[] = {
     {kRedditFilterPromoted, @"Promoted", @"Show ads in feeds and comments", @"rpl3/tag,icon_tag", YES},
@@ -79,6 +79,8 @@ static const RFToggleRow kToggleRows[] = {
     {kRedditFilterTapToCollapse, @"Tap to collapse too",
      @"Long press collapses the whole thread", @"rpl3/comment,icon_comment", NO,
      kRedditFilterSwipeToCollapse},
+    {kRedditFilterHideLinkPanel, @"Hide panel on opened links", @"Full page. Votes stay on the post",
+     @"rpl3/link,icon_link", NO},
 };
 static const NSInteger kToggleRowCount = sizeof(kToggleRows) / sizeof(kToggleRows[0]);
 static const NSInteger kAboutUpdateRow = 1;
@@ -428,7 +430,7 @@ static NSArray<NSNumber *> *RFSections(id settings) {
 static NSArray<NSNumber *> *RFTags(RFSection section) {
   switch (section) {
     case RFSectionFilters: return @[@(RFPromoted), @(RFRecommended), @(RFNSFW), @(RFVideos), @(RFExtraCards)];
-    case RFSectionAppearance: return @[@(RFAwards), @(RFScores), @(RFColoured), @(RFApollo)];
+    case RFSectionAppearance: return @[@(RFAwards), @(RFScores), @(RFColoured), @(RFApollo), @(RFLinkPanel)];
     case RFSectionSwipe: return @[@(RFSwipe), @(RFLeft), @(RFRight), @(RFHaptics), @(RFTap)];
     case RFSectionCollapse: return @[@(RFAutoMod)];
     case RFSectionRedgifs: return @[@(RFDirect), @(RFSD), @(RFMobileSD)];
@@ -911,7 +913,7 @@ static NSString *RFBackupSummaryMessage(RFBackupSummary *summary) {
         icon = @"rpl3/filter"; symbol = @"line.3.horizontal.decrease.circle";
         break;
       }
-      case RFPageAppearance: subtitle = @"Awards, scores and comment colours"; icon = @"rpl3/award"; symbol = @"paintpalette"; break;
+      case RFPageAppearance: subtitle = @"Awards, scores, colours and links"; icon = @"rpl3/award"; symbol = @"paintpalette"; break;
       case RFPageCollapse: return RFSwipeCell(tableView);
       case RFPageRedgifs: subtitle = [NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterRedgifsDirect] ? @"Direct play on" : @"Direct play off"; icon = @"rpl3/play"; symbol = @"play.rectangle"; break;
       case RFPageBackup: subtitle = @"Export or import your settings"; icon = @"rpl3/download"; symbol = @"arrow.up.arrow.down"; break;

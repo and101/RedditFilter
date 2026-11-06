@@ -38,6 +38,9 @@ recommendationContext
 # Comment thread lines (ColoredComments.x)
 _TtC21PDP_CommentSheet_Impl15VerticalDivider
 _TtC63Components_CommentTreeItem_CommentTreeItemPresentation_Internal30CommentTreeItemVerticalDivider
+# Panel on links opened from a post page (LinkPanel.x)
+FBPArticleLinkConsumptionView
+FBPCommentSheetAdapterView
 # Swipe-to-collapse restoration (SwipeCollapse.x)
 SliceKit.FlexStackView
 _TtC21PDP_CommentSheet_Impl16CommentSliceView

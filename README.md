@@ -2,7 +2,7 @@
 
 Filters unwanted content from the Reddit app: promoted posts, recommendations, NSFW posts, awards, scores, and posts or comments that mention your keywords. It can also play RedGIFs videos with sound, collapse comments with a swipe, open Reddit links from Safari in the app, and back up or restore your settings, keywords and stats.
 
-Settings are grouped under **Filters**, **Display** and **More**. **Posts and ads** contains the feed filters. **Appearance** contains awards, scores and comment colours. **Collapsing comments** contains swipe, tap and AutoMod options. **Keywords** includes both comment switches. **Backup**, **Diagnostics** and **About** each have their own page under **More**. To get there quickly, long press the sidebar button at the top left of Reddit.
+Settings are grouped under **Filters**, **Display** and **More**. **Posts and ads** contains the feed filters. **Appearance** contains awards, scores, comment colours and the panel on opened links. **Collapsing comments** contains swipe, tap and AutoMod options. **Keywords** includes both comment switches. **Backup**, **Diagnostics** and **About** each have their own page under **More**. To get there quickly, long press the sidebar button at the top left of Reddit.
 
 <table>
   <tr>

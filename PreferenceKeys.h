@@ -26,5 +26,6 @@
 #define kRedditFilterRedgifsHDWiFiOnly @"kRedditFilterRedgifsHDWiFiOnly"
 #define kRedditFilterColoredComments @"kRedditFilterColoredComments"
 #define kRedditFilterColoredCommentsApollo @"kRedditFilterColoredCommentsApollo"
+#define kRedditFilterHideLinkPanel @"kRedditFilterHideLinkPanel"
 #define kRedditFilterCheckUpdates @"kRedditFilterCheckUpdates"
 #define kRedditFilterDiagnostics @"kRedditFilterDiagnostics" // record schema paths for bug reports

@@ -9,6 +9,9 @@
 #import "Redgifs.h"
 #import "UpdateChecker.h"
 
+// LinkPanel.x hooks Reddit's player, which isn't part of this test.
+void RFSetHideLinkPanel(BOOL hide) {}
+
 // Browser login lives in LoginHelper.x, which isn't part of this test.
 NSString *RFPendingWebSession(void) { return nil; }
 void RFClearPendingWebSession(void) {}
