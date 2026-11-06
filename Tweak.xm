@@ -473,7 +473,7 @@ static BOOL RFIsAPIHost(NSString *host) {
         dispatch_group_notify(group, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
           NSData *updated;
           @synchronized(lock) {
-            updated = pageSoFar();
+            updated = latest;
           }
           topUpAndFinish(updated);
         });
