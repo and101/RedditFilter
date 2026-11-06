@@ -1,8 +1,8 @@
 # RedditFilter
 
-Filters unwanted content from the Reddit app: promoted posts, recommendations, NSFW posts, awards, scores, and posts or comments that mention your keywords. It can also play RedGIFs videos with sound, collapse comments with a swipe, open Reddit links from Safari in the app, and back up or restore your settings, keywords and stats.
+Filters unwanted content from the Reddit app, and adds the comment, video and link options it's missing.
 
-Settings are grouped under **Filters**, **Display** and **More**. **Posts and ads** contains the feed filters. **Appearance** contains awards, scores, comment colours and the panel on opened links. **Collapsing comments** contains swipe, tap and AutoMod options. **Keywords** includes both comment switches. **Backup**, **Diagnostics** and **About** each have their own page under **More**. To get there quickly, long press the sidebar button at the top left of Reddit.
+To open RedditFilter, long press the sidebar button at the top left of Reddit, or go to Profile → Settings and tap the button at the top right.
 
 <table>
   <tr>
@@ -32,79 +32,36 @@ Settings are grouped under **Filters**, **Display** and **More**. **Posts and ad
     <td align="center" width="25%"><img src="screenshots/safari.png" width="200" alt="Steps to turn on the RedditFilter Safari extension"></td>
   </tr>
   <tr>
-    <td align="center"><b>Tweaks</b><br><sub>Show or hide each kind of content</sub></td>
-    <td align="center"><b>Collapsing and RedGIFs</b><br><sub>Swipe or tap, and video quality</sub></td>
-    <td align="center"><b>Keywords and About</b><br><sub>Keyword filters, Safari and update check</sub></td>
+    <td align="center"><b>Settings</b><br><sub>Filters, display and more</sub></td>
+    <td align="center"><b>Collapsing comments</b><br><sub>Swipe or tap, and AutoMod</sub></td>
+    <td align="center"><b>Keywords</b><br><sub>Words to hide, and comment options</sub></td>
     <td align="center"><b>Open Reddit links here</b><br><sub>Set up the Safari extension</sub></td>
   </tr>
 </table>
 
 <sub>Screenshots use a made-up community, post and users.</sub>
 
-## New in 1.3.6
+## Features
 
-- **Log in from the app's own login screen**: on sideloaded installs, type your username and password into Reddit's normal login form and it logs you in, with no browser step. Sideloaded apps can't pass Reddit's check that the app is its own build, so RedditFilter tells Reddit this iPhone can't do that check, as some devices can't, and Reddit accepts that. **If Reddit turns this down, you don't need to do anything.** A reddit.com sheet opens by itself, fills in the username and password you just typed, logs in and closes once you're in. If Reddit asks for a 2FA code or a check, finish it in the sheet. A wrong password or too many tries still shows Reddit's usual message, and closing the sheet takes you back to the login screen.
-- **Swipe to collapse has its own page**: all the swipe options now live on one page under **Collapsing comments**. **Swipe left** is on by default. Turn on **Swipe right** to collapse with a right swipe too, while swiping from the screen edge still goes back. Turn on both to collapse either way, or turn off **Swipe left** so that swiping left only moves to the next post. Your swipe setting carries over.
-- **Extra cards**: turn this off to hide suggested communities, promos, surveys and post carousels from your feeds. Videos for you keeps its own switch.
-- **Stats**: a new section at the top of RedditFilter settings shows how much has been hidden, in total, today and by filter. It stays on your device, and you can reset it at any time.
-- **Diagnostics**: turn this on at the end of the settings to see whether RedditFilter still finds the posts and ads in Reddit's responses, and whether any new kind of card has appeared in your feeds. Tap **Share report** to copy or send it with a bug report. The report has no usernames or post text. Nothing is shared unless you choose to, and it's cleared when Reddit closes or you turn it off.
-- **Fixes**: Keyword checks now read the full text of posts in the Following feed, not just the title and preview. The **Log in with browser** sheet closes reddit.com's cookie banner by itself, opens the **Continue with Google** and **Continue with Apple** windows, and no longer gets stuck if it appears late. RedditFilter only fills in your password on reddit.com, and keeps it in memory only until it's been used.
+### Filters
 
-## New in 1.3.5
+- **Posts and ads**: hide promoted posts and comment ads, recommendations, NSFW posts, the Videos for you carousel, and extra cards such as suggested communities, promos and surveys. These switches show that content when on, so turn one off to hide it. A For You page left short by hidden posts is topped up from the next page.
+- **Keywords**: hide posts that mention a word or phrase. Matching is whole-word and ignores capitals, and it checks a post's full text, not just the title and preview. With **Filter comments too**, comments that mention a keyword are hidden with their replies, or replaced by a placeholder if you want to keep the replies.
 
-**Rebuilt for Reddit 2026.44.0.** The IPA now contains Reddit 2026.44.0 (earlier releases contained 2026.43.0). Install it over your current RedditFilter as usual; your settings and accounts carry over.
+### Display
 
-- **Check for updates now**: tap **Check for updates** under About to check GitHub straight away. It tells you whether an update is available, you're up to date, or it couldn't check. The switch still turns the daily check on or off.
-- **Fixes**: full-text keyword checks work on Reddit 2026.44 from the first launch. Swiping the **Log in with browser** sheet away now cancels that login; dragging it down and letting it spring back doesn't. Rows with an arrow in RedditFilter settings use the full width for their text. Look-alike sites such as evilredgifs.com are no longer treated as RedGIFs. Pages that wait for the full-text check, RedGIFs or the next page now reach Reddit the same way as any other response, and a few unexpected values from Reddit or iOS no longer risk a crash.
+- **Appearance**: hide awards and scores on posts and comments, and give each reply level its own colour with **Coloured comment threads**. **Apollo style** colours only each comment's own line.
+- **Hide panel on opened links**: when you open a link from its post page, Reddit covers the bottom of the page with a votes and comments panel. This hides it, so the page fills the screen. Votes and comments stay on the post page. It works for any site, including RedGIFs.
+- **Swipe to collapse**: swipe a comment to collapse it and its replies, or swipe further to collapse the whole thread. Choose left, right or both, with optional haptics. **Tap to collapse too** keeps tap and long press, and **AutoMod** always collapses AutoMod comments.
+- **Direct-play RedGIFs**: Reddit's copies of RedGIFs videos have no sound, so this plays the originals from RedGIFs instead. **Prefer SD** and **Prefer SD on mobile data** keep data use down. Your device connects to RedGIFs directly, and Reddit's silent version plays if RedGIFs can't be reached.
 
-## New in 1.3.4
+### More
 
-- **Swipe haptics**: a light vibration when your swipe reaches Collapse or Collapse thread. On by default; turn it off under **Collapsing comments**.
-- **Stay on the web in Safari**: cancel the prompt twice in a row and that Safari tab stays on the web until it's closed. Going back or forward no longer asks again.
-- **RedGIFs quality switches renamed**: **Prefer SD** (on by default) and **Prefer SD on mobile data**, which also covers Low Data Mode. Your settings carry over. HD still plays when a video has no SD version, and videos already loaded keep their quality when your network changes.
-- **Fixes**: with **Swipe to collapse** on and **Tap to collapse too** off, "more replies" rows load again when tapped. A RedGIFs video whose lookup came back without a playable file is looked up again, instead of playing silently until Reddit is restarted. Reddit links the website opens without loading a new page now open in the app too. After turning ads off, RedditFilter asks you to reopen Reddit if your account was in the Reddit experiment that loads Home ads differently.
-
-## New in 1.3.3
-
-- **Swipe to collapse**: swipe a comment left to collapse it and its replies, or swipe further to collapse the whole thread, like the 2024 app. The comment slides with your finger and shows what will happen. Swiping left on a collapsed comment or on the post still moves to the next post, and swiping right still goes back. Off by default; turn it on under **Collapsing comments**.
-- **Collapsing comments settings**: a new section for **Swipe to collapse**, **Tap to collapse too** and the **AutoMod** switch. With swipe on, tapping or long pressing anywhere on a comment no longer collapses it, so it can't happen by accident. Links and spoilers still open with a tap. Turn on **Tap to collapse too** to keep both. A collapsed comment always opens with a tap.
-- **Open Reddit links in the app**: a Safari extension now opens Reddit links from Safari in RedditFilter. Safari asks before each one. To set it up, tap **Open Reddit links here** in the new **Safari** section of RedditFilter settings.
-- **RedGIFs quality**: RedGIFs has its own settings section, with **HD video** (off by default, so videos play in SD and use less data) and **HD on Wi-Fi only**, which plays SD on mobile data and in Low Data Mode.
-- **Fixes**: ads no longer appear on the Home feed for users in a Reddit experiment that loads it differently. The IPA no longer includes Reddit's crash report extension, so SideStore and AltStore can install it.
-
-## New in 1.3.2
-
-- **Coloured comment threads**: new option that gives each reply level's thread line its own colour. Each comment's own line is in full colour and the lines of the comments above it are faded. Turn on **Apollo style** to colour only each comment's own line. Off by default. Lines Reddit already colours, like a highlighted comment's, keep their colour.
-- **Update check**: once a day, RedditFilter checks GitHub for a new release and shows an alert once for each one. That includes the same RedditFilter version rebuilt for a newer Reddit version. RedditFilter settings also show when an update is available. Turn it off with **Check for updates** under About.
-- **Redesigned settings**: RedditFilter settings now look like Reddit's current Settings and follow its theme colours. They open in their own sheet with a close button. **Filters** is now called **Tweaks**. Section headers and footers grow with your text size.
-- **Fixes**: icons no longer disappear from settings rows. A highlighted comment's gold line no longer shifts the thread colours.
-
-## New in 1.3.1
-
-- **Ads and filters came back for some users**: Reddit is moving some users to a new server address, and RedditFilter didn't filter anything coming from it. Ads, keywords and every other filter now work on both.
-- **Feeds don't wait long for extra checks**: if the full-text keyword check or the extra page loaded for a short For You feed is slow, the page now appears after at most 5 seconds instead of waiting for it. With RedGIFs direct-play on, RedGIFs videos and the full-text check now load at the same time.
-- **Keywords ignore link addresses**: a keyword only matches the visible text of a link, not the address it points to.
-- **Full-text check after a Reddit update**: after you update Reddit, RedditFilter no longer reuses the request it saved from the previous version.
-- **RedGIFs**: videos loading at the same time now share one RedGIFs sign-in instead of each asking for their own.
-- **Sideloaded installs**: fixed a crash at launch when the app couldn't read its keychain settings, and a memory leak in keychain access.
-
-## New in 1.3.0
-
-- **Keywords check the whole post**: posts are hidden when a keyword appears anywhere in their text, not just in the title or the preview shown in the feed. Feed cards that show the whole post are now checked too. With keywords set, checking full text adds one batch request per feed page before it appears. If that request fails, title and preview filtering still apply.
-- **Filter comments too**: new option under Keywords to hide comments that mention a keyword. Their replies are hidden as well, unless you turn off **Hide replies too**: then the comment is replaced by a "Hidden by keyword filter" placeholder and its replies stay.
-- **Direct-play RedGIFs**: new option to play RedGIFs videos with sound. Reddit's copies of RedGIFs videos have no audio, so RedditFilter plays the original from RedGIFs instead, in posts and in the feed. It may use more data, and your device connects to RedGIFs directly. If RedGIFs can't be reached, Reddit's silent version plays as before.
-- **Clearer settings**: every switch now says what it does. The **Promoted**, **Recommended** and **NSFW** switches show that content when on; turn **Promoted** off to hide ads. Icons are aligned and follow your light or dark theme.
-
-## Fixes for Reddit 2026.43.0
-
-- **Comment ads** are hidden again.
-- **NSFW filter** now hides NSFW posts in the new feed cards and in community highlights.
-- **Recommended filter** no longer empties the For You feed, which is now mostly recommendations (your subscriptions are in Following). It still removes the "Related answers" section on post pages.
-- **Videos for you**: new option to hide the "Videos for you" carousel in your feed.
-- **For You** no longer stops after a few posts when hidden posts leave the first page too short to scroll.
-- **Keywords**: new option to hide posts that mention a word or phrase. In RedditFilter settings, tap **Keywords** to add them (separate several with commas). Swipe a keyword to remove it, or use **Clear All Keywords**. Matching is whole-word and ignores capitals.
-- **RedditFilter settings** are back: Profile → Settings, button at the top right.
-- **Logging in** now works on sideloaded installs (see below).
+- **Open Reddit links here**: a Safari extension opens Reddit links from Safari in the app, asking first each time.
+- **Stats**: see how much has been hidden in total, today and by filter. It stays on your device.
+- **Backup**: export your settings, keywords and stats to a file, and import them later. No account details are included.
+- **Diagnostics**: check whether RedditFilter still finds posts and ads in Reddit's responses, and share a report with a bug report. Nothing leaves your device unless you share it.
+- **Update check**: RedditFilter checks GitHub once a day for a new release. Turn it off under **About**.
 
 ## Logging in
 
