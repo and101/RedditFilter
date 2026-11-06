@@ -107,7 +107,28 @@ static NSArray<CUICatalog *> *RFAssetCatalogs(void) {
   return catalogs;
 }
 
+// The bundle holding Reddit's current icons. The app has so many bundles that going through them
+// took about 55ms for each icon, so look here first.
+static NSBundle *RFIconBundle(void) {
+  static NSBundle *iconBundle;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    for (NSBundle *bundle in RFAssetBundles()) {
+      if (![UIImage imageNamed:@"rpl3/filter" inBundle:bundle compatibleWithTraitCollection:nil]) continue;
+      iconBundle = bundle;
+      break;
+    }
+  });
+  return iconBundle;
+}
+
+extern "C" void RFWarmIcons(void) {
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{ RFIconBundle(); });
+}
+
 static UIImage *RFFindIcon(NSString *iconName) {
+  UIImage *found = [UIImage imageNamed:iconName inBundle:RFIconBundle() compatibleWithTraitCollection:nil];
+  if (found) return found;
   for (NSBundle *bundle in RFAssetBundles()) {
     UIImage *image = [UIImage imageNamed:iconName inBundle:bundle compatibleWithTraitCollection:nil];
     if (image) return image;

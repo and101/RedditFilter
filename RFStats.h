@@ -38,6 +38,18 @@ void RFStatsRecord(RFStat stat, NSString *identifier);
 // Current counts and when they started. Thread-safe.
 NSDictionary *RFStatsSnapshot(void);
 
+// A JSON-safe copy for a settings backup: counts by stable name, days by "yyyy-MM-dd", and
+// since as an ISO 8601 string.
+NSDictionary *RFStatsExport(void);
+
+// Checks an exported stats dictionary without changing anything. Unknown stat names are
+// allowed (and ignored), as are missing ones (they become 0).
+BOOL RFStatsValidate(NSDictionary *stats, NSError **error);
+
+// Replaces the counts, days and since date from an exported dictionary. Validates first, so a
+// bad dictionary changes nothing.
+BOOL RFStatsImport(NSDictionary *stats, NSError **error);
+
 // Sets everything back to zero, from now.
 void RFStatsReset(void);
 

@@ -10,3 +10,7 @@ xcrun --sdk macosx clang -fobjc-arc -fblocks -framework Foundation -I. \
 xcrun --sdk macosx clang -fobjc-arc -framework Foundation -framework CoreGraphics -I. \
   SwipeCollapseGeometry.m tests/SwipeCollapseTests.m -o "$test_dir/SwipeCollapseTests"
 "$test_dir/SwipeCollapseTests"
+
+xcrun --sdk macosx clang -fobjc-arc -framework Foundation -I. \
+  RFBackup.m RFStats.m tests/RFBackupTests.m -o "$test_dir/RFBackupTests"
+"$test_dir/RFBackupTests"

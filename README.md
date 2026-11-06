@@ -1,6 +1,8 @@
 # RedditFilter
 
-Filters unwanted content from the Reddit app: promoted posts, recommendations, NSFW posts, awards, scores, and posts or comments that mention your keywords. It can also play RedGIFs videos with sound, collapse comments with a swipe and open Reddit links from Safari in the app.
+Filters unwanted content from the Reddit app: promoted posts, recommendations, NSFW posts, awards, scores, and posts or comments that mention your keywords. It can also play RedGIFs videos with sound, collapse comments with a swipe, open Reddit links from Safari in the app, and back up or restore your settings, keywords and stats.
+
+Settings are grouped under **Filters**, **Display** and **More**. **Posts and ads** contains the feed filters. **Appearance** contains awards, scores and comment colours. **Collapsing comments** contains swipe, tap and AutoMod options. **Keywords** includes both comment switches. **Backup**, **Diagnostics** and **About** each have their own page under **More**. To get there quickly, long press the sidebar button at the top left of Reddit.
 
 <table>
   <tr>
@@ -24,9 +26,9 @@ Filters unwanted content from the Reddit app: promoted posts, recommendations, N
     <th>Safari</th>
   </tr>
   <tr>
-    <td align="center" width="25%"><img src="screenshots/settings.png" width="200" alt="RedditFilter settings: the Tweaks section"></td>
-    <td align="center" width="25%"><img src="screenshots/settings2.png" width="200" alt="RedditFilter settings: Collapsing comments and RedGIFs"></td>
-    <td align="center" width="25%"><img src="screenshots/settings3.png" width="200" alt="RedditFilter settings: Keywords, Safari and About"></td>
+    <td align="center" width="25%"><img src="screenshots/settings.png" width="200" alt="RedditFilter settings: root page"></td>
+    <td align="center" width="25%"><img src="screenshots/settings2.png" width="200" alt="RedditFilter settings: Collapsing comments"></td>
+    <td align="center" width="25%"><img src="screenshots/settings3.png" width="200" alt="RedditFilter settings: Keywords"></td>
     <td align="center" width="25%"><img src="screenshots/safari.png" width="200" alt="Steps to turn on the RedditFilter Safari extension"></td>
   </tr>
   <tr>

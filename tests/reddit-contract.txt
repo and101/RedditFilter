@@ -23,6 +23,9 @@ AdPost
 CellGroup
 RelatedAnswersFeedUnit
 CommunityRecommendationsUnitCell
+# Long pressing the sidebar button opens RedditFilter
+reddit_community__community_drawer__bar_button
+RPLTopAppBarButton
 CarouselCommunityRecommendationsFeedUnit
 MerchandisingUnitCell
 FeedSurvey

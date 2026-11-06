@@ -8,6 +8,8 @@
 extern "C" {
 #endif
 NSArray<NSString *> *RFSavedKeywords(void);
+UITableViewCell *RFKeywordSettingsCell(UITableView *table, NSInteger index, id target);
+void RFKeywordSettingsChanged(UISwitch *sender, UITableView *table);
 #ifdef __cplusplus
 }
 #endif

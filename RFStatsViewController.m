@@ -1,20 +1,11 @@
 // RFStatsViewController.m
 //
 // An inset grouped table like the Settings app: a total with a bar split by filter (like iPhone
-// Storage), each filter with its count, then Reset. Follows Reddit's theme like the Keywords screen.
+// Storage), each filter with its count, then Reset. Follows Reddit's theme like the other settings screens.
 
 #import "RFStatsViewController.h"
+#import "Preferences.h"
 #import "RFStats.h"
-
-@interface UIView ()
-- (void)associatePropertySetter:(SEL)propertySetter withThemePropertyGetter:(SEL)themePropertyGetter;
-@end
-
-// Follows Reddit's light/dark theme when it's available, else keeps the system colour.
-static void RFTheme(id view, SEL setter, SEL themeGetter) {
-  if ([view respondsToSelector:@selector(associatePropertySetter:withThemePropertyGetter:)])
-    [view associatePropertySetter:setter withThemePropertyGetter:themeGetter];
-}
 
 typedef struct {
   __unsafe_unretained NSString *name;
@@ -149,7 +140,7 @@ typedef NS_ENUM(NSInteger, RFStatsSection) { RFStatsSectionTotal, RFStatsSection
 - (void)viewDidLoad {
   [super viewDidLoad];
   self.tableView.backgroundColor = UIColor.systemGroupedBackgroundColor;
-  RFTheme(self.tableView, @selector(setBackgroundColor:), @selector(canvasColor));
+  RFApplySettingsTheme(self.tableView, @selector(setBackgroundColor:), @selector(bodyColor));
   [NSNotificationCenter.defaultCenter addObserver:self
                                          selector:@selector(reload)
                                              name:RFStatsDidChangeNotification
@@ -183,11 +174,11 @@ typedef NS_ENUM(NSInteger, RFStatsSection) { RFStatsSectionTotal, RFStatsSection
 
 - (UITableViewCell *)styledCell:(UITableViewCell *)cell {
   cell.backgroundColor = UIColor.secondarySystemGroupedBackgroundColor;
-  RFTheme(cell, @selector(setBackgroundColor:), @selector(bodyColor));
+  RFApplySettingsCardTheme(cell);
   cell.textLabel.textColor = UIColor.labelColor;
-  RFTheme(cell.textLabel, @selector(setTextColor:), @selector(bodyTextColor));
+  RFApplySettingsTheme(cell.textLabel, @selector(setTextColor:), @selector(bodyTextColor));
   cell.detailTextLabel.textColor = UIColor.secondaryLabelColor;
-  RFTheme(cell.detailTextLabel, @selector(setTextColor:), @selector(metaTextColor));
+  RFApplySettingsTheme(cell.detailTextLabel, @selector(setTextColor:), @selector(metaTextColor));
   cell.selectionStyle = UITableViewCellSelectionStyleNone;
   return cell;
 }
@@ -208,8 +199,8 @@ typedef NS_ENUM(NSInteger, RFStatsSection) { RFStatsSectionTotal, RFStatsSection
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
   if (section != RFStatsSectionFilters) return nil;
-  return @"Counted on this device only, while a filter is on. Each post is counted once per launch, so one "
-         @"Reddit shows you again after a restart counts again.";
+  return @"Counted on this device while a filter is on. A post counts once per launch, so it can count again "
+         @"after a restart.";
 }
 
 - (UITableViewCell *)totalCell {
@@ -226,7 +217,7 @@ typedef NS_ENUM(NSInteger, RFStatsSection) { RFStatsSectionTotal, RFStatsSection
   number.minimumScaleFactor = 0.5;
   number.text = RFStatsFormattedCount(total);
   number.textColor = UIColor.labelColor;
-  RFTheme(number, @selector(setTextColor:), @selector(bodyTextColor));
+  RFApplySettingsTheme(number, @selector(setTextColor:), @selector(bodyTextColor));
 
   UILabel *caption = [UILabel new];
   caption.font = [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline];
@@ -235,7 +226,7 @@ typedef NS_ENUM(NSInteger, RFStatsSection) { RFStatsSectionTotal, RFStatsSection
   caption.text = [NSString stringWithFormat:@"Hidden %@ · %@ today", RFStatsSinceText(_stats[kRFStatsSince]),
                                             RFStatsFormattedCount(today.unsignedLongLongValue)];
   caption.textColor = UIColor.secondaryLabelColor;
-  RFTheme(caption, @selector(setTextColor:), @selector(metaTextColor));
+  RFApplySettingsTheme(caption, @selector(setTextColor:), @selector(metaTextColor));
 
   RFSplitBar *bar = [RFSplitBar new];
   bar.counts = counts;
@@ -258,7 +249,7 @@ typedef NS_ENUM(NSInteger, RFStatsSection) { RFStatsSectionTotal, RFStatsSection
   UILabel *legendLabel = [UILabel new];
   legendLabel.numberOfLines = 0;
   legendLabel.textColor = UIColor.secondaryLabelColor;
-  RFTheme(legendLabel, @selector(setTextColor:), @selector(metaTextColor));
+  RFApplySettingsTheme(legendLabel, @selector(setTextColor:), @selector(metaTextColor));
   legendLabel.attributedText = legend;
   legendLabel.hidden = total == 0;
 

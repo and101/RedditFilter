@@ -5,6 +5,7 @@
 // the background.
 
 #import "RFStats.h"
+#import <math.h>
 #import <os/lock.h>
 
 NSString *const kRFStatsCounts = @"counts";
@@ -136,6 +137,130 @@ NSDictionary *RFStatsSnapshot(void) {
   NSDictionary *snapshot = @{kRFStatsCounts : counts, kRFStatsDays : [gDays copy], kRFStatsSince : gSince};
   os_unfair_lock_unlock(&gLock);
   return snapshot;
+}
+
+#pragma mark - Settings backup
+
+static NSError *RFStatsBackupError(NSString *message) {
+  return [NSError errorWithDomain:@"RedditFilterStats"
+                             code:1
+                         userInfo:@{NSLocalizedDescriptionKey : message}];
+}
+
+// A count must be a whole number, not a boolean, not a negative one, not a NaN or infinity, and
+// small enough to fit in uint64_t.
+static BOOL RFStatsIsCount(id value) {
+  if (![value isKindOfClass:NSNumber.class] || CFGetTypeID((__bridge CFTypeRef)value) == CFBooleanGetTypeID())
+    return NO;
+  double number = [value doubleValue];
+  return isfinite(number) && number >= 0 && number == floor(number) && number < 18446744073709551616.0;
+}
+
+static BOOL RFStatsIsDayKey(id key) {
+  if (![key isKindOfClass:NSString.class] || [key length] != 10) return NO;
+  static NSDateFormatter *formatter;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    formatter = [NSDateFormatter new];
+    formatter.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+    formatter.dateFormat = @"yyyy-MM-dd";
+    formatter.lenient = NO;
+    // A day key is only a label, so parse it in UTC: a day whose midnight doesn't exist in the
+    // device's time zone would otherwise be refused.
+    formatter.timeZone = [NSTimeZone timeZoneForSecondsFromGMT:0];
+  });
+  NSDate *date = [formatter dateFromString:key];
+  return date && [[formatter stringFromDate:date] isEqualToString:key];
+}
+
+static NSDate *RFStatsDateFromISOString(id string) {
+  if (![string isKindOfClass:NSString.class]) return nil;
+  static NSISO8601DateFormatter *plain, *fractional;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    plain = [NSISO8601DateFormatter new];
+    fractional = [NSISO8601DateFormatter new];
+    fractional.formatOptions = NSISO8601DateFormatWithInternetDateTime | NSISO8601DateFormatWithFractionalSeconds;
+  });
+  return [plain dateFromString:string] ?: [fractional dateFromString:string];
+}
+
+NSDictionary *RFStatsExport(void) {
+  NSDictionary *snapshot = RFStatsSnapshot();
+  NSArray<NSNumber *> *counts = snapshot[kRFStatsCounts];
+  NSMutableDictionary *byName = [NSMutableDictionary dictionaryWithCapacity:RFStatCount];
+  for (NSInteger i = 0; i < RFStatCount; i++) byName[kRFStatNames[i]] = counts[i] ?: @0;
+  NSString *since = [[NSISO8601DateFormatter new] stringFromDate:snapshot[kRFStatsSince]] ?: @"";
+  return @{kRFStatsCounts : byName, kRFStatsDays : snapshot[kRFStatsDays] ?: @{}, kRFStatsSince : since};
+}
+
+BOOL RFStatsValidate(NSDictionary *stats, NSError **error) {
+  if (![stats isKindOfClass:NSDictionary.class]) {
+    if (error) *error = RFStatsBackupError(@"The stats in this backup are damaged.");
+    return NO;
+  }
+
+  id counts = stats[kRFStatsCounts];
+  if (counts) {
+    if (![counts isKindOfClass:NSDictionary.class]) {
+      if (error) *error = RFStatsBackupError(@"The stats in this backup are damaged.");
+      return NO;
+    }
+    for (id name in counts) {
+      if (![name isKindOfClass:NSString.class] || !RFStatsIsCount(counts[name])) {
+        if (error) *error = RFStatsBackupError(@"The stats in this backup are damaged.");
+        return NO;
+      }
+    }
+  }
+
+  id days = stats[kRFStatsDays];
+  if (days) {
+    if (![days isKindOfClass:NSDictionary.class]) {
+      if (error) *error = RFStatsBackupError(@"The stats in this backup are damaged.");
+      return NO;
+    }
+    for (id day in days) {
+      if (!RFStatsIsDayKey(day) || !RFStatsIsCount(days[day])) {
+        if (error) *error = RFStatsBackupError(@"The daily stats in this backup are damaged.");
+        return NO;
+      }
+    }
+  }
+
+  id since = stats[kRFStatsSince];
+  if (since && !RFStatsDateFromISOString(since)) {
+    if (error) *error = RFStatsBackupError(@"The stats in this backup have an invalid start date.");
+    return NO;
+  }
+  return YES;
+}
+
+BOOL RFStatsImport(NSDictionary *stats, NSError **error) {
+  if (!RFStatsValidate(stats, error)) return NO;
+
+  uint64_t counts[RFStatCount] = {0};
+  NSDictionary *savedCounts = stats[kRFStatsCounts];
+  for (NSInteger i = 0; i < RFStatCount; i++) {
+    id value = savedCounts[kRFStatNames[i]];
+    if (value) counts[i] = [value unsignedLongLongValue];
+  }
+  NSDictionary *savedDays = stats[kRFStatsDays];
+  NSDate *since = RFStatsDateFromISOString(stats[kRFStatsSince]) ?: [NSDate date];
+
+  os_unfair_lock_lock(&gLock);
+  RFStatsLoad();
+  memcpy(gCounts, counts, sizeof(counts));
+  [gDays removeAllObjects];
+  for (NSString *day in savedDays) gDays[day] = @([savedDays[day] unsignedLongLongValue]);
+  [gSeen removeAllObjects];
+  gSince = since;
+  // An old or hand-made backup can hold more days than the app keeps.
+  RFStatsPruneDays(RFStatsDayKey([NSDate date]));
+  os_unfair_lock_unlock(&gLock);
+
+  RFStatsSave();
+  return YES;
 }
 
 void RFStatsReset(void) {

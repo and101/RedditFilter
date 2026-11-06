@@ -1,28 +1,5 @@
 #import <UIKit/UIKit.h>
-
-#define kRedditFilterPromoted @"kRedditFilterPromoted"
-#define kRedditFilterRecommended @"kRedditFilterRecommended"
-#define kRedditFilterNSFW @"kRedditFilterNSFW"
-#define kRedditFilterAwards @"kRedditFilterAwards"
-#define kRedditFilterScores @"kRedditFilterScores"
-#define kRedditFilterAutoCollapseAutoMod @"kRedditFilterAutoCollapseAutoMod"
-#define kRedditFilterSwipeToCollapse @"kRedditFilterSwipeToCollapse"
-#define kRedditFilterSwipeCollapseHaptics @"kRedditFilterSwipeCollapseHaptics"
-#define kRedditFilterTapToCollapse @"kRedditFilterTapToCollapse" // with swipe on, keep tap and long press too
-#define kRedditFilterSwipeLeftToCollapse @"kRedditFilterSwipeLeftToCollapse" // with swipe on, left swipes collapse
-#define kRedditFilterSwipeRightToCollapse @"kRedditFilterSwipeRightToCollapse" // with swipe on, right swipes collapse
-#define kRedditFilterVideosForYou @"kRedditFilterVideosForYou"
-#define kRedditFilterExtraCards @"kRedditFilterExtraCards" // hide suggestion, promo and survey cards in feeds
-#define kRedditFilterKeywords @"kRedditFilterKeywords" // array of strings
-#define kRedditFilterKeywordComments @"kRedditFilterKeywordComments"
-#define kRedditFilterKeywordCommentReplies @"kRedditFilterKeywordCommentReplies"
-#define kRedditFilterRedgifsDirect @"kRedditFilterRedgifsDirect"
-#define kRedditFilterRedgifsHD @"kRedditFilterRedgifsHD"
-#define kRedditFilterRedgifsHDWiFiOnly @"kRedditFilterRedgifsHDWiFiOnly"
-#define kRedditFilterColoredComments @"kRedditFilterColoredComments"
-#define kRedditFilterColoredCommentsApollo @"kRedditFilterColoredCommentsApollo"
-#define kRedditFilterCheckUpdates @"kRedditFilterCheckUpdates"
-#define kRedditFilterDiagnostics @"kRedditFilterDiagnostics" // record schema paths for bug reports
+#import "PreferenceKeys.h"
 
 #define kToggleCellID @"kToggleCellID"
 
@@ -33,7 +10,11 @@ extern "C" {
 void RFReloadPreferences(void); // call after changing a setting
 BOOL RFCleanCachedExperiments(void); // YES if it removed experiments the running app may still use
 UIImage *iconWithName(NSString *iconName);
+void RFWarmIcons(void);
 Class CoreClass(NSString *name);
+// Defined in FeedFilterSettingsViewController.x, so every settings screen matches.
+void RFApplySettingsTheme(UIView *view, SEL setter, SEL themeGetter);
+void RFApplySettingsCardTheme(UIView *view);
 #ifdef __cplusplus
 }
 #endif

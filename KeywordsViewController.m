@@ -1,16 +1,6 @@
 #import "KeywordsViewController.h"
 #import "Preferences.h"
 
-@interface UIView ()
-- (void)associatePropertySetter:(SEL)propertySetter withThemePropertyGetter:(SEL)themePropertyGetter;
-@end
-
-// Follows Reddit's light/dark theme when it's available, else keeps the system color.
-static void RFTheme(id view, SEL setter, SEL themeGetter) {
-  if ([view respondsToSelector:@selector(associatePropertySetter:withThemePropertyGetter:)])
-    [view associatePropertySetter:setter withThemePropertyGetter:themeGetter];
-}
-
 NSArray<NSString *> *RFSavedKeywords(void) {
   NSMutableArray *keywords = [NSMutableArray array];
   for (id keyword in [NSUserDefaults.standardUserDefaults arrayForKey:kRedditFilterKeywords])
@@ -18,7 +8,7 @@ NSArray<NSString *> *RFSavedKeywords(void) {
   return keywords;
 }
 
-typedef NS_ENUM(NSInteger, RFKeywordSection) { RFKeywordSectionAdd, RFKeywordSectionList, RFKeywordSectionClear };
+typedef NS_ENUM(NSInteger, RFKeywordSection) { RFKeywordSectionOptions, RFKeywordSectionAdd, RFKeywordSectionList, RFKeywordSectionClear };
 
 @interface RFKeywordsViewController () <UITextFieldDelegate>
 @property(nonatomic, strong) NSMutableArray<NSString *> *keywords;
@@ -39,7 +29,9 @@ typedef NS_ENUM(NSInteger, RFKeywordSection) { RFKeywordSectionAdd, RFKeywordSec
 - (void)viewDidLoad {
   [super viewDidLoad];
   self.tableView.backgroundColor = UIColor.systemGroupedBackgroundColor;
-  RFTheme(self.tableView, @selector(setBackgroundColor:), @selector(canvasColor));
+  RFApplySettingsTheme(self.tableView, @selector(setBackgroundColor:), @selector(bodyColor));
+  self.tableView.rowHeight = UITableViewAutomaticDimension;
+  self.tableView.estimatedRowHeight = 63;
   self.tableView.keyboardDismissMode = UIScrollViewKeyboardDismissModeOnDrag;
 
   UITextField *field = [UITextField new];
@@ -51,7 +43,7 @@ typedef NS_ENUM(NSInteger, RFKeywordSection) { RFKeywordSectionAdd, RFKeywordSec
   field.font = [UIFont systemFontOfSize:16.0];
   field.delegate = self;
   [field addTarget:self action:@selector(updateAddButton) forControlEvents:UIControlEventEditingChanged];
-  RFTheme(field, @selector(setTextColor:), @selector(bodyTextColor));
+  RFApplySettingsTheme(field, @selector(setTextColor:), @selector(bodyTextColor));
   self.field = field;
 
   UIButton *addButton = [UIButton buttonWithType:UIButtonTypeSystem];
@@ -62,6 +54,10 @@ typedef NS_ENUM(NSInteger, RFKeywordSection) { RFKeywordSectionAdd, RFKeywordSec
   [addButton addTarget:self action:@selector(addFromField) forControlEvents:UIControlEventTouchUpInside];
   self.addButton = addButton;
   [self updateAddButton];
+}
+
+- (void)rfToggleChanged:(UISwitch *)sender {
+  RFKeywordSettingsChanged(sender, self.tableView);
 }
 
 - (void)viewDidAppear:(BOOL)animated {
@@ -181,10 +177,11 @@ typedef NS_ENUM(NSInteger, RFKeywordSection) { RFKeywordSectionAdd, RFKeywordSec
 }
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-  return self.keywords.count ? 3 : 2;
+  return self.keywords.count ? 4 : 3;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+  if (section == RFKeywordSectionOptions) return 2;
   if (section == RFKeywordSectionList) return MAX(self.keywords.count, 1); // 1: the empty message
   return 1;
 }
@@ -195,18 +192,19 @@ typedef NS_ENUM(NSInteger, RFKeywordSection) { RFKeywordSectionAdd, RFKeywordSec
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
   if (section != RFKeywordSectionAdd) return nil;
-  return @"Posts with a keyword in their title or text are hidden from your feeds, and comments too if "
-         @"Filter comments too is on (with their replies, if Hide replies too is on). Whole words only, and capitals don't matter: \"cat\" hides \"Cat pics\" "
-         @"but not \"category\". Separate several with commas.";
+  return @"Posts with a keyword in their title or text are hidden from your feeds. Only whole words match, "
+         @"and capitals don't matter: \"cat\" hides \"Cat pics\" but not \"category\". Separate several with commas.";
 }
 
 - (UITableViewCell *)styledCell:(UITableViewCell *)cell {
   cell.backgroundColor = UIColor.secondarySystemGroupedBackgroundColor;
-  RFTheme(cell, @selector(setBackgroundColor:), @selector(bodyColor));
+  RFApplySettingsCardTheme(cell);
   return cell;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+  if (indexPath.section == RFKeywordSectionOptions)
+    return [self styledCell:RFKeywordSettingsCell(tableView, indexPath.row, self)];
   if (indexPath.section == RFKeywordSectionAdd) {
     UITableViewCell *cell = [self styledCell:[[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
                                                                     reuseIdentifier:nil]];
@@ -233,7 +231,9 @@ typedef NS_ENUM(NSInteger, RFKeywordSection) { RFKeywordSectionAdd, RFKeywordSec
     cell = [self styledCell:[[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
                                                    reuseIdentifier:@"RFKeywordCell"]];
   }
-  cell.textLabel.font = [UIFont systemFontOfSize:16.0];
+  cell.textLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+  cell.textLabel.adjustsFontForContentSizeCategory = YES;
+  cell.textLabel.numberOfLines = 0;
   cell.textLabel.textAlignment = NSTextAlignmentNatural;
   cell.imageView.image = nil;
   cell.selectionStyle = UITableViewCellSelectionStyleNone;
@@ -246,14 +246,14 @@ typedef NS_ENUM(NSInteger, RFKeywordSection) { RFKeywordSectionAdd, RFKeywordSec
   } else if (!self.keywords.count) {
     cell.textLabel.text = @"No keywords yet";
     cell.textLabel.textColor = UIColor.secondaryLabelColor;
-    RFTheme(cell.textLabel, @selector(setTextColor:), @selector(metaTextColor));
+    RFApplySettingsTheme(cell.textLabel, @selector(setTextColor:), @selector(metaTextColor));
   } else {
     cell.textLabel.text = self.keywords[indexPath.row];
     cell.textLabel.textColor = UIColor.labelColor;
-    RFTheme(cell.textLabel, @selector(setTextColor:), @selector(bodyTextColor));
+    RFApplySettingsTheme(cell.textLabel, @selector(setTextColor:), @selector(bodyTextColor));
     cell.imageView.image = [UIImage systemImageNamed:@"eye.slash"];
     cell.imageView.tintColor = UIColor.secondaryLabelColor;
-    RFTheme(cell.imageView, @selector(setTintColor:), @selector(metaTextColor));
+    RFApplySettingsTheme(cell.imageView, @selector(setTintColor:), @selector(metaTextColor));
   }
   return cell;
 }
