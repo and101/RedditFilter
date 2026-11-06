@@ -1,6 +1,7 @@
 #import <Comment.h>
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
+#import <os/lock.h>
 #import "ColoredComments.h"
 #import "DebugMenu.h"
 #import "JSONFilter.h"
@@ -12,6 +13,7 @@
 
 // Cached copy of the settings, read by the network hook on background threads.
 static RFPrefs globalPrefs;
+static os_unfair_lock globalPrefsLock = OS_UNFAIR_LOCK_INIT;
 
 extern "C" void RFReloadPreferences(void) {
   NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
@@ -32,7 +34,9 @@ extern "C" void RFReloadPreferences(void) {
   prefs.redgifsDirect = [defaults boolForKey:kRedditFilterRedgifsDirect];
   prefs.redgifsHD = [defaults boolForKey:kRedditFilterRedgifsHD];
   prefs.redgifsHDWiFiOnly = [defaults boolForKey:kRedditFilterRedgifsHDWiFiOnly];
+  os_unfair_lock_lock(&globalPrefsLock);
   globalPrefs = prefs;
+  os_unfair_lock_unlock(&globalPrefsLock);
   RFSetDiagnosticsEnabled([defaults boolForKey:kRedditFilterDiagnostics]);
   // Start watching the network now, so the first page already knows whether it's on Wi-Fi.
   if (prefs.redgifsDirect && prefs.redgifsHD && prefs.redgifsHDWiFiOnly) RFRedgifsOnWiFi();
@@ -359,7 +363,9 @@ static BOOL RFIsAPIHost(NSString *host) {
   if (!RFIsAPIHost(host) || !completionHandler) RF_RECORD_UNFILTERED(request, completionHandler != nil);
 
   // One copy of the settings for this request, so a switch flipped halfway through doesn't mix them.
+  os_unfair_lock_lock(&globalPrefsLock);
   RFPrefs prefs = globalPrefs;
+  os_unfair_lock_unlock(&globalPrefsLock);
   if (!completionHandler || !RFPrefsAnyEnabled(prefs) || !RFIsAPIHost(host)) return %orig;
 
   NSString *operation = RFOperationName(request);
