@@ -24,6 +24,7 @@ static const NSUInteger kRFSeenLimit = 5000; // IDs remembered for counting once
 static const double kRFSaveDelay = 3.0;
 
 static os_unfair_lock gLock = OS_UNFAIR_LOCK_INIT;
+static os_unfair_lock gSaveLock = OS_UNFAIR_LOCK_INIT;
 static BOOL gLoaded, gSaveScheduled, gSavingDisabled;
 static uint64_t gCounts[RFStatCount];
 static NSMutableDictionary<NSString *, NSNumber *> *gDays;
@@ -40,11 +41,14 @@ NSString *RFStatsDayKey(NSDate *date) {
 static NSDictionary *RFStatsPlist(void); // caller holds gLock
 
 static void RFStatsSave(void) {
+  // Serialise snapshots and writes; always take gSaveLock before gLock.
+  os_unfair_lock_lock(&gSaveLock);
   os_unfair_lock_lock(&gLock);
   gSaveScheduled = NO;
   NSDictionary *plist = gSavingDisabled ? nil : RFStatsPlist();
   os_unfair_lock_unlock(&gLock);
   if (plist) [NSUserDefaults.standardUserDefaults setObject:plist forKey:kRFStatsDefaultsKey];
+  os_unfair_lock_unlock(&gSaveLock);
   dispatch_async(dispatch_get_main_queue(), ^{
     [NSNotificationCenter.defaultCenter postNotificationName:RFStatsDidChangeNotification object:nil];
   });
