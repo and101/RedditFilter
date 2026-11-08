@@ -45,6 +45,10 @@ FBPCommentSheetAdapterView
 VideoPostNavigatorImpl
 navigateArticleLinkExperienceForPost:feedContextInfo:videoPlayerView:navigationSession:servingID:analyticsReferrerInfo:
 linkURL
+# Post-page article route (Swift router; observed UIKit and WebKit boundaries)
+MainTabBarNavigationController
+FBPListViewModel
+FBPArticleLinkConsumptionViewModel
 # Swipe-to-collapse restoration (SwipeCollapse.x)
 SliceKit.FlexStackView
 _TtC21PDP_CommentSheet_Impl16CommentSliceView
