@@ -29,7 +29,7 @@ typedef NS_ENUM(NSInteger, RFToggleTag) {
   RFPromoted, RFRecommended, RFNSFW, RFVideos, RFExtraCards,
   RFAwards, RFScores, RFColoured, RFApollo, RFKeywordComments, RFKeywordReplies,
   RFUpdates, RFDirect, RFSD, RFMobileSD, RFAutoMod, RFDiagnostics,
-  RFSwipe, RFLeft, RFRight, RFHaptics, RFTap, RFLinkPanel,
+  RFSwipe, RFLeft, RFRight, RFHaptics, RFTap, RFLinkPanel, RFSafariLinks,
 };
 static const RFToggleRow kToggleRows[] = {
     {kRedditFilterPromoted, @"Promoted", @"Show ads in feeds and comments", @"rpl3/tag,icon_tag", YES},
@@ -80,6 +80,8 @@ static const RFToggleRow kToggleRows[] = {
      @"Long press collapses the whole thread", @"rpl3/comment,icon_comment", NO,
      kRedditFilterSwipeToCollapse},
     {kRedditFilterHideLinkPanel, @"Hide panel on opened links", @"Full page. Votes stay on the post",
+     @"rpl3/link,icon_link", NO},
+    {kRedditFilterSafariLinks, @"Open article links in Safari", @"In-app browser with Safari content blockers",
      @"rpl3/link,icon_link", NO},
 };
 static const NSInteger kToggleRowCount = sizeof(kToggleRows) / sizeof(kToggleRows[0]);
@@ -430,7 +432,7 @@ static NSArray<NSNumber *> *RFSections(id settings) {
 static NSArray<NSNumber *> *RFTags(RFSection section) {
   switch (section) {
     case RFSectionFilters: return @[@(RFPromoted), @(RFRecommended), @(RFNSFW), @(RFVideos), @(RFExtraCards)];
-    case RFSectionAppearance: return @[@(RFAwards), @(RFScores), @(RFColoured), @(RFApollo), @(RFLinkPanel)];
+    case RFSectionAppearance: return @[@(RFAwards), @(RFScores), @(RFColoured), @(RFApollo), @(RFLinkPanel), @(RFSafariLinks)];
     case RFSectionSwipe: return @[@(RFSwipe), @(RFLeft), @(RFRight), @(RFHaptics), @(RFTap)];
     case RFSectionCollapse: return @[@(RFAutoMod)];
     case RFSectionRedgifs: return @[@(RFDirect), @(RFSD), @(RFMobileSD)];
@@ -478,6 +480,8 @@ static NSString *RFFooterText(id settings, NSInteger section) {
              @"can't be reached, Reddit's silent version plays. HD plays when a video has no SD version, and "
              @"videos already loaded keep their quality if your network changes.";
     case RFSectionAppearance:
+      return @"In-app Safari uses your enabled Safari content blockers. It does not run every Safari extension. "
+             @"Tap Done to return to Reddit. Other link types keep Reddit's usual behavior.";
     case RFSectionRootFilters:
     case RFSectionDisplay:
     case RFSectionMore:

@@ -26,3 +26,9 @@ xcrun simctl spawn "$device" "$test_dir/NetworkTests"
 xcrun --sdk iphonesimulator clang++ $flags -framework UIKit -framework CoreGraphics -DCOLORED_COMMENTS_SOURCE="\"$test_dir/ColoredComments.mm\"" \
   tests/ColoredCommentsTests.mm -o "$test_dir/ColoredCommentsTests"
 xcrun simctl spawn "$device" "$test_dir/ColoredCommentsTests"
+
+"$THEOS/bin/logos.pl" -c generator=internal ArticleSafari.x >"$test_dir/ArticleSafari.mm"
+xcrun --sdk iphonesimulator clang++ $flags -framework UIKit -framework SafariServices \
+  -DARTICLE_SAFARI_SOURCE="\"$test_dir/ArticleSafari.mm\"" \
+  tests/ArticleSafariTests.mm -o "$test_dir/ArticleSafariTests"
+xcrun simctl spawn "$device" "$test_dir/ArticleSafariTests"

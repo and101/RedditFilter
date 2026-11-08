@@ -577,6 +577,7 @@ BOOL RFCleanCachedExperiments(void) {
     kRedditFilterColoredComments : @NO,
     kRedditFilterColoredCommentsApollo : @NO,
     kRedditFilterHideLinkPanel : @NO,
+    kRedditFilterSafariLinks : @NO,
     kRedditFilterCheckUpdates : @YES,
   }];
   RFReloadPreferences();
