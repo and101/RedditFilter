@@ -29,13 +29,13 @@ jobs:
     name: Device build and simulator tests
     runs-on: macos-15 # arm64, matching tests/run-sim.sh
     timeout-minutes: 20
-    env:
-      THEOS: ${{ runner.temp }}/theos
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Logos
         run: |
+          export THEOS="$RUNNER_TEMP/theos"
+          echo "THEOS=$THEOS" >> "$GITHUB_ENV"
           theos_commit=$(sed -n 's/^THEOS_COMMIT=//p' build-ipa.sh)
           git clone --filter=blob:none --no-checkout https://github.com/theos/theos.git "$THEOS"
           git -C "$THEOS" checkout -q "$theos_commit"
