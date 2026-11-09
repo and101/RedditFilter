@@ -14,80 +14,6 @@
 @property(nonatomic, readonly) UIViewController *vc;
 @end
 
-#ifdef RF_ARTICLE_TRACE
-// Temporary, opt-in build diagnostic. Only fixed event names, flags and class names are recorded.
-static void RFArticleTrace(NSString *event, NSString *reason, UIViewController *presenter, UIView *view) {
-  BOOL mainThread = NSThread.isMainThread;
-  NSMutableDictionary *entry = [@{@"event" : event, @"reason" : reason, @"mainThread" : @(mainThread),
-      @"enabled" : @([NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterSafariLinks])} mutableCopy];
-  if (mainThread) {
-    if ([presenter isKindOfClass:UIViewController.class]) {
-      entry[@"presenter"] = NSStringFromClass(presenter.class);
-      UIViewController *presented = presenter.presentedViewController;
-      if (presented) entry[@"presented"] = NSStringFromClass(presented.class);
-    }
-    if (view) {
-      entry[@"attached"] = @(view.window != nil);
-      NSMutableArray *responders = [NSMutableArray array], *ancestors = [NSMutableArray array];
-      UIViewController *owner = nil;
-      for (UIResponder *node = view; node && responders.count < 16; node = node.nextResponder) {
-        [responders addObject:NSStringFromClass(node.class)];
-        if (!owner && [node isKindOfClass:UIViewController.class]) owner = (UIViewController *)node;
-      }
-      for (UIView *node = view; node && ancestors.count < 16; node = node.superview)
-        [ancestors addObject:NSStringFromClass(node.class)];
-      entry[@"responders"] = responders;
-      entry[@"viewAncestors"] = ancestors;
-      NSMutableArray *parents = [NSMutableArray array];
-      for (UIViewController *node = owner; node && parents.count < 12; node = node.parentViewController)
-        [parents addObject:NSStringFromClass(node.class)];
-      entry[@"controllerParents"] = parents;
-      if (owner.presentingViewController)
-        entry[@"ownerPresenting"] = NSStringFromClass(owner.presentingViewController.class);
-    }
-  }
-  static dispatch_queue_t queue;
-  static NSMutableArray *entries;
-  static NSString *path;
-  static NSUInteger sequence;
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    queue = dispatch_queue_create("com.and101.RedditFilter.article-trace", DISPATCH_QUEUE_SERIAL);
-    entries = [NSMutableArray array];
-    NSString *directory = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES).firstObject;
-    if (directory) {
-      [NSFileManager.defaultManager createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:nil];
-      path = [directory stringByAppendingPathComponent:@"RedditFilterArticleTrace.plist"];
-    }
-  });
-  dispatch_async(queue, ^{
-    entry[@"sequence"] = @(++sequence);
-    [entries addObject:entry];
-    if (entries.count > 40) [entries removeObjectAtIndex:0];
-    if (path) [entries writeToFile:path atomically:YES];
-  });
-}
-
-static UIViewController *RFArticleTracePresenter(id navigator) {
-  if (!NSThread.isMainThread || ![navigator respondsToSelector:@selector(vc)]) return nil;
-  id presenter = [(RFArticleNavigator *)navigator vc];
-  return [presenter isKindOfClass:UIViewController.class] ? presenter : nil;
-}
-
-static BOOL RFArticleTraceHookMatches(Class cls, SEL selector, const char *encoding, NSString *event) {
-  Method method = class_getInstanceMethod(cls, selector);
-  BOOL matches = method && strcmp(method_getTypeEncoding(method), encoding) == 0;
-  RFArticleTrace(event, !cls ? @"missing-class" : !method ? @"missing-method" :
-                       matches ? @"abi-matched" : @"abi-mismatch", nil, nil);
-  return matches;
-}
-#define RF_ARTICLE_EVENT(...) RFArticleTrace(__VA_ARGS__)
-#define RF_ARTICLE_REJECT(reason, presenter) do { RFArticleTrace(@"article-fallback", reason, presenter, nil); return NO; } while (0)
-#else
-#define RF_ARTICLE_EVENT(...) ((void)0)
-#define RF_ARTICLE_REJECT(reason, presenter) return NO
-#endif
-
 static NSURL *RFArticleValidURL(id url) {
   if (![url isKindOfClass:NSURL.class]) return nil;
   NSString *scheme = [(NSURL *)url scheme].lowercaseString;
@@ -101,28 +27,27 @@ static NSURL *RFArticleURL(id post) {
 }
 
 static BOOL RFOpenArticleInSafari(id navigator, id post) {
-  if (![NSThread isMainThread]) RF_ARTICLE_REJECT(@"off-main-thread", nil);
+  if (![NSThread isMainThread]) return NO;
   if (![NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterSafariLinks])
-    RF_ARTICLE_REJECT(@"option-off", nil);
+    return NO;
   NSURL *url = RFArticleURL(post);
-  if (!url) RF_ARTICLE_REJECT(@"invalid-article-url", nil);
-  if (![navigator respondsToSelector:@selector(vc)]) RF_ARTICLE_REJECT(@"missing-presenter-getter", nil);
+  if (!url) return NO;
+  if (![navigator respondsToSelector:@selector(vc)]) return NO;
   UIViewController *presenter = [(RFArticleNavigator *)navigator vc];
-  if (![presenter isKindOfClass:UIViewController.class]) RF_ARTICLE_REJECT(@"invalid-presenter", nil);
+  if (![presenter isKindOfClass:UIViewController.class]) return NO;
   UIWindow *window = presenter.viewIfLoaded.window;
-  if (!window) RF_ARTICLE_REJECT(@"detached-presenter", presenter);
-  if (window.hidden) RF_ARTICLE_REJECT(@"hidden-window", presenter);
-  if (presenter.presentedViewController) RF_ARTICLE_REJECT(@"existing-presentation", presenter);
-  if (presenter.isBeingPresented) RF_ARTICLE_REJECT(@"presenter-being-presented", presenter);
-  if (presenter.isBeingDismissed) RF_ARTICLE_REJECT(@"presenter-being-dismissed", presenter);
-  if (presenter.transitionCoordinator) RF_ARTICLE_REJECT(@"presenter-transition", presenter);
+  if (!window) return NO;
+  if (window.hidden) return NO;
+  if (presenter.presentedViewController) return NO;
+  if (presenter.isBeingPresented) return NO;
+  if (presenter.isBeingDismissed) return NO;
+  if (presenter.transitionCoordinator) return NO;
   if (window.windowScene && window.windowScene.activationState != UISceneActivationStateForegroundActive)
-    RF_ARTICLE_REJECT(@"inactive-scene", presenter);
+    return NO;
 
   SFSafariViewController *safari = [[SFSafariViewController alloc] initWithURL:url];
   [presenter presentViewController:safari animated:YES completion:nil];
   BOOL presented = safari.presentingViewController != nil || presenter.presentedViewController == safari;
-  RF_ARTICLE_EVENT(@"article-presentation", presented ? @"accepted" : @"declined", presenter, nil);
   return presented;
 }
 
@@ -197,7 +122,6 @@ static void RFRecordArticleWebView(WKWebView *webView, id url) {
   NSURL *valid = RFArticleValidURL(url);
   if (!previous || (!RFArticleValidURL(previous) && valid)) {
     [marker.urls setObject:valid ?: (id)NSNull.null forKey:webView];
-    RF_ARTICLE_EVENT(@"modern-candidate", valid ? @"url-captured" : @"awaiting-url", owner, nil);
   }
 }
 
@@ -211,11 +135,9 @@ static BOOL RFInspectArticlePush(RFArticlePushMarker *marker, Class articleClass
   // Consume first: no later video swipe, preload, redirect or back-navigation can revive this attempt.
   if (!NSThread.isMainThread || marker.cancelled ||
       ![NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterSafariLinks]) {
-    RF_ARTICLE_EVENT(@"modern-fallback", @"cancelled-or-disabled", nil, nil);
     return NO;
   }
   if (!RFArticleStackMatches(navigation, marker.originalStack, destination)) {
-    RF_ARTICLE_EVENT(@"modern-fallback", @"stack-changed", navigation, nil);
     return NO;
   }
   UIWindow *window = destination.viewIfLoaded.window;
@@ -224,7 +146,6 @@ static BOOL RFInspectArticlePush(RFArticlePushMarker *marker, Class articleClass
       navigation.presentedViewController || navigation.isBeingPresented || navigation.isBeingDismissed ||
       destination.isBeingPresented || destination.isBeingDismissed ||
       navigation.transitionCoordinator || destination.transitionCoordinator) {
-    RF_ARTICLE_EVENT(@"modern-fallback", @"presenter-unavailable", navigation, nil);
     return NO;
   }
   WKWebView *article = nil;
@@ -234,14 +155,12 @@ static BOOL RFInspectArticlePush(RFArticlePushMarker *marker, Class articleClass
     NSURL *candidate = RFArticleValidURL([marker.urls objectForKey:view]) ?: RFArticleValidURL(view.URL);
     if (!candidate) continue;
     if (article) {
-      RF_ARTICLE_EVENT(@"modern-fallback", @"ambiguous-visible-article", navigation, nil);
       return NO;
     }
     article = view;
     url = candidate;
   }
   if (!article) {
-    RF_ARTICLE_EVENT(@"modern-fallback", @"no-visible-article", navigation, nil);
     return NO;
   }
   SFSafariViewController *safari = [[SFSafariViewController alloc] initWithURL:url];
@@ -251,14 +170,10 @@ static BOOL RFInspectArticlePush(RFArticlePushMarker *marker, Class articleClass
     if ((safari.presentingViewController || navigation.presentedViewController == safari) &&
         RFArticleStackMatches(navigation, marker.originalStack, destination)) {
       [navigation popViewControllerAnimated:NO];
-      RF_ARTICLE_EVENT(@"modern-return", @"captured-destination-popped", navigation, nil);
-    } else {
-      RF_ARTICLE_EVENT(@"modern-return", @"stack-or-presentation-changed", navigation, nil);
     }
   }];
   BOOL accepted = safari.presentingViewController != nil || navigation.presentedViewController == safari;
   if (accepted) [article stopLoading];
-  RF_ARTICLE_EVENT(@"modern-presentation", accepted ? @"accepted" : @"declined", navigation, nil);
   return accepted;
 }
 
@@ -275,7 +190,6 @@ static BOOL RFInspectArticlePush(RFArticlePushMarker *marker, Class articleClass
     marker.destination = destination;
     marker.originalStack = navigation.viewControllers;
     objc_setAssociatedObject(destination, &kRFArticlePushMarker, marker, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    RF_ARTICLE_EVENT(@"modern-push", @"captured", navigation, nil);
   }
   %orig;
   if (!marker) return;
@@ -301,39 +215,14 @@ static BOOL RFInspectArticlePush(RFArticlePushMarker *marker, Class articleClass
                          navigationSession:(id)navigationSession
                                  servingID:(id)servingID
                      analyticsReferrerInfo:(id)analyticsReferrerInfo {
-  RF_ARTICLE_EVENT(@"article-route", @"entered", nil, nil);
   if (!RFOpenArticleInSafari(self, post)) %orig;
 }
 %end
 %end
 
-#ifdef RF_ARTICLE_TRACE
-%group RFArticleTraceFeedPost
-%hook RFArticleFeedRouter
-- (void)navigateToUrl:(id)url forPost:(id)post outboundSourceElement:(NSUInteger)element
- analyticsReferrerInfo:(id)referrer referrerServingID:(id)servingID {
-  RFArticleTrace(@"feed-post-route", @"entered", RFArticleTracePresenter(self), nil);
-  %orig;
-}
-%end
-%end
-
-%group RFArticleTraceFeedContext
-%hook RFArticleFeedRouter
-- (void)navigateToUrl:(id)url forPost:(id)post context:(NSInteger)context
- outboundSourceElement:(NSUInteger)element analyticsReferrerInfo:(id)referrer referrerServingID:(id)servingID {
-  RFArticleTrace(@"feed-post-context-route", @"entered", RFArticleTracePresenter(self), nil);
-  %orig;
-}
-%end
-%end
-
-#endif
-
 %group RFArticleWebViewStart
 %hook RFArticleWebViewModel
 - (void)webView:(WKWebView *)webView didStartProvisionalNavigation:(WKNavigation *)navigation {
-  RF_ARTICLE_EVENT(@"article-webview", @"provisional-start", nil, webView);
   RFRecordArticleWebView(webView, webView.URL);
   %orig;
 }
@@ -357,36 +246,19 @@ static BOOL RFInspectArticlePush(RFArticlePushMarker *marker, Class articleClass
   // Only install the hook for the object-argument ABI checked in Reddit 2026.44.
   if (method && strcmp(method_getTypeEncoding(method), "v64@0:8@16@24@32@40@48@56") == 0) {
     %init(RFArticleSafari, RFArticleNavigator = navigator);
-    RF_ARTICLE_EVENT(@"article-hook", @"installed", nil, nil);
-  } else {
-    RF_ARTICLE_EVENT(@"article-hook", !navigator ? @"missing-class" : !method ? @"missing-method" : @"abi-mismatch", nil, nil);
   }
-#ifdef RF_ARTICLE_TRACE
-  Class feed = NSClassFromString(@"Actions_FeedRouter_Impl.FeedRouterImpl");
-  if (RFArticleTraceHookMatches(feed, @selector(navigateToUrl:forPost:outboundSourceElement:analyticsReferrerInfo:referrerServingID:),
-                                "v56@0:8@16@24Q32@40@48", @"feed-post-hook")) {
-    %init(RFArticleTraceFeedPost, RFArticleFeedRouter = feed);
-  }
-  if (RFArticleTraceHookMatches(feed, @selector(navigateToUrl:forPost:context:outboundSourceElement:analyticsReferrerInfo:referrerServingID:),
-                                "v64@0:8@16@24q32Q40@48@56", @"feed-post-context-hook")) {
-    %init(RFArticleTraceFeedContext, RFArticleFeedRouter = feed);
-  }
-#endif
   Class navigation = NSClassFromString(@"MainTabBar.MainTabBarNavigationController");
   Method push = class_getInstanceMethod(navigation, @selector(pushViewController:animated:));
   if (push && strcmp(method_getTypeEncoding(push), "v28@0:8@16B24") == 0) {
     %init(RFArticlePush, RFArticleNavigationController = navigation);
-    RF_ARTICLE_EVENT(@"modern-push-hook", @"installed", nil, nil);
-  } else RF_ARTICLE_EVENT(@"modern-push-hook", @"missing-or-abi-mismatch", nil, nil);
+  }
   Class web = NSClassFromString(@"Video_FBP_Impl.FBPArticleLinkConsumptionViewModel");
   Method start = class_getInstanceMethod(web, @selector(webView:didStartProvisionalNavigation:));
   if (start && strcmp(method_getTypeEncoding(start), "v32@0:8@16@24") == 0) {
     %init(RFArticleWebViewStart, RFArticleWebViewModel = web);
-    RF_ARTICLE_EVENT(@"article-webview-hook", @"installed", nil, nil);
-  } else RF_ARTICLE_EVENT(@"article-webview-hook", @"missing-or-abi-mismatch", nil, nil);
+  }
   Method policy = class_getInstanceMethod(web, @selector(webView:decidePolicyForNavigationAction:decisionHandler:));
   if (policy && strcmp(method_getTypeEncoding(policy), "v40@0:8@\"WKWebView\"16@\"WKNavigationAction\"24@?<v@?q>32") == 0) {
     %init(RFArticleWebViewPolicy, RFArticleWebViewModel = web);
-    RF_ARTICLE_EVENT(@"article-policy-hook", @"installed", nil, nil);
-  } else RF_ARTICLE_EVENT(@"article-policy-hook", @"missing-or-abi-mismatch", nil, nil);
+  }
 }
