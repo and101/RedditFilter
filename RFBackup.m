@@ -39,6 +39,7 @@ static NSString *const kRFBackupSettingKeys[] = {
     kRedditFilterColoredComments,
     kRedditFilterColoredCommentsApollo,
     kRedditFilterHideLinkPanel,
+    kRedditFilterSafariLinks,
     kRedditFilterCheckUpdates,
     kRedditFilterDiagnostics,
 };

@@ -22,6 +22,57 @@ jobs:
             bash -n "$script"
           done
 
-      # The simulator tests (tests/run-sim.sh) need Theos and a booted simulator, so they run locally.
       - name: JSON filter and swipe-to-collapse tests
         run: tests/run.sh
+
+  simulator:
+    name: ${{ matrix.device }} simulator tests
+    runs-on: macos-15 # arm64, matching tests/run-sim.sh
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [iPhone, iPad]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Logos
+        run: |
+          export THEOS="$RUNNER_TEMP/theos"
+          echo "THEOS=$THEOS" >> "$GITHUB_ENV"
+          theos_commit=$(sed -n 's/^THEOS_COMMIT=//p' build-ipa.sh)
+          git clone --filter=blob:none --no-checkout https://github.com/theos/theos.git "$THEOS"
+          git -C "$THEOS" checkout -q "$theos_commit"
+          git -C "$THEOS" submodule update --init vendor/logos
+
+      - name: Build device dylib
+        if: matrix.device == 'iPhone'
+        run: |
+          git -C "$THEOS" submodule update --init vendor/include vendor/lib
+          brew install ldid-procursus
+          make all FINALPACKAGE=1 ADDITIONAL_CFLAGS=-DRF_SIDELOADED=1
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.device == 'iPhone'
+        with:
+          name: RedditFilter-arm64
+          path: .theos/obj/RedditFilter.dylib
+          include-hidden-files: true
+          if-no-files-found: error
+
+      - name: Boot an available ${{ matrix.device }} simulator
+        timeout-minutes: 5
+        env:
+          DEVICE_FAMILY: ${{ matrix.device }}
+        run: |
+          selected=$(xcrun simctl list devices available --json | jq -c --arg family "$DEVICE_FAMILY" \
+            '[.devices | to_entries[] | .key as $runtime | .value[] | select(.name | startswith($family)) |
+              {udid, name, runtime: $runtime}][0] // empty')
+          test -n "$selected" || { echo "No available $DEVICE_FAMILY simulator" >&2; exit 1; }
+          echo "Selected simulator: $selected"
+          device=$(printf '%s' "$selected" | jq -r .udid)
+          echo "SIMULATOR_UDID=$device" >> "$GITHUB_ENV"
+          xcrun simctl bootstatus "$device" -b
+
+      - name: Simulator tests
+        run: tests/run-sim.sh "$SIMULATOR_UDID"

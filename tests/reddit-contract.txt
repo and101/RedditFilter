@@ -41,6 +41,14 @@ _TtC63Components_CommentTreeItem_CommentTreeItemPresentation_Internal30CommentTr
 # Panel on links opened from a post page (LinkPanel.x)
 FBPArticleLinkConsumptionView
 FBPCommentSheetAdapterView
+# Optional in-app Safari article route (ArticleSafari.x)
+VideoPostNavigatorImpl
+navigateArticleLinkExperienceForPost:feedContextInfo:videoPlayerView:navigationSession:servingID:analyticsReferrerInfo:
+linkURL
+# Post-page article route (Swift router; observed UIKit and WebKit boundaries)
+MainTabBarNavigationController
+FBPListViewModel
+FBPArticleLinkConsumptionViewModel
 # Swipe-to-collapse restoration (SwipeCollapse.x)
 SliceKit.FlexStackView
 _TtC21PDP_CommentSheet_Impl16CommentSliceView
