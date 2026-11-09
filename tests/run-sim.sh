@@ -30,5 +30,5 @@ xcrun simctl spawn "$device" "$test_dir/ColoredCommentsTests"
 "$THEOS/bin/logos.pl" -c generator=internal ArticleSafari.x >"$test_dir/ArticleSafari.mm"
 xcrun --sdk iphonesimulator clang++ $flags -framework UIKit -framework SafariServices -framework WebKit -framework CoreGraphics \
   -DARTICLE_SAFARI_SOURCE="\"$test_dir/ArticleSafari.mm\"" \
-  tests/ArticleSafariTests.mm -o "$test_dir/ArticleSafariTests"
+  tests/ArticleSafariTests.mm -x objective-c DebugMenu.x -x none -o "$test_dir/ArticleSafariTests"
 xcrun simctl spawn "$device" "$test_dir/ArticleSafariTests"

@@ -26,9 +26,13 @@ jobs:
         run: tests/run.sh
 
   simulator:
-    name: Device build and simulator tests
+    name: ${{ matrix.device }} simulator tests
     runs-on: macos-15 # arm64, matching tests/run-sim.sh
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [iPhone, iPad]
     steps:
       - uses: actions/checkout@v4
 
@@ -42,24 +46,31 @@ jobs:
           git -C "$THEOS" submodule update --init vendor/logos
 
       - name: Build device dylib
+        if: matrix.device == 'iPhone'
         run: |
           git -C "$THEOS" submodule update --init vendor/include vendor/lib
           brew install ldid-procursus
           make all FINALPACKAGE=1 ADDITIONAL_CFLAGS=-DRF_SIDELOADED=1
 
       - uses: actions/upload-artifact@v4
+        if: matrix.device == 'iPhone'
         with:
           name: RedditFilter-arm64
           path: .theos/obj/RedditFilter.dylib
           include-hidden-files: true
           if-no-files-found: error
 
-      - name: Boot an available iPhone simulator
+      - name: Boot an available ${{ matrix.device }} simulator
         timeout-minutes: 5
+        env:
+          DEVICE_FAMILY: ${{ matrix.device }}
         run: |
-          device=$(xcrun simctl list devices available --json | jq -r \
-            '[.devices[][] | select(.name | startswith("iPhone"))][0].udid // empty')
-          test -n "$device" || { echo "No available iPhone simulator" >&2; exit 1; }
+          selected=$(xcrun simctl list devices available --json | jq -c --arg family "$DEVICE_FAMILY" \
+            '[.devices | to_entries[] | .key as $runtime | .value[] | select(.name | startswith($family)) |
+              {udid, name, runtime: $runtime}][0] // empty')
+          test -n "$selected" || { echo "No available $DEVICE_FAMILY simulator" >&2; exit 1; }
+          echo "Selected simulator: $selected"
+          device=$(printf '%s' "$selected" | jq -r .udid)
           echo "SIMULATOR_UDID=$device" >> "$GITHUB_ENV"
           xcrun simctl bootstatus "$device" -b
 

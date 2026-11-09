@@ -81,7 +81,7 @@ static const RFToggleRow kToggleRows[] = {
      kRedditFilterSwipeToCollapse},
     {kRedditFilterHideLinkPanel, @"Hide panel on opened links", @"Full page. Votes stay on the post",
      @"rpl3/link,icon_link", NO},
-    {kRedditFilterSafariLinks, @"Open article links in Safari", @"In-app browser with Safari content blockers",
+    {kRedditFilterSafariLinks, @"Open article links in Safari", @"Opens an in-app Safari sheet",
      @"rpl3/link,icon_link", NO},
 };
 static const NSInteger kToggleRowCount = sizeof(kToggleRows) / sizeof(kToggleRows[0]);
@@ -480,8 +480,9 @@ static NSString *RFFooterText(id settings, NSInteger section) {
              @"can't be reached, Reddit's silent version plays. HD plays when a video has no SD version, and "
              @"videos already loaded keep their quality if your network changes.";
     case RFSectionAppearance:
-      return @"In-app Safari uses your enabled Safari content blockers. It does not run every Safari extension. "
-             @"Tap Done to return to Reddit. Other link types keep Reddit's usual behavior.";
+      return @"In-app Safari uses native Safari content blockers enabled in iOS Settings. "
+             @"A Safari web extension alone may not provide this blocking. Tap Done to return to Reddit. "
+             @"The separate Open Reddit links here extension handles links coming from Safari.";
     case RFSectionRootFilters:
     case RFSectionDisplay:
     case RFSectionMore:
@@ -1117,6 +1118,14 @@ static NSString *RFBackupSummaryMessage(RFBackupSummary *summary) {
   }
 
   NSDictionary *record = snapshot[row];
+  NSString *summary = record[kRFDebugSummary];
+  if (summary) {
+    cell.textLabel.textColor = [UIColor labelColor];
+    cell.textLabel.text = record[kRFDebugOp];
+    cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
+    cell.detailTextLabel.text = summary;
+    return cell;
+  }
   NSArray<NSString *> *unfiltered = record[kRFDebugUnfiltered];
   if (unfiltered) {
     cell.textLabel.textColor = [UIColor labelColor];
