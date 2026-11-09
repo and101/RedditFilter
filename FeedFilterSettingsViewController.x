@@ -482,7 +482,9 @@ static NSString *RFFooterText(id settings, NSInteger section) {
     case RFSectionAppearance:
       return @"In-app Safari uses native Safari content blockers enabled in iOS Settings. "
              @"A Safari web extension alone may not provide this blocking. Tap Done to return to Reddit. "
-             @"The separate Open Reddit links here extension handles links coming from Safari.";
+             @"The separate Open Reddit links here extension handles links coming from Safari. With Open "
+             @"article links in Safari on, Hide panel on opened links only matters when an article still "
+             @"opens in Reddit's own screen.";
     case RFSectionRootFilters:
     case RFSectionDisplay:
     case RFSectionMore:

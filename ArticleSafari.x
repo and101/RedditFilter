@@ -3,6 +3,7 @@
 #import <SafariServices/SafariServices.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
+#import <stdatomic.h>
 #import <string.h>
 #import "PreferenceKeys.h"
 #import "DebugMenu.h"
@@ -10,6 +11,16 @@
 @interface RFArticlePost : NSObject
 @property(nonatomic, readonly) NSURL *linkURL;
 @end
+
+// The setting, kept up to date as the defaults change (read on every push in Home's stack, so not looked
+// up each time).
+static atomic_bool gRFSafariLinks;
+
+static void RFArticleReadSetting(void) {
+  atomic_store(&gRFSafariLinks, [NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterSafariLinks]);
+}
+
+static BOOL RFArticleSafariLinksOn(void) { return atomic_load(&gRFSafariLinks); }
 
 static void RFArticleRecordResult(RFArticleSafariResult result) {
   if (RFDiagnosticsEnabled()) [[RFSchemaDebug shared] recordArticleSafariResult:result];
@@ -38,7 +49,7 @@ static NSURL *RFArticleURL(id post) {
 
 static BOOL RFOpenArticleInSafari(id navigator, id post) {
   if (![NSThread isMainThread]) return RFArticleFallback(RFArticleSafariPresenterUnavailable);
-  if (![NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterSafariLinks])
+  if (!RFArticleSafariLinksOn())
     return RFArticleFallback(RFArticleSafariDisabledOrCancelled);
   NSURL *url = RFArticleURL(post);
   if (!url) return RFArticleFallback(RFArticleSafariInvalidURL);
@@ -155,7 +166,7 @@ static BOOL RFInspectArticlePush(RFArticlePushMarker *marker, Class articleClass
     objc_setAssociatedObject(destination, &kRFArticlePushMarker, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
   // Consume first: no later video swipe, preload, redirect or back-navigation can revive this attempt.
   if (!NSThread.isMainThread || marker.cancelled ||
-      ![NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterSafariLinks]) {
+      !RFArticleSafariLinksOn()) {
     return RFArticleFallback(RFArticleSafariDisabledOrCancelled);
   }
   if (!RFArticleStackMatches(navigation, marker.originalStack, destination)) {
@@ -225,7 +236,7 @@ static void RFScheduleArticleInspection(RFArticlePushMarker *marker,
 - (void)pushViewController:(UIViewController *)destination animated:(BOOL)animated {
   UINavigationController *navigation = (UINavigationController *)self;
   RFArticlePushMarker *marker = nil;
-  if (NSThread.isMainThread && [NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterSafariLinks] &&
+  if (NSThread.isMainThread && RFArticleSafariLinksOn() &&
       [NSStringFromClass(destination.class) isEqualToString:kRFArticleControllerName] &&
       navigation.topViewController && navigation.topViewController != destination) {
     marker = [RFArticlePushMarker new];
@@ -274,6 +285,13 @@ static void RFScheduleArticleInspection(RFArticlePushMarker *marker,
 %end
 
 %ctor {
+  RFArticleReadSetting();
+  [NSNotificationCenter.defaultCenter addObserverForName:NSUserDefaultsDidChangeNotification
+                                                  object:nil
+                                                   queue:nil
+                                              usingBlock:^(NSNotification *note) {
+                                                RFArticleReadSetting();
+                                              }];
   RFArticleSafariHooks hooks = 0;
   Class navigator = NSClassFromString(@"Video_OldVideo_OldVideoLegacy.VideoPostNavigatorImpl");
   SEL route = @selector(navigateArticleLinkExperienceForPost:feedContextInfo:videoPlayerView:navigationSession:servingID:analyticsReferrerInfo:);
@@ -296,7 +314,10 @@ static void RFScheduleArticleInspection(RFArticlePushMarker *marker,
     hooks |= RFArticleSafariHookStart;
   }
   Method policy = class_getInstanceMethod(web, @selector(webView:decidePolicyForNavigationAction:decisionHandler:));
-  if (policy && strcmp(method_getTypeEncoding(policy), "v40@0:8@\"WKWebView\"16@\"WKNavigationAction\"24@?<v@?q>32") == 0) {
+  // Reddit 2026.44 reports the long form (with class names); the plain form is the same method.
+  const char *policyTypes = policy ? method_getTypeEncoding(policy) : NULL;
+  if (policyTypes && (strcmp(policyTypes, "v40@0:8@\"WKWebView\"16@\"WKNavigationAction\"24@?<v@?q>32") == 0 ||
+                      strcmp(policyTypes, "v40@0:8@16@24@?32") == 0)) {
     %init(RFArticleWebViewPolicy, RFArticleWebViewModel = web);
     hooks |= RFArticleSafariHookPolicy;
   }
