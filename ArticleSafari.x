@@ -5,10 +5,20 @@
 #import <objc/runtime.h>
 #import <string.h>
 #import "PreferenceKeys.h"
+#import "DebugMenu.h"
 
 @interface RFArticlePost : NSObject
 @property(nonatomic, readonly) NSURL *linkURL;
 @end
+
+static void RFArticleRecordResult(RFArticleSafariResult result) {
+  if (RFDiagnosticsEnabled()) [[RFSchemaDebug shared] recordArticleSafariResult:result];
+}
+
+static BOOL RFArticleFallback(RFArticleSafariResult result) {
+  RFArticleRecordResult(result);
+  return NO;
+}
 
 @interface RFArticleNavigator : NSObject
 @property(nonatomic, readonly) UIViewController *vc;
@@ -27,27 +37,24 @@ static NSURL *RFArticleURL(id post) {
 }
 
 static BOOL RFOpenArticleInSafari(id navigator, id post) {
-  if (![NSThread isMainThread]) return NO;
+  if (![NSThread isMainThread]) return RFArticleFallback(RFArticleSafariPresenterUnavailable);
   if (![NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterSafariLinks])
-    return NO;
+    return RFArticleFallback(RFArticleSafariDisabledOrCancelled);
   NSURL *url = RFArticleURL(post);
-  if (!url) return NO;
-  if (![navigator respondsToSelector:@selector(vc)]) return NO;
+  if (!url) return RFArticleFallback(RFArticleSafariInvalidURL);
+  if (![navigator respondsToSelector:@selector(vc)]) return RFArticleFallback(RFArticleSafariMissingGetter);
   UIViewController *presenter = [(RFArticleNavigator *)navigator vc];
-  if (![presenter isKindOfClass:UIViewController.class]) return NO;
+  if (![presenter isKindOfClass:UIViewController.class]) return RFArticleFallback(RFArticleSafariPresenterUnavailable);
   UIWindow *window = presenter.viewIfLoaded.window;
-  if (!window) return NO;
-  if (window.hidden) return NO;
-  if (presenter.presentedViewController) return NO;
-  if (presenter.isBeingPresented) return NO;
-  if (presenter.isBeingDismissed) return NO;
-  if (presenter.transitionCoordinator) return NO;
-  if (window.windowScene && window.windowScene.activationState != UISceneActivationStateForegroundActive)
-    return NO;
+  if (!window || window.hidden || presenter.presentedViewController || presenter.isBeingPresented ||
+      presenter.isBeingDismissed || presenter.transitionCoordinator ||
+      (window.windowScene && window.windowScene.activationState != UISceneActivationStateForegroundActive))
+    return RFArticleFallback(RFArticleSafariPresenterUnavailable);
 
   SFSafariViewController *safari = [[SFSafariViewController alloc] initWithURL:url];
   [presenter presentViewController:safari animated:YES completion:nil];
   BOOL presented = safari.presentingViewController != nil || presenter.presentedViewController == safari;
+  RFArticleRecordResult(presented ? RFArticleSafariLegacyPresented : RFArticleSafariPresentationDeclined);
   return presented;
 }
 
@@ -125,6 +132,20 @@ static void RFRecordArticleWebView(WKWebView *webView, id url) {
   }
 }
 
+static NSArray<WKWebView *> *RFInitialArticleWebViews(UIViewController *destination) {
+  UIView *root = destination.viewIfLoaded;
+  if (!root) return @[];
+  NSMutableArray<UIView *> *pending = [NSMutableArray arrayWithObject:root];
+  NSMutableArray<WKWebView *> *webViews = [NSMutableArray array];
+  while (pending.count) {
+    UIView *view = pending.lastObject;
+    [pending removeLastObject];
+    if ([view isKindOfClass:WKWebView.class]) [webViews addObject:(WKWebView *)view];
+    else [pending addObjectsFromArray:view.subviews]; // no need to traverse WebKit's own internal views
+  }
+  return webViews;
+}
+
 static BOOL RFInspectArticlePush(RFArticlePushMarker *marker, Class articleClass) {
   if (!marker || marker.inspected) return NO;
   marker.inspected = YES;
@@ -135,10 +156,10 @@ static BOOL RFInspectArticlePush(RFArticlePushMarker *marker, Class articleClass
   // Consume first: no later video swipe, preload, redirect or back-navigation can revive this attempt.
   if (!NSThread.isMainThread || marker.cancelled ||
       ![NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterSafariLinks]) {
-    return NO;
+    return RFArticleFallback(RFArticleSafariDisabledOrCancelled);
   }
   if (!RFArticleStackMatches(navigation, marker.originalStack, destination)) {
-    return NO;
+    return RFArticleFallback(RFArticleSafariStackChanged);
   }
   UIWindow *window = destination.viewIfLoaded.window;
   if (!window || window.hidden || navigation.viewIfLoaded.window != window ||
@@ -146,22 +167,26 @@ static BOOL RFInspectArticlePush(RFArticlePushMarker *marker, Class articleClass
       navigation.presentedViewController || navigation.isBeingPresented || navigation.isBeingDismissed ||
       destination.isBeingPresented || destination.isBeingDismissed ||
       navigation.transitionCoordinator || destination.transitionCoordinator) {
-    return NO;
+    return RFArticleFallback(RFArticleSafariPresenterUnavailable);
   }
   WKWebView *article = nil;
   NSURL *url = nil;
-  for (WKWebView *view in marker.urls.keyEnumerator.allObjects) {
+  BOOL visibleArticle = NO;
+  // WebKit can send its first callbacks before the view has an owner, so no marker captured them.
+  // Inspect the initial loaded hierarchy too; visibility and owner checks remain unchanged.
+  for (WKWebView *view in RFInitialArticleWebViews(destination)) {
     if (!RFArticleWebViewIsVisible(view, destination, articleClass)) continue;
+    visibleArticle = YES;
     NSURL *candidate = RFArticleValidURL([marker.urls objectForKey:view]) ?: RFArticleValidURL(view.URL);
     if (!candidate) continue;
     if (article) {
-      return NO;
+      return RFArticleFallback(RFArticleSafariAmbiguousArticle);
     }
     article = view;
     url = candidate;
   }
   if (!article) {
-    return NO;
+    return RFArticleFallback(visibleArticle ? RFArticleSafariURLNotReady : RFArticleSafariNoVisibleArticle);
   }
   SFSafariViewController *safari = [[SFSafariViewController alloc] initWithURL:url];
   [navigation presentViewController:safari animated:YES completion:^{
@@ -170,11 +195,29 @@ static BOOL RFInspectArticlePush(RFArticlePushMarker *marker, Class articleClass
     if ((safari.presentingViewController || navigation.presentedViewController == safari) &&
         RFArticleStackMatches(navigation, marker.originalStack, destination)) {
       [navigation popViewControllerAnimated:NO];
+      RFArticleRecordResult(RFArticleSafariReturnedToPost);
+    } else {
+      RFArticleRecordResult(RFArticleSafariReturnSkipped);
     }
   }];
   BOOL accepted = safari.presentingViewController != nil || navigation.presentedViewController == safari;
   if (accepted) [article stopLoading];
+  RFArticleRecordResult(accepted ? RFArticleSafariModernPresented : RFArticleSafariPresentationDeclined);
   return accepted;
+}
+
+static void RFScheduleArticleInspection(RFArticlePushMarker *marker,
+                                        id<UIViewControllerTransitionCoordinator> coordinator, Class articleClass) {
+  void (^inspect)(void) = ^{
+    dispatch_async(dispatch_get_main_queue(), ^{
+      // The Swift view class may first become available while the pushed screen loads.
+      RFInspectArticlePush(marker, articleClass ?: NSClassFromString(@"Video_FBP_Impl.FBPArticleLinkConsumptionView"));
+    });
+  };
+  if (!coordinator || ![coordinator animateAlongsideTransition:nil completion:^(id<UIViewControllerTransitionCoordinatorContext> context) {
+    marker.cancelled = context.isCancelled;
+    inspect();
+  }]) inspect();
 }
 
 %group RFArticlePush
@@ -193,16 +236,7 @@ static BOOL RFInspectArticlePush(RFArticlePushMarker *marker, Class articleClass
   }
   %orig;
   if (!marker) return;
-  void (^inspect)(void) = ^{
-    dispatch_async(dispatch_get_main_queue(), ^{
-      RFInspectArticlePush(marker, NSClassFromString(@"Video_FBP_Impl.FBPArticleLinkConsumptionView"));
-    });
-  };
-  id<UIViewControllerTransitionCoordinator> coordinator = navigation.transitionCoordinator;
-  if (!coordinator || ![coordinator animateAlongsideTransition:nil completion:^(id<UIViewControllerTransitionCoordinatorContext> context) {
-    marker.cancelled = context.isCancelled;
-    inspect();
-  }]) inspect();
+  RFScheduleArticleInspection(marker, navigation.transitionCoordinator, Nil);
 }
 %end
 %end
@@ -240,25 +274,31 @@ static BOOL RFInspectArticlePush(RFArticlePushMarker *marker, Class articleClass
 %end
 
 %ctor {
+  RFArticleSafariHooks hooks = 0;
   Class navigator = NSClassFromString(@"Video_OldVideo_OldVideoLegacy.VideoPostNavigatorImpl");
   SEL route = @selector(navigateArticleLinkExperienceForPost:feedContextInfo:videoPlayerView:navigationSession:servingID:analyticsReferrerInfo:);
   Method method = class_getInstanceMethod(navigator, route);
   // Only install the hook for the object-argument ABI checked in Reddit 2026.44.
   if (method && strcmp(method_getTypeEncoding(method), "v64@0:8@16@24@32@40@48@56") == 0) {
     %init(RFArticleSafari, RFArticleNavigator = navigator);
+    hooks |= RFArticleSafariHookLegacy;
   }
   Class navigation = NSClassFromString(@"MainTabBar.MainTabBarNavigationController");
   Method push = class_getInstanceMethod(navigation, @selector(pushViewController:animated:));
   if (push && strcmp(method_getTypeEncoding(push), "v28@0:8@16B24") == 0) {
     %init(RFArticlePush, RFArticleNavigationController = navigation);
+    hooks |= RFArticleSafariHookPush;
   }
   Class web = NSClassFromString(@"Video_FBP_Impl.FBPArticleLinkConsumptionViewModel");
   Method start = class_getInstanceMethod(web, @selector(webView:didStartProvisionalNavigation:));
   if (start && strcmp(method_getTypeEncoding(start), "v32@0:8@16@24") == 0) {
     %init(RFArticleWebViewStart, RFArticleWebViewModel = web);
+    hooks |= RFArticleSafariHookStart;
   }
   Method policy = class_getInstanceMethod(web, @selector(webView:decidePolicyForNavigationAction:decisionHandler:));
   if (policy && strcmp(method_getTypeEncoding(policy), "v40@0:8@\"WKWebView\"16@\"WKNavigationAction\"24@?<v@?q>32") == 0) {
     %init(RFArticleWebViewPolicy, RFArticleWebViewModel = web);
+    hooks |= RFArticleSafariHookPolicy;
   }
+  [[RFSchemaDebug shared] setArticleSafariHooks:hooks];
 }

@@ -3,6 +3,7 @@
 // Implementation of RFSchemaDebug, which records only while Diagnostics is on.
 
 #import "DebugMenu.h"
+#import "PreferenceKeys.h"
 #include <stdatomic.h>
 
 static atomic_bool gRFDiagnosticsEnabled;
@@ -25,11 +26,13 @@ NSString *const kRFDebugSeen = @"seen";
 NSString *const kRFDebugFailedJSON = @"failedJSON";
 NSString *const kRFDebugUnfiltered = @"unfiltered";
 NSString *const kRFDebugFeedCards = @"feedCards";
+NSString *const kRFDebugSummary = @"summary";
 
 // The row that lists GraphQL requests the filter let through. Always first.
 static NSString *const kRFUnfilteredRow = @"Unfiltered requests";
 // The row that lists feed cards that aren't posts or ads. Always last.
 static NSString *const kRFFeedCardsRow = @"Other feed cards";
+static NSString *const kRFArticleSafariRow = @"Article links in Safari";
 static const NSUInteger kRFMaxCardTypes = 30;
 
 // Bounds for discovery so a broken path can never turn into an expensive walk
@@ -46,6 +49,8 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
   NSMutableDictionary<NSString *, NSMutableDictionary *> *_unfiltered;
   // Card type -> { count, known, last operation }
   NSMutableDictionary<NSString *, NSMutableDictionary *> *_feedCards;
+  RFArticleSafariHooks _articleSafariHooks;
+  RFArticleSafariResult _articleSafariResult;
 }
 
 + (instancetype)shared {
@@ -76,6 +81,7 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
     [self seedOperation:@"FeedPostDetailsByIds" expected:@"data.postsInfoByIds"];
     [self seedOperation:@"PostInfoById" expected:@"data.postInfoById.commentForest.trees"];
     [self seedOperation:@"PdpCommentsAds" expected:@"data.*.pdpCommentsAds"];
+    [self seedOperation:kRFArticleSafariRow expected:@"article hook compatibility"];
     [self seedOperation:kRFFeedCardsRow expected:@"feed cards that aren't posts or ads"];
   }
   return self;
@@ -187,6 +193,45 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
   });
 }
 
+- (void)setArticleSafariHooks:(RFArticleSafariHooks)hooks {
+  dispatch_sync(_queue, ^{ _articleSafariHooks = hooks; });
+}
+
+- (void)recordArticleSafariResult:(RFArticleSafariResult)result {
+  if (!RFDiagnosticsEnabled() || result > RFArticleSafariReturnSkipped) return;
+  dispatch_sync(_queue, ^{
+    if (RFDiagnosticsEnabled()) _articleSafariResult = result;
+  });
+}
+
+// Caller is on _queue. This is a single fixed outcome, not a browsing history.
+- (NSString *)articleSafariSummary {
+  NSArray<NSString *> *results = @[
+    @"No article attempt observed with Diagnostics on",
+    @"Legacy article: Safari presented",
+    @"Post-page article: Safari presented",
+    @"Native behavior kept: option off or transition cancelled",
+    @"Native behavior kept: URL is not eligible HTTP(S)",
+    @"Native behavior kept: expected getter missing",
+    @"Native behavior kept: presenter, scene or transition unavailable",
+    @"Native behavior kept: navigation stack changed",
+    @"Native behavior kept: no visible initial article",
+    @"Native behavior kept: initial article URL not ready",
+    @"Native behavior kept: multiple visible article candidates",
+    @"Native behavior kept: Safari presentation declined",
+    @"Post-page Safari presented; original post restored",
+    @"Native stack preserved after presentation or navigation changed",
+  ];
+  NSString *(^found)(RFArticleSafariHooks) = ^NSString *(RFArticleSafariHooks hook) {
+    return (_articleSafariHooks & hook) ? @"found" : @"missing";
+  };
+  return [NSString stringWithFormat:@"Setting: %@\nLegacy hook: %@\nPost-page push hook: %@\n"
+                                    @"Article load hook: %@\nArticle policy hook: %@\nLast result: %@",
+      [NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterSafariLinks] ? @"on" : @"off",
+      found(RFArticleSafariHookLegacy), found(RFArticleSafariHookPush), found(RFArticleSafariHookStart),
+      found(RFArticleSafariHookPolicy), results[_articleSafariResult]];
+}
+
 // Caller must be on _queue.
 - (NSArray<NSString *> *)feedCardLines {
   NSArray *types = [_feedCards.allKeys sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
@@ -209,6 +254,7 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
       // Deep-ish copy: the values are immutable, so a shallow copy is a safe
       // immutable snapshot for the UI to read on the main thread.
       NSMutableDictionary *record = [_records[op] mutableCopy];
+      if ([op isEqualToString:kRFArticleSafariRow]) record[kRFDebugSummary] = [self articleSafariSummary];
       if ([op isEqualToString:kRFUnfilteredRow]) {
         NSArray *keys = [_unfiltered keysSortedByValueUsingComparator:^NSComparisonResult(id a, id b) {
           return [b[@"count"] compare:a[@"count"]];
@@ -231,12 +277,15 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
   NSMutableArray<NSString *> *lines = [NSMutableArray array];
   for (NSDictionary *record in [self snapshot]) {
     NSString *op = record[kRFDebugOp];
+    NSString *summary = record[kRFDebugSummary];
     NSArray<NSString *> *unfiltered = record[kRFDebugUnfiltered];
     NSArray<NSString *> *feedCards = record[kRFDebugFeedCards];
     NSInteger hits = [record[kRFDebugHits] integerValue], misses = [record[kRFDebugMisses] integerValue];
     NSInteger errors = [record[kRFDebugErrors] integerValue];
     NSString *errorNote = errors ? [NSString stringWithFormat:@", %ld Reddit error%@", (long)errors, errors == 1 ? @"" : @"s"] : @"";
-    if (unfiltered) {
+    if (summary) {
+      [lines addObject:[NSString stringWithFormat:@"%@:\n%@", op, summary]];
+    } else if (unfiltered) {
       [lines addObject:[NSString stringWithFormat:@"%@: %@", op, unfiltered.count ? @"" : @"none"]];
       for (NSString *line in unfiltered) [lines addObject:[@"  " stringByAppendingString:line]];
     } else if (feedCards) {
@@ -274,6 +323,7 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
     }
     [_unfiltered removeAllObjects];
     [_feedCards removeAllObjects];
+    _articleSafariResult = RFArticleSafariNotObserved;
   });
 }
 

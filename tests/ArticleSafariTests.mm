@@ -82,9 +82,11 @@ static void Check(BOOL condition, NSString *message) {
 
 @interface TestArticleWebView : WKWebView
 @property(nonatomic) NSUInteger stops;
+@property(nonatomic, strong) NSURL *testURL;
 @end
 @implementation TestArticleWebView
 - (void)stopLoading { self.stops++; }
+- (NSURL *)URL { return self.testURL; }
 @end
 
 @interface TestArticleCollection : UICollectionView
@@ -94,6 +96,40 @@ static void Check(BOOL condition, NSString *message) {
 - (NSArray<UICollectionViewCell *> *)visibleCells { return self.testVisibleCells ?: @[]; }
 @end
 
+// Exercise the production scheduling helper with callbacks delivered before/after completion.
+@interface TestArticleTransition : NSObject
+@property(nonatomic) BOOL cancelled, immediate, acceptsCompletion;
+@property(nonatomic, copy) void (^completion)(id<UIViewControllerTransitionCoordinatorContext>);
+- (void)finish;
+@end
+@implementation TestArticleTransition
+- (instancetype)init {
+  if ((self = [super init])) _acceptsCompletion = YES;
+  return self;
+}
+- (BOOL)animateAlongsideTransition:(void (^)(id<UIViewControllerTransitionCoordinatorContext>))animation
+                       completion:(void (^)(id<UIViewControllerTransitionCoordinatorContext>))completion {
+  self.completion = completion;
+  if (self.immediate) [self finish];
+  return self.acceptsCompletion;
+}
+- (void)finish {
+  void (^completion)(id<UIViewControllerTransitionCoordinatorContext>) = self.completion;
+  self.completion = nil;
+  if (completion) completion((id<UIViewControllerTransitionCoordinatorContext>)self);
+}
+- (BOOL)isCancelled { return self.cancelled; }
+@end
+
+static void DrainArticleQueue(void) {
+  __block BOOL drained = NO;
+  dispatch_async(dispatch_get_main_queue(), ^{ drained = YES; });
+  NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:5];
+  while (!drained && deadline.timeIntervalSinceNow > 0)
+    [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+  Check(drained, @"The queued initial inspection runs");
+}
+
 static RFArticlePushMarker *ArticleMarker(TestArticleNavigation *navigation, UIViewController *destination,
                                         NSArray<UIViewController *> *originalStack, WKWebView *webView) {
   RFArticlePushMarker *marker = [RFArticlePushMarker new];
@@ -102,6 +138,16 @@ static RFArticlePushMarker *ArticleMarker(TestArticleNavigation *navigation, UIV
   marker.originalStack = originalStack;
   marker.urls = [NSMapTable weakToStrongObjectsMapTable];
   [marker.urls setObject:[NSURL URLWithString:@"https://example.com/article?q=one#section"] forKey:webView];
+  return marker;
+}
+
+static RFArticlePushMarker *PendingArticleMarker(TestArticleNavigation *navigation, UIViewController *destination,
+                                               NSArray<UIViewController *> *originalStack) {
+  RFArticlePushMarker *marker = [RFArticlePushMarker new];
+  marker.navigation = navigation;
+  marker.destination = destination;
+  marker.originalStack = originalStack;
+  objc_setAssociatedObject(destination, &kRFArticlePushMarker, marker, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
   return marker;
 }
 
@@ -185,6 +231,8 @@ static void TestModernArticleFallback(UIWindow *window) {
   [navigation finishPresentation];
   Check(navigation.pops == 1 && [navigation.testStack isEqualToArray:originalStack],
         @"After Safari appears, remove only the captured article and retain the original post");
+  Check([RFSchemaDebug.shared.reportText containsString:@"original post restored"],
+        @"Diagnostics report the completed handoff without its URL");
   Check(!RFInspectArticlePush(marker, TestArticleView.class), @"Accepted article presentation is also one-shot");
 
   navigation.shown = nil;
@@ -195,13 +243,120 @@ static void TestModernArticleFallback(UIWindow *window) {
   [navigation finishPresentation];
   Check(navigation.pops == 1 && navigation.testStack.lastObject == other,
         @"A stack change during presentation must not pop the replacement screen");
+
+  navigation.shown = nil;
+  navigation.testStack = pushedStack;
+  NSUInteger presentations = navigation.presentations;
+  marker = PendingArticleMarker(navigation, destination, originalStack);
+  [article removeFromSuperview];
+  webView.testURL = [NSURL URLWithString:@"https://example.com/early?private=not-in-report#section"];
+  RFRecordArticleWebView(webView, webView.URL);
+  Check(marker.urls.count == 0, @"A callback before attachment cannot find the destination marker");
+  [cell.contentView addSubview:article];
+  RFScheduleArticleInspection(marker, nil, TestArticleView.class);
+  Check(!marker.inspected && navigation.presentations == presentations, @"No-animation push still waits one main-queue turn");
+  DrainArticleQueue();
+  Check(marker.inspected && navigation.presentations == presentations + 1,
+        @"Recover an initial visible article whose callback preceded attachment, without waiting for another callback");
+  [navigation finishPresentation];
+
+  navigation.shown = nil;
+  navigation.testStack = pushedStack;
+  presentations = navigation.presentations;
+  webView.testURL = nil;
+  marker = PendingArticleMarker(navigation, destination, originalStack);
+  TestArticleTransition *transition = [TestArticleTransition new];
+  RFScheduleArticleInspection(marker, (id<UIViewControllerTransitionCoordinator>)transition, TestArticleView.class);
+  DrainArticleQueue();
+  Check(!marker.inspected && navigation.presentations == presentations, @"An unfinished push does not inspect or present");
+  webView.testURL = [NSURL URLWithString:@"https://example.com/ready-before-transition"];
+  RFRecordArticleWebView(webView, webView.URL);
+  [transition finish];
+  Check(!marker.inspected, @"Transition completion queues rather than reenters presentation");
+  DrainArticleQueue();
+  Check(marker.inspected && navigation.presentations == presentations + 1,
+        @"A URL arriving during a cold push is used after its transition completes");
+  [navigation finishPresentation];
+
+  navigation.shown = nil;
+  navigation.testStack = pushedStack;
+  presentations = navigation.presentations;
+  marker = PendingArticleMarker(navigation, destination, originalStack);
+  transition = [TestArticleTransition new];
+  transition.immediate = YES;
+  RFScheduleArticleInspection(marker, (id<UIViewControllerTransitionCoordinator>)transition, TestArticleView.class);
+  Check(!marker.inspected, @"Synchronous transition completion still yields before inspection");
+  DrainArticleQueue();
+  Check(navigation.presentations == presentations + 1, @"Short transition uses the same initial-article guard");
+  [navigation finishPresentation];
+
+  navigation.shown = nil;
+  navigation.testStack = pushedStack;
+  presentations = navigation.presentations;
+  webView.testURL = nil;
+  marker = PendingArticleMarker(navigation, destination, originalStack);
+  RFScheduleArticleInspection(marker, nil, TestArticleView.class);
+  DrainArticleQueue();
+  Check(marker.inspected && navigation.presentations == presentations, @"A genuinely unready initial URL preserves native browsing");
+  Check([RFSchemaDebug.shared.reportText containsString:@"initial article URL not ready"],
+        @"Diagnostics distinguish an unready URL from missing hooks");
+  webView.testURL = [NSURL URLWithString:@"https://example.com/too-late"];
+  RFRecordArticleWebView(webView, webView.URL);
+  DrainArticleQueue();
+  Check(!RFInspectArticlePush(marker, TestArticleView.class) && navigation.presentations == presentations,
+        @"Late URLs cannot revive an expired attempt or interrupt later browsing");
+
+  marker = PendingArticleMarker(navigation, destination, originalStack);
+  transition = [TestArticleTransition new];
+  transition.cancelled = YES;
+  RFScheduleArticleInspection(marker, (id<UIViewControllerTransitionCoordinator>)transition, TestArticleView.class);
+  [transition finish];
+  DrainArticleQueue();
+  Check(marker.inspected && marker.cancelled && navigation.presentations == presentations,
+        @"A real completion callback reporting cancellation keeps native behavior");
+
+  marker = PendingArticleMarker(navigation, destination, originalStack);
+  transition = [TestArticleTransition new];
+  transition.acceptsCompletion = NO;
+  RFScheduleArticleInspection(marker, (id<UIViewControllerTransitionCoordinator>)transition, TestArticleView.class);
+  DrainArticleQueue();
+  Check(navigation.presentations == presentations + 1, @"An unavailable coordinator queues the initial inspection once");
+  [transition finish];
+  DrainArticleQueue();
+  Check(navigation.presentations == presentations + 1, @"A late duplicate coordinator callback cannot present twice");
+  [navigation finishPresentation];
   [navigation.view removeFromSuperview];
+}
+
+static void TestArticleDiagnostics(void) {
+  RFSchemaDebug *debug = RFSchemaDebug.shared;
+  RFSetDiagnosticsEnabled(YES);
+  [debug setArticleSafariHooks:RFArticleSafariHookLegacy | RFArticleSafariHookPush | RFArticleSafariHookStart];
+  [debug recordArticleSafariResult:RFArticleSafariModernPresented];
+  NSString *report = debug.reportText;
+  Check([report containsString:@"Article links in Safari:"] && [report containsString:@"Legacy hook: found"] &&
+        [report containsString:@"Article policy hook: missing"] && [report containsString:@"Post-page article: Safari presented"],
+        @"The existing report describes hook availability separately from the observed outcome");
+  Check(![report containsString:@"example.com"] && ![report containsString:@"private="] &&
+        ![report containsString:@"not-in-report"], @"Article diagnostics contain no URL, query or fragment history");
+  [debug recordArticleSafariResult:(RFArticleSafariResult)999];
+  Check([debug.reportText isEqualToString:report], @"Unknown outcome values cannot enter the report");
+  [debug reset];
+  Check([debug.reportText containsString:@"No article attempt observed"] && [debug.reportText containsString:@"Legacy hook: found"],
+        @"Reset clears activity but retains static compatibility");
+  [debug recordArticleSafariResult:RFArticleSafariURLNotReady];
+  RFSetDiagnosticsEnabled(NO);
+  [debug recordArticleSafariResult:RFArticleSafariPresentationDeclined];
+  Check([debug.reportText containsString:@"No article attempt observed"] && ![debug.reportText containsString:@"presentation declined"],
+        @"Turning Diagnostics off clears the last outcome and stops recording");
 }
 
 int main(void) {
   @autoreleasepool {
     NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
     id saved = [defaults objectForKey:kRedditFilterSafariLinks];
+    BOOL diagnosticsWasEnabled = RFDiagnosticsEnabled();
+    RFSetDiagnosticsEnabled(YES);
     TestArticle *post = [TestArticle new];
     for (NSString *link in @[@"https://example.com/article?q=a%20b#section", @"http://example.com/"]) {
       post.linkURL = [NSURL URLWithString:link];
@@ -259,7 +414,16 @@ int main(void) {
     Check(!RFOpenArticleInSafari(navigator, post), @"Failed presentation keeps the original route");
 
     [presenter.view removeFromSuperview];
-    TestModernArticleFallback(window);
+    for (NSValue *size in @[[NSValue valueWithCGSize:CGSizeMake(402, 874)],
+                           [NSValue valueWithCGSize:CGSizeMake(874, 402)],
+                           [NSValue valueWithCGSize:CGSizeMake(1024, 1366)],
+                           [NSValue valueWithCGSize:CGSizeMake(1366, 1024)],
+                           [NSValue valueWithCGSize:CGSizeMake(375, 1024)]]) {
+      window.frame = (CGRect){CGPointZero, size.CGSizeValue};
+      TestModernArticleFallback(window);
+    }
+    TestArticleDiagnostics();
+    RFSetDiagnosticsEnabled(diagnosticsWasEnabled);
 
     if (saved) [defaults setObject:saved forKey:kRedditFilterSafariLinks];
     else [defaults removeObjectForKey:kRedditFilterSafariLinks];

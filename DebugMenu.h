@@ -63,6 +63,31 @@ extern NSString *const kRFDebugUnfiltered;    // NSArray   on the unfiltered-req
                                               //           one line per address, most requests first
 extern NSString *const kRFDebugFeedCards;     // NSArray   on the feed cards row only: one line per card type,
                                               //           starting "? " if Extra cards can't hide it, else "\u2713 "
+extern NSString *const kRFDebugSummary;       // NSString  compatibility summary, never response or browsing data
+
+typedef NS_OPTIONS(NSUInteger, RFArticleSafariHooks) {
+  RFArticleSafariHookLegacy = 1 << 0,
+  RFArticleSafariHookPush = 1 << 1,
+  RFArticleSafariHookStart = 1 << 2,
+  RFArticleSafariHookPolicy = 1 << 3,
+};
+// Fixed outcomes keep URLs, page contents and account data out of the compatibility report.
+typedef NS_ENUM(NSUInteger, RFArticleSafariResult) {
+  RFArticleSafariNotObserved,
+  RFArticleSafariLegacyPresented,
+  RFArticleSafariModernPresented,
+  RFArticleSafariDisabledOrCancelled,
+  RFArticleSafariInvalidURL,
+  RFArticleSafariMissingGetter,
+  RFArticleSafariPresenterUnavailable,
+  RFArticleSafariStackChanged,
+  RFArticleSafariNoVisibleArticle,
+  RFArticleSafariURLNotReady,
+  RFArticleSafariAmbiguousArticle,
+  RFArticleSafariPresentationDeclined,
+  RFArticleSafariReturnedToPost,
+  RFArticleSafariReturnSkipped,
+};
 
 @interface RFSchemaDebug : NSObject
 
@@ -92,8 +117,14 @@ extern NSString *const kRFDebugFeedCards;     // NSArray   on the feed cards row
 // Keeps a short list of types, so nothing in the card itself is stored. Thread-safe.
 - (void)recordFeedCardType:(NSString *)type known:(BOOL)known operation:(NSString *)operation;
 
+// Hook availability is static compatibility information. Only the latest outcome is recorded,
+// while Diagnostics is on; reset/off clears that outcome. No URL or arbitrary text is accepted.
+- (void)setArticleSafariHooks:(RFArticleSafariHooks)hooks;
+- (void)recordArticleSafariResult:(RFArticleSafariResult)result;
+
 // What -snapshot shows, as plain text for a bug report. It holds operation names, schema paths,
-// Reddit addresses and card types only: captured JSON is never included. Thread-safe.
+// Reddit API addresses, card types and article compatibility only: captured JSON is never included.
+// The settings share sheet adds the RedditFilter, Reddit and iOS versions. Thread-safe.
 - (NSString *)reportText;
 
 // Zero all counters and clear discovered paths (re-arm the probes).
