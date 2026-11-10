@@ -19,6 +19,9 @@ BOOL RFScreenRestoreWantsComments(void);
 // Takes a post's comments (PostInfoByIdComments) as they're handed to the app, to note where you are in
 // them. Always returns nil.
 NSData *RFScreenRestoreCommentsPage(NSURLRequest *request, NSData *page);
+// Takes a search's results (SearchDynamic) as they're handed to the app, so a post opened from them in the
+// full-screen viewer can be named. Always returns nil.
+NSData *RFScreenRestoreSearchPage(NSURLRequest *request, NSData *page);
 // Forgets every post's comments (the comment filters changed, another account, incognito).
 void RFScreenRestoreForgetComments(void);
 

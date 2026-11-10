@@ -21,6 +21,7 @@ void RFSetRestoreScreens(BOOL restore) {}
 void RFSetRestoreOptions(BOOL afterSwipe, NSInteger hours) {}
 BOOL RFScreenRestoreWantsComments(void) { return NO; }
 NSData *RFScreenRestoreCommentsPage(NSURLRequest *request, NSData *page) { return nil; }
+NSData *RFScreenRestoreSearchPage(NSURLRequest *request, NSData *page) { return nil; }
 void RFScreenRestoreForgetComments(void) {}
 
 // Browser login lives in LoginHelper.x, which isn't part of this test.

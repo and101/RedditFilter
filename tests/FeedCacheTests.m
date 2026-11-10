@@ -436,6 +436,28 @@ int main(void) {
     Check(RFCommentRowForCell(rows, @[], @[ @"von", @"bob", @"vor" ], nil, NSNotFound) == 1,
           @"Words of the description when there's no username label");
     Check(RFCommentRows([@"{}" dataUsingEncoding:NSUTF8StringEncoding]) == nil, @"No rows from something else");
+
+    // Search results: each post once, with its community when one copy gives it.
+    NSDictionary *searchJSON = @{@"data": @{@"search": @{@"dynamic": @{@"components": @{@"main": @{@"edges": @[
+      @{@"node": @{@"children": @[
+        @{@"behaviors": @{@"title": @{@"post": @{@"id": @"t3_a", @"title": @"The best apple pie ever"}},
+                          @"community": @{@"post": @{@"id": @"t3_a", @"title": @"The best apple pie ever", @"subreddit": @{@"name": @"Baking"}}}}},
+        @{@"post": @{@"id": @"t3_b", @"title": @"Same title", @"subreddit": @{@"name": @"Cooking"}}},
+        @{@"post": @{@"id": @"t3_c", @"title": @"Same title", @"subreddit": @{@"name": @"Baking"}}},
+        @{@"comment": @{@"id": @"t1_x", @"title": @"not a post"}},
+      ]}},
+    ]}}}}}};
+    NSArray *searchPosts = RFSearchResultPosts([NSJSONSerialization dataWithJSONObject:searchJSON options:0 error:NULL]);
+    Check(searchPosts.count == 3 && [searchPosts[0][@"id"] isEqual:@"t3_a"] && [searchPosts[0][@"community"] isEqual:@"Baking"],
+          @"Read a search's posts once each, with their community");
+    Check([RFSearchPostForTexts(searchPosts, @[ @"u/someone", @"The best apple pie ever", @"1/3" ]) isEqual:@"t3_a"],
+          @"Name the post a screen shows from its title");
+    Check([RFSearchPostForTexts(searchPosts, @[ @"Same title", @"\ufffc r/Cooking" ]) isEqual:@"t3_b"] &&
+              RFSearchPostForTexts(searchPosts, @[ @"Same title" ]) == nil,
+          @"Two posts with one title: told apart by the community shown, or not at all");
+    Check(RFSearchPostForTexts(searchPosts, @[ @"Something else" ]) == nil &&
+              RFSearchResultPosts([@"[]" dataUsingEncoding:NSUTF8StringEncoding]) == nil,
+          @"No post from other texts or another response");
     [NSFileManager.defaultManager removeItemAtPath:directory error:NULL];
 
     puts("All feed cache tests passed.");

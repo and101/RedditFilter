@@ -413,6 +413,14 @@ static BOOL RFIsAPIHost(NSString *host) {
       appHandler(data, response, error);
     };
   }
+  // and each search's results, to name a post opened from them in the full-screen viewer.
+  if (RFScreenRestoreWantsComments() && [operation isEqualToString:@"SearchDynamic"]) {
+    void (^appHandler)(NSData *, NSURLResponse *, NSError *) = completionHandler;
+    completionHandler = ^(NSData *data, NSURLResponse *response, NSError *error) {
+      if (RFIsOK(response, error)) RFScreenRestoreSearchPage(request, data);
+      appHandler(data, response, error);
+    };
+  }
 
   if (!completionHandler || !RFPrefsAnyEnabled(prefs) || !RFIsAPIHost(host)) return %orig(request, completionHandler);
 

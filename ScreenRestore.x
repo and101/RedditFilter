@@ -1,9 +1,9 @@
 // Restore open community and post.
 //
 // Keep feed position brings Home's feeds back after iOS closes Reddit in the background. This goes one
-// step further: the communities, profiles and posts open on Home (in any order, a few deep), or on top
-// of your own profile in the You tab, are opened again, and the top post offers to jump back to where
-// you were in its comments.
+// step further: the communities, profiles, searches and posts open on Home (in any order, a few deep), or
+// on top of your own profile in the You tab, are opened again, and the top post offers to jump back to
+// where you were in its comments. The screen where a search is typed is skipped.
 //
 // How the app was closed: iOS keeps a snapshot of the app's window for its card in the app switcher.
 // When iOS closes the app in the background the card stays, and so does the snapshot; swiping the card
@@ -44,6 +44,8 @@ static NSString *const kRFCommunityClass = @"Subreddit_Internal.SubredditScreenV
 static NSString *const kRFProfileClass = @"Profiles.ProfileCoreStackViewController";
 static NSString *const kRFPreviewClass = @"PreviewModeViewController.PreviewModeViewControllerImpl";
 static NSString *const kRFPostClass = @"PDP_Impl.PDPViewController";
+static NSString *const kRFSearchClass = @"Search_Core_Impl.SearchResultsViewController"; // a search's results
+static NSString *const kRFTypeaheadClass = @"Search_Core_Impl.TypeaheadViewController";   // typing a search
 static NSString *const kRFYouTabID = @"reddit_tab_bar__profile_button";
 
 static BOOL gRestoreScreens; // the setting; main thread, like the two below
@@ -60,6 +62,7 @@ static NSMutableArray<NSString *> *gCommentPosts;                // oldest first
 static NSMutableSet<NSString *> *gTruncatedPosts;                // posts with only the first few comments; guarded by gRowsLock
 static NSMutableDictionary<NSString *, NSDate *> *gRowsAt;        // when each post's rows came; guarded by gRowsLock
 static NSMutableDictionary<NSString *, NSString *> *gCommentAccounts; // and the account that asked; guarded by gRowsLock
+static NSArray<NSDictionary *> *gSearchPosts; // the posts of the last few searches' results; guarded by gRowsLock
 
 #pragma mark - Small helpers
 
@@ -340,9 +343,31 @@ NSData *RFScreenRestoreCommentsPage(NSURLRequest *request, NSData *page) {
   return nil;
 }
 
+NSData *RFScreenRestoreSearchPage(NSURLRequest *request, NSData *page) {
+  if (RFFeedCacheRequestIsIncognito(request)) return nil;
+  NSArray *posts = RFSearchResultPosts(page);
+  if (!posts.count) return nil;
+  os_unfair_lock_lock(&gRowsLock);
+  // Newest first, and only so many (a few searches' worth).
+  NSMutableArray *kept = [posts mutableCopy];
+  [kept addObjectsFromArray:gSearchPosts ?: @[]];
+  if (kept.count > 400) [kept removeObjectsInRange:NSMakeRange(400, kept.count - 400)];
+  gSearchPosts = kept;
+  os_unfair_lock_unlock(&gRowsLock);
+  return nil;
+}
+
+static NSArray<NSDictionary *> *RFKnownSearchPosts(void) {
+  os_unfair_lock_lock(&gRowsLock);
+  NSArray *posts = gSearchPosts;
+  os_unfair_lock_unlock(&gRowsLock);
+  return posts;
+}
+
 // Forgets every post's comments (another account, incognito, or the comment filters changed).
 void RFScreenRestoreForgetComments(void) {
   os_unfair_lock_lock(&gRowsLock);
+  gSearchPosts = nil;
   [gCommentRows removeAllObjects];
   [gCommentPosts removeAllObjects];
   [gTruncatedPosts removeAllObjects];
@@ -548,9 +573,93 @@ static NSString *RFScreenNames(NSArray<UIViewController *> *screens) {
   return [names componentsJoinedByString:@" > "];
 }
 
-// One pushed screen as it's kept: @{community: name}, @{profile: name} or @{post: {id, community, and for
-// the top one where you were}}. nil if it isn't one of those, with why in `left`.
+// One pushed screen as it's kept: @{community: name}, @{profile: name}, @{search: query} or @{post: {id,
+// community, and for the top one where you were}}. nil if it isn't one of those, with why in `left`.
+// What a search results screen searched for: the text in its search bar (its navigation item's title view,
+// which it keeps while another screen is on top).
+static NSString *RFSearchQuery(UIViewController *results) {
+  UIView *bar = results.navigationItem.titleView;
+  NSMutableArray<UIView *> *queue = bar ? [NSMutableArray arrayWithObject:bar] : [NSMutableArray array];
+  for (NSUInteger seen = 0; queue.count && seen < 60; seen++) {
+    UIView *view = queue.firstObject;
+    [queue removeObjectAtIndex:0];
+    if ([view isKindOfClass:UITextField.class]) {
+      NSString *text = [((UITextField *)view).text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+      return text.length && text.length <= 512 ? text : nil;
+    }
+    [queue addObjectsFromArray:view.subviews];
+  }
+  return nil;
+}
+
+// Reddit's full-screen viewer, which posts open in from search results (a list of posts, one per page).
+static BOOL RFIsFullScreenViewer(UIViewController *vc) {
+  return [NSStringFromClass(vc.class) containsString:@"FBPListViewModel"];
+}
+
+// The post the full-screen viewer shows: the texts of its page on screen (the post's title among them),
+// matched against the posts of the searches' results.
+static NSString *RFFullScreenViewerPost(UIViewController *viewer) {
+  UICollectionView *list = nil;
+  CGFloat listArea = 0;
+  NSMutableArray<UIView *> *queue = viewer.viewIfLoaded ? [NSMutableArray arrayWithObject:viewer.viewIfLoaded] : [NSMutableArray array];
+  for (NSUInteger seen = 0; queue.count && seen < 300; seen++) {
+    UIView *view = queue.firstObject;
+    [queue removeObjectAtIndex:0];
+    if ([view isKindOfClass:UICollectionView.class] && view.bounds.size.width * view.bounds.size.height > listArea) {
+      list = (UICollectionView *)view;
+      listArea = view.bounds.size.width * view.bounds.size.height;
+      continue;
+    }
+    [queue addObjectsFromArray:view.subviews];
+  }
+  UICollectionViewCell *page = nil;
+  CGFloat pageArea = 0;
+  for (UICollectionViewCell *cell in list.visibleCells) {
+    CGRect shown = CGRectIntersection(cell.frame, list.bounds);
+    CGFloat area = CGRectIsNull(shown) ? 0 : shown.size.width * shown.size.height;
+    if (area > pageArea) {
+      page = cell;
+      pageArea = area;
+    }
+  }
+  if (!page) return nil;
+  NSMutableArray<NSString *> *texts = [NSMutableArray array];
+  queue = [NSMutableArray arrayWithObject:page];
+  for (NSUInteger seen = 0; queue.count && seen < 300; seen++) {
+    UIView *view = queue.firstObject;
+    [queue removeObjectAtIndex:0];
+    NSString *text = [view isKindOfClass:UILabel.class] ? ((UILabel *)view).text : nil;
+    if (text.length) [texts addObject:text];
+    [queue addObjectsFromArray:view.subviews];
+  }
+  // The community shows in the viewer's top bar, outside the page.
+  queue = [NSMutableArray arrayWithObject:viewer.viewIfLoaded];
+  for (NSUInteger seen = 0; queue.count && seen < 300; seen++) {
+    UIView *view = queue.firstObject;
+    [queue removeObjectAtIndex:0];
+    if (view == page) continue;
+    NSString *text = [view isKindOfClass:UILabel.class] ? ((UILabel *)view).text : nil;
+    if ([text containsString:@"r/"]) [texts addObject:text];
+    [queue addObjectsFromArray:view.subviews];
+  }
+  return RFSearchPostForTexts(RFKnownSearchPosts(), texts);
+}
+
 static NSDictionary *RFKeptScreen(UIViewController *vc, BOOL top, NSString **part, NSString **left) {
+  if (RFIsFullScreenViewer(vc)) {
+    // Reopened as an ordinary post page (the viewer can't be opened from a link).
+    NSString *postId = RFFullScreenViewerPost(vc);
+    if (!postId) return *left = @"couldn't read a post in the full-screen viewer", nil;
+    *part = [NSString stringWithFormat:@"post %@ (full-screen viewer)", postId];
+    return @{@"post" : @{@"id" : postId}};
+  }
+  if (RFIsClass(vc, kRFSearchClass)) {
+    NSString *query = RFSearchQuery(vc);
+    if (!query) return *left = @"couldn't read a search", nil;
+    *part = [NSString stringWithFormat:@"search \u201c%@\u201d", query];
+    return @{@"search" : query};
+  }
   if (RFIsClass(vc, kRFCommunityClass)) {
     NSString *name = RFCommunityName(vc);
     if (!name) return *left = @"couldn't read a community", nil;
@@ -596,13 +705,17 @@ static NSDictionary *RFOpenScreens(NSString **left) {
   }
   NSArray<UIViewController *> *stack = nav.viewControllers;
   BOOL you = [tab isEqualToString:@"you"];
-  if (stack.count < 2 && !you) return *left = @"Home", nil;
-  if (stack.count - 1 > kRFMaxScreens) return *left = [NSString stringWithFormat:@"more than %lu screens", (unsigned long)kRFMaxScreens], nil;
+  // The screen where a search is typed isn't kept (what was opened from it is).
+  NSMutableArray<UIViewController *> *kept = [NSMutableArray array];
+  for (NSUInteger i = 1; i < stack.count; i++)
+    if (!RFIsClass(stack[i], kRFTypeaheadClass)) [kept addObject:stack[i]];
+  if (!kept.count && !you) return *left = @"Home", nil;
+  if (kept.count > kRFMaxScreens) return *left = [NSString stringWithFormat:@"more than %lu screens", (unsigned long)kRFMaxScreens], nil;
   NSMutableArray *screens = [NSMutableArray array];
   NSMutableArray *parts = [NSMutableArray arrayWithObject:you ? @"You" : @"Home"];
-  for (NSUInteger i = 1; i < stack.count; i++) {
+  for (NSUInteger i = 0; i < kept.count; i++) {
     NSString *part = nil;
-    NSDictionary *screen = RFKeptScreen(stack[i], i == stack.count - 1, &part, left);
+    NSDictionary *screen = RFKeptScreen(kept[i], i == kept.count - 1, &part, left);
     if (!screen) return nil;
     [screens addObject:screen];
     [parts addObject:part];
@@ -760,7 +873,11 @@ static NSDictionary *RFStepScreen(void) {
 }
 
 static NSString *RFScreenKind(NSDictionary *screen) {
-  return screen[@"community"] ? @"the community" : screen[@"profile"] ? @"the profile" : screen[@"post"] ? @"the post" : @"";
+  return screen[@"community"] ? @"the community"
+         : screen[@"profile"] ? @"the profile"
+         : screen[@"search"]  ? @"the search"
+         : screen[@"post"]    ? @"the post"
+                              : @"";
 }
 
 static UINavigationController *RFTabWithRoot(UITabBarController *tabs, NSString *rootClass) {
@@ -1132,6 +1249,11 @@ static void RFStartStep(NSInteger step) {
     RFOpenLink([NSString stringWithFormat:@"https://www.reddit.com/r/%@/", name]);
   } else if (screen[@"profile"]) {
     RFOpenLink([NSString stringWithFormat:@"https://www.reddit.com/user/%@/", screen[@"profile"]]);
+  } else if (screen[@"search"]) {
+    NSMutableCharacterSet *allowed = [NSCharacterSet.URLQueryAllowedCharacterSet mutableCopy];
+    [allowed removeCharactersInString:@"&+=?#"];
+    NSString *query = [screen[@"search"] stringByAddingPercentEncodingWithAllowedCharacters:allowed];
+    if (query) RFOpenLink([@"https://www.reddit.com/search/?q=" stringByAppendingString:query]);
   } else if (screen[@"post"]) {
     NSDictionary *post = screen[@"post"];
     NSString *postId = post[@"id"];
@@ -1344,6 +1466,12 @@ static void RFRestoreTick(void) {
     BOOL ready = list && RFListShowsPosts(list) && !RFFeedRestoring();
     gSteady = ready ? gSteady + 1 : 0;
     if (gSteady >= 2 || late) RFNextStep();
+  } else if (screen[@"search"]) {
+    // The results open at their top: done once the search is showing with its query.
+    BOOL ready = RFIsClass(top, kRFSearchClass) && top.viewIfLoaded.window &&
+                 [RFSearchQuery(top).lowercaseString isEqualToString:[screen[@"search"] lowercaseString]];
+    gSteady = ready ? gSteady + 1 : 0;
+    if (gSteady >= 2 || late) RFNextStep();
   } else if (screen[@"profile"]) {
     // Opens at its top (it isn't kept like a feed): done once its header has loaded (some profiles hide
     // their posts, so those can't be waited for).
@@ -1377,8 +1505,9 @@ static BOOL RFIsText(id value) { return [value isKindOfClass:NSString.class] && 
 // Screens.json if everything in it is what it should be (an older or damaged one isn't used).
 static BOOL RFValidScreen(id screen) {
   if (![screen isKindOfClass:NSDictionary.class] || [screen count] != 1) return NO;
-  id community = screen[@"community"], profile = screen[@"profile"], post = screen[@"post"];
+  id community = screen[@"community"], profile = screen[@"profile"], post = screen[@"post"], search = screen[@"search"];
   if (community) return RFIsText(community);
+  if (search) return RFIsText(search) && [search length] <= 512;
   if (profile) return RFIsUsername(profile);
   if (![post isKindOfClass:NSDictionary.class]) return NO;
   NSString *postId = post[@"id"];

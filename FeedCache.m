@@ -276,6 +276,63 @@ NSArray<NSDictionary *> *RFCommentRows(NSData *response) {
   return rows;
 }
 
+static void RFCollectSearchPosts(id object, NSMutableDictionary<NSString *, NSMutableDictionary *> *posts,
+                                 NSMutableArray<NSString *> *order, NSUInteger depth) {
+  if (depth > 40) return;
+  if ([object isKindOfClass:NSArray.class]) {
+    for (id item in object) RFCollectSearchPosts(item, posts, order, depth + 1);
+    return;
+  }
+  NSDictionary *dict = RFDict(object);
+  if (!dict) return;
+  NSString *identifier = RFString(dict[@"id"]), *title = RFString(dict[@"title"]);
+  if ([identifier hasPrefix:@"t3_"] && identifier.length > 3 && title.length) {
+    NSMutableDictionary *post = posts[identifier];
+    if (!post) {
+      post = [NSMutableDictionary dictionaryWithDictionary:@{@"id" : identifier, @"title" : title}];
+      posts[identifier] = post;
+      [order addObject:identifier];
+    }
+    NSString *community = RFString(RFDict(dict[@"subreddit"])[@"name"]);
+    if (community.length && !post[@"community"]) post[@"community"] = community;
+  }
+  for (id value in dict.allValues)
+    if ([value isKindOfClass:NSDictionary.class] || [value isKindOfClass:NSArray.class])
+      RFCollectSearchPosts(value, posts, order, depth + 1);
+}
+
+NSArray<NSDictionary *> *RFSearchResultPosts(NSData *response) {
+  NSDictionary *json = RFDict(RFJSON(response, 0));
+  if (!RFDict(json[@"data"])) return nil;
+  NSMutableDictionary *posts = [NSMutableDictionary dictionary];
+  NSMutableArray *order = [NSMutableArray array];
+  RFCollectSearchPosts(json[@"data"], posts, order, 0);
+  NSMutableArray *result = [NSMutableArray array];
+  for (NSString *identifier in order) [result addObject:[posts[identifier] copy]];
+  return result;
+}
+
+NSString *RFSearchPostForTexts(NSArray<NSDictionary *> *posts, NSArray<NSString *> *texts) {
+  NSSet *shown = [NSSet setWithArray:texts ?: @[]];
+  NSMutableArray<NSDictionary *> *matches = [NSMutableArray array];
+  for (NSDictionary *post in posts)
+    if ([shown containsObject:post[@"title"]]) [matches addObject:post];
+  if (matches.count == 1) return matches[0][@"id"];
+  // Two with the same title: the one whose community is shown ("r/name" on the screen).
+  NSString *found = nil;
+  for (NSDictionary *post in matches) {
+    NSString *community = post[@"community"];
+    BOOL here = NO;
+    for (NSString *text in texts)
+      if (community.length && [text rangeOfString:[@"r/" stringByAppendingString:community] options:NSCaseInsensitiveSearch].location != NSNotFound)
+        here = YES;
+    if (!here) continue;
+    if (found && ![found isEqualToString:post[@"id"]]) return nil;
+    found = post[@"id"];
+  }
+  return found;
+}
+
 // The row nearest `near` by one of `authors` (at `depth`, unless that's -1).
 static NSUInteger RFNearestCommentRow(NSArray<NSDictionary *> *rows, NSSet<NSString *> *authors, NSInteger depth,
                                       NSUInteger near) {

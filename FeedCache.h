@@ -52,6 +52,14 @@ NSUInteger RFCommentRowForLabel(NSArray<NSDictionary *> *rows, NSString *label, 
 NSUInteger RFCommentRowForCell(NSArray<NSDictionary *> *rows, NSArray<NSString *> *texts, NSArray<NSString *> *words,
                                NSString *label, NSUInteger near);
 
+// The posts in a search's results (SearchDynamic): @{@"id": t3_..., @"title", @"community" (when given)}, once
+// each. nil if the response can't be read.
+NSArray<NSDictionary *> *RFSearchResultPosts(NSData *response);
+
+// Which of those posts a screen shows: the one whose title is among the screen's texts, and (when two share
+// a title) whose community is too. nil if none, or it can't be told.
+NSString *RFSearchPostForTexts(NSArray<NSDictionary *> *posts, NSArray<NSString *> *texts);
+
 #pragma mark - The kept feeds (thread-safe)
 
 // Home's three feeds are kept separately: For You (HomeFeedSdui), Following (FollowingFeed) and

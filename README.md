@@ -60,7 +60,7 @@ To open RedditFilter, long press the sidebar button at the top left of Reddit, o
 These are new, so they're off by default. They work in any app language.
 
 - **Keep feed position**: stay where you were in For You, Following and Popular, even after Reddit closes. Reddit normally jumps back to the top after 10 minutes away. Pull down to refresh.
-- **Reopen community and post**: brings back the communities, profiles and posts you had open, up to six screens deep, on Home or in the You tab. Posts open at the top, with a **Back to where you were** button that scrolls to the comment you were reading. Communities use their default sort. If you open Reddit from a notification or a link, that screen is shown instead.
+- **Reopen community and post**: brings back the communities, profiles, searches and posts you had open, up to six screens deep, on Home or in the You tab. Posts open at the top, with a **Back to where you were** button that scrolls to the comment you were reading. Communities use their default sort. If you open Reddit from a notification or a link, that screen is shown instead.
 - **Restore after swiping away** and **Restore for**: by default, your place only comes back if iOS closed Reddit, for 12 hours. You can also have it back after swiping Reddit away, and keep it for 24 hours or with no limit.
 
 ### More
