@@ -5,12 +5,23 @@
 #import <Foundation/Foundation.h>
 #import <objc/runtime.h>
 #import "DebugMenu.h"
+#import "FeedCache.h"
 #import "Preferences.h"
 #import "Redgifs.h"
 #import "UpdateChecker.h"
 
 // LinkPanel.x hooks Reddit's player, which isn't part of this test.
 void RFSetHideLinkPanel(BOOL hide) {}
+// FeedPosition.x hooks Reddit's scene delegate, which isn't part of this test.
+void RFSetKeepFeedPosition(BOOL keep) {}
+// PostPageFeed.x hides part of Reddit's post page, which isn't part of this test.
+void RFSetHidePostPageFeed(BOOL hide) {}
+// ScreenRestore.x reopens Reddit's screens, which isn't part of this test.
+void RFSetRestoreScreens(BOOL restore) {}
+void RFSetRestoreOptions(BOOL afterSwipe, NSInteger hours) {}
+BOOL RFScreenRestoreWantsComments(void) { return NO; }
+NSData *RFScreenRestoreCommentsPage(NSURLRequest *request, NSData *page) { return nil; }
+void RFScreenRestoreForgetComments(void) {}
 
 // Browser login lives in LoginHelper.x, which isn't part of this test.
 NSString *RFPendingWebSession(void) { return nil; }
@@ -149,6 +160,7 @@ static NSDictionary *LoadHome(NSURLSession *session, NSTimeInterval settle, RFTi
   NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:[NSString stringWithFormat:@"https://%@/", gHost]]];
   request.HTTPMethod = @"POST";
   [request setValue:@"HomeFeedSdui" forHTTPHeaderField:@"X-APOLLO-OPERATION-NAME"];
+  [request setValue:@"loid-test" forHTTPHeaderField:@"x-reddit-loid"]; // the account, for Keep feed position
   request.HTTPBody = [NSJSONSerialization dataWithJSONObject:@{@"operationName" : @"HomeFeedSdui", @"variables" : @{}}
                                                      options:0
                                                        error:NULL];
@@ -386,7 +398,7 @@ int main(void) {
     gHost = @"api-v9.reddit.com";
     json = LoadHome(session, 0.2, &timing);
     Check([Edges(json)[0][@"node"][@"cells"] count] == 1, @"Pass requests to other addresses through");
-    Check(unfiltered().count == 1 && [unfiltered()[0] hasPrefix:@"api-v9.reddit.com \u00b7 1 \u00b7 last HomeFeedSdui"],
+    Check(unfiltered().count == 1 && [unfiltered()[0] hasPrefix:@"api-v9.reddit.com \u00b7 1 request \u00b7 last HomeFeedSdui"],
           @"List a GraphQL request to an unknown Reddit address in the Debug section");
     // Diagnostics off: what was recorded is cleared and nothing new is recorded
     [NSUserDefaults.standardUserDefaults setBool:NO forKey:kRedditFilterDiagnostics];
@@ -428,6 +440,33 @@ int main(void) {
     NSLog(@"top-up, slow: %.2fs, %lu call(s)", timing.seconds, (unsigned long)timing.calls);
     Check(timing.seconds > 4.5 && timing.seconds < 6, @"Stop waiting for a slow next page after 5s");
     Check(Edges(json).count == 2 && timing.calls == 1, @"Show just the first page, once");
+
+    // Keep feed position: the first Home page after a relaunch starts at the post you were on, once.
+    NSString *feedDirectory = [NSTemporaryDirectory() stringByAppendingPathComponent:
+                                                          [NSString stringWithFormat:@"feedcache-%@", NSUUID.UUID.UUIDString]];
+    RFFeedCacheSetDirectory(feedDirectory);
+    RFFeedCacheSetEnabled(YES);
+    RFFeedCacheSetColdReplayAllowed(YES);
+    __block NSArray *homePosts = @[ @"t3_a", @"t3_b" ];
+    gRoute = ^NSArray *(NSString *operation, NSDictionary *body, NSURL *url) {
+      return @[ @200, @0.05, Page(homePosts, nil) ];
+    };
+    json = LoadHome(session, 0.3, &timing);
+    Check(Edges(json).count == 2 && timing.calls == 1, @"Hand the first page over as it is with nothing kept");
+    dispatch_semaphore_t left = dispatch_semaphore_create(0);
+    RFFeedCacheNoteLeaving(@[ @[ @"r/cars, Car advice, 3 upvotes" ] ], @[ @[ @0 ] ], ^{
+      dispatch_semaphore_signal(left);
+    });
+    Check(dispatch_semaphore_wait(left, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0, @"Save the feed when leaving");
+    RFFeedCacheSetDirectory(feedDirectory); // relaunch
+    homePosts = @[ @"t3_c" ];
+    json = LoadHome(session, 0.3, &timing);
+    Check(Edges(json).count == 3 && [Edges(json)[0][@"node"][@"id"] isEqual:CardId(@"t3_a")] && timing.calls == 1,
+          @"Show the kept feed in the first page after a relaunch, once");
+    RFFeedCacheEndRestore(@"HomeFeedSdui");
+    json = LoadHome(session, 0.3, &timing);
+    Check(Edges(json).count == 1, @"Refresh as usual after that");
+    RFFeedCacheSetEnabled(NO);
 
     // RedGIFs videos and the full text together: fetched side by side, so slow RedGIFs lookups
     // don't use up the keyword check's time.

@@ -34,6 +34,7 @@ int main(void) {
       saved[keys[i]] = @(value);
       [defaults setBool:value forKey:keys[i]];
     }
+    [defaults setInteger:24 forKey:kRedditFilterRestoreHours];
     NSArray *keywords = @[ @"Café", @"new york" ];
     [defaults setObject:keywords forKey:kRedditFilterKeywords];
 
@@ -48,11 +49,12 @@ int main(void) {
     Check(data.length > 0, @"export produces data");
     RFBackupSummary *summary = RFBackupParse(data, &error);
     Check(summary != nil, @"parse an exported backup");
-    Check(summary.settingCount == keys.count, @"summary has every setting");
+    Check(summary.settingCount == keys.count + 1, @"summary has every setting, and the restore time");
     Check(summary.keywordCount == 2, @"summary has the keywords");
     Check(summary.totalHidden == 7, @"summary totals the counts");
 
     for (NSString *key in keys) [defaults setBool:!saved[key].boolValue forKey:key];
+    [defaults setInteger:12 forKey:kRedditFilterRestoreHours];
     [defaults setObject:@[ @"gone" ] forKey:kRedditFilterKeywords];
     RFStatsReset();
 
@@ -60,6 +62,7 @@ int main(void) {
     for (NSString *key in keys)
       Check([defaults boolForKey:key] == saved[key].boolValue, ([NSString stringWithFormat:@"restored %@", key]));
     Check([[defaults arrayForKey:kRedditFilterKeywords] isEqual:keywords], @"restored keywords");
+    Check([defaults integerForKey:kRedditFilterRestoreHours] == 24, @"restored the restore time");
 
     NSDictionary *snapshot = RFStatsSnapshot();
     NSArray<NSNumber *> *counts = snapshot[kRFStatsCounts];
@@ -177,6 +180,13 @@ int main(void) {
     };
     error = nil;
     Check(RFBackupParse(JSONData(numberSetting), &error) == nil, @"reject non-boolean settings values");
+    // The restore time is a number, but only one it offers.
+    for (id hours in @[ @36, @YES, @"12" ]) {
+      NSDictionary *badHours = @{@"format" : @"RedditFilterSettings", @"version" : @1, @"settings" : @{kRedditFilterRestoreHours : hours}};
+      Check(RFBackupParse(JSONData(badHours), &error) == nil, @"reject a restore time it doesn't offer");
+    }
+    NSDictionary *always = @{@"format" : @"RedditFilterSettings", @"version" : @1, @"settings" : @{kRedditFilterRestoreHours : @0}};
+    Check(RFBackupParse(JSONData(always), &error).settingCount == 1, @"accept Always (0)");
 
     // Importing more days than the app keeps drops the oldest ones.
     NSMutableDictionary<NSString *, NSNumber *> *manyDays = [NSMutableDictionary dictionary];

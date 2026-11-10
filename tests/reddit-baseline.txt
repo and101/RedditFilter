@@ -1,4 +1,4 @@
-# Reddit 2026.44.0 (673033). Regenerate with: tests/check-ipa.sh <ipa> --update
+# Reddit 2026.45.0 (674908). Regenerate with: tests/check-ipa.sh <ipa> --update
 [hosts]
 accounts.reddit.com
 ads-api.reddit.com
@@ -52,7 +52,6 @@ NSURLSession.data(from:delegate:)
 NSURLSession.dataTaskPublisher(for:)
 [network-experiments]
 ios_af_sdk_alt_host
-ios_awards_quick_give
 ios_comment_service_type_safe_graphql
 ios_econ_type_safe_graphql
 ios_ek_http3_event_submission

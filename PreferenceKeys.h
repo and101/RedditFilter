@@ -27,6 +27,10 @@
 #define kRedditFilterColoredComments @"kRedditFilterColoredComments"
 #define kRedditFilterColoredCommentsApollo @"kRedditFilterColoredCommentsApollo"
 #define kRedditFilterHideLinkPanel @"kRedditFilterHideLinkPanel"
+#define kRedditFilterKeepFeedPosition @"kRedditFilterKeepFeedPosition" // don't reload Home after time away
+#define kRedditFilterRestoreScreens @"kRedditFilterRestoreScreens" // reopen the community and post left open
+#define kRedditFilterRestoreAfterSwipe @"kRedditFilterRestoreAfterSwipe" // restore even after Reddit was swiped away
+#define kRedditFilterRestoreHours @"kRedditFilterRestoreHours" // restore for 12 or 24 hours after leaving, 0 = always
 #define kRedditFilterSafariLinks @"kRedditFilterSafariLinks"
 #define kRedditFilterCheckUpdates @"kRedditFilterCheckUpdates"
 #define kRedditFilterDiagnostics @"kRedditFilterDiagnostics" // record schema paths for bug reports

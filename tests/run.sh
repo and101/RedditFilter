@@ -14,3 +14,7 @@ xcrun --sdk macosx clang -fobjc-arc -framework Foundation -framework CoreGraphic
 xcrun --sdk macosx clang -fobjc-arc -framework Foundation -I. \
   RFBackup.m RFStats.m tests/RFBackupTests.m -o "$test_dir/RFBackupTests"
 "$test_dir/RFBackupTests"
+
+xcrun --sdk macosx clang -fobjc-arc -framework Foundation -I. \
+  FeedCache.m tests/FeedCacheTests.m -o "$test_dir/FeedCacheTests"
+"$test_dir/FeedCacheTests"

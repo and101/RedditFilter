@@ -317,30 +317,49 @@ static BOOL RFIsKeywordPostPreview(id node, const RFContext *ctx) {
          RFContentMatchesKeywords(RFDict(preview[@"post"]), ctx->keywords);
 }
 
+// The fields of a real post card (CellGroup) among the edges, to build an empty one with. Reddit's parser
+// drops the whole page if a card lacks a field its query asks for (2026.45 added aiDisclosure), so the
+// card copies whatever the page's own cards have.
+static NSArray<NSString *> *RFCardFields(NSArray *edges) {
+  for (id edge in edges) {
+    NSDictionary *node = RFDict(RFDict(edge)[@"node"]);
+    if ([RFString(node[@"__typename"]) isEqualToString:@"CellGroup"] && RFArray(node[@"cells"])) return node.allKeys;
+  }
+  return nil;
+}
+
 // Swaps a feed element for an empty post card, the same thing the other filters leave behind for a
 // hidden post. Removing the element, or emptying it in place, can stop the feed loading more posts.
-static NSDictionary *RFEmptyCard(NSDictionary *element) {
+// `fields`: a real card's fields (each left null), or nil for the known ones.
+static NSDictionary *RFEmptyCard(NSDictionary *element, NSArray<NSString *> *fields) {
   NSString *identifier = [@"redditfilter-" stringByAppendingString:RFString(element[@"id"]) ?: @"video_in_feed_unit"];
-  return [@{
+  NSMutableDictionary *card = [NSMutableDictionary dictionary];
+  for (NSString *field in fields ?: @[ @"adPayload", @"recommendationContext", @"aiDisclosure" ]) card[field] = NSNull.null;
+  [card addEntriesFromDictionary:@{
     @"__typename" : @"CellGroup",
     @"id" : identifier,
     @"groupId" : identifier,
     @"cells" : @[],
-    @"adPayload" : NSNull.null,
-    @"recommendationContext" : NSNull.null,
-  } mutableCopy];
+  }];
+  return card;
 }
 
 // An array of { node: ... } wrappers: feed edges and comment trees.
 static BOOL RFFilterEdges(NSArray *edges, const RFContext *ctx) {
   BOOL changed = NO;
+  NSArray<NSString *> *fields = nil;
+  BOOL fieldsRead = NO;
   for (id edge in edges) {
     NSMutableDictionary *wrapper = RFMutableDict(edge);
     BOOL videos = wrapper && ctx->prefs.videosForYou && RFIsVideosForYou(wrapper[@"node"]);
     BOOL extra = wrapper && ctx->prefs.extraCards && RFIsExtraFeedCard(wrapper[@"node"]);
     if (videos || extra || (wrapper && RFIsKeywordPostPreview(wrapper[@"node"], ctx))) {
       RFCount(videos ? RFStatVideosForYou : extra ? RFStatExtraCards : RFStatKeywordPosts, wrapper[@"node"]);
-      wrapper[@"node"] = RFEmptyCard(wrapper[@"node"]);
+      if (!fieldsRead) {
+        fields = RFCardFields(edges);
+        fieldsRead = YES;
+      }
+      wrapper[@"node"] = RFEmptyCard(wrapper[@"node"], fields);
       changed = YES;
       continue;
     }
@@ -759,7 +778,7 @@ NSData *RFMergedFeedPages(NSData *firstPage, NSData *nextPage) {
 
 static NSString *const kRFPostDetailsRequestKey = @"kRedditFilterPostDetailsRequest";
 
-// The app's request for full posts, minus the post IDs, as seen in Reddit 2026.44. Replaced by the
+// The app's request for full posts, minus the post IDs, as seen in Reddit 2026.45. Replaced by the
 // app's own request as soon as it makes one.
 static NSDictionary *RFDefaultPostDetailsRequest(void) {
   NSMutableDictionary *variables = [NSMutableDictionary dictionary];
@@ -772,16 +791,16 @@ static NSDictionary *RFDefaultPostDetailsRequest(void) {
     variables[flag] = @YES;
   for (NSString *flag in @[
          @"includeCommentPostUnits", @"includeFeedTrend", @"includeLinkTitle", @"includeMediaAuth",
-         @"includeProfileFlair", @"includePublisherAttribution", @"includeSubredditBackgroundColor"
+         @"includePostAIDisclosure", @"includePostAIInfoSheetContent", @"includeProfileFlair",
+         @"includePublisherAttribution", @"includeSubredditBackgroundColor"
        ])
     variables[flag] = @NO;
-  variables[@"featureVariantNames"] =
-      @[ @"mod_guide_subreddit_rollout", @"mediaf_video_in_comments_subreddit_allowlist" ];
+  variables[@"featureVariantNames"] = @[ @"mod_guide_subreddit_rollout" ];
   return @{
     @"body" : @{
       @"extensions" : @{
         @"persistedQuery" :
-            @{@"sha256Hash" : @"2f76b78c53f3ecb611efea6057139ba52b6657700594efb78d159ca35a6b7d94", @"version" : @1}
+            @{@"sha256Hash" : @"40fc72b2d8478c7ad06669920f520ae11b9e91e9217a1c140b5c748e74fdf42a", @"version" : @1}
       },
       @"operationName" : @"FeedPostDetailsByIds",
       @"variables" : variables,

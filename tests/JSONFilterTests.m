@@ -218,6 +218,18 @@ int main(void) {
       Check([Filter(withCarousels, op, ads) isEqual:withCarousels], @"Other filters keep Videos for you");
       Check([Filter(withCarousels, op, off) isEqual:withCarousels], @"Disabled filter keeps Videos for you");
     }
+    // Reddit drops the whole page if a card lacks a field its query asks for (2026.45 added aiDisclosure):
+    // an empty card copies the fields of the page's own cards.
+    NSDictionary *realCard = @{@"__typename": @"CellGroup", @"id": @"r", @"groupId": @"r", @"cells": @[@{@"__typename": @"TitleCell"}],
+                               @"adPayload": NSNull.null, @"recommendationContext": NSNull.null, @"aiDisclosure": NSNull.null,
+                               @"futureField": NSNull.null};
+    NSArray *withRealCard = Filter(Feed(@[realCard, videoCarousel]), @"HomeFeedSdui", videos)[@"data"][@"homeV3"][@"elements"][@"edges"];
+    NSDictionary *emptied = withRealCard[1][@"node"];
+    Check([emptied[@"aiDisclosure"] isEqual:NSNull.null] && [emptied[@"futureField"] isEqual:NSNull.null] &&
+              [emptied[@"cells"] count] == 0 && [emptied[@"__typename"] isEqual:@"CellGroup"],
+          @"An empty card has every field the page's cards have");
+    NSArray *alone = Filter(Feed(@[videoCarousel]), @"HomeFeedSdui", videos)[@"data"][@"homeV3"][@"elements"][@"edges"];
+    Check([alone[0][@"node"][@"aiDisclosure"] isEqual:NSNull.null], @"Without a card to copy, the empty card still has aiDisclosure");
     // Short first pages get topped up with the next page.
     NSMutableURLRequest *feedRequest = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"https://gql-fed.reddit.com/"]];
     [feedRequest setValue:@"HomeFeedSdui" forHTTPHeaderField:@"X-APOLLO-OPERATION-NAME"];

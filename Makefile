@@ -28,7 +28,7 @@ TWEAK_NAME = RedditFilter
 
 $(TWEAK_NAME)_FILES = $(wildcard *.x*) $(wildcard *.m)
 $(TWEAK_NAME)_CFLAGS = -fobjc-arc -Iinclude -Wno-module-import-in-extern-c
-$(TWEAK_NAME)_FRAMEWORKS = UIKit WebKit SafariServices Network UniformTypeIdentifiers
+$(TWEAK_NAME)_FRAMEWORKS = UIKit QuartzCore WebKit SafariServices Network UniformTypeIdentifiers
 
 $(TWEAK_NAME)_CFLAGS += -DRF_VERSION='"$(RF_VERSION)"'
 

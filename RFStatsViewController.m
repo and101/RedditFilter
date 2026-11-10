@@ -13,14 +13,14 @@ typedef struct {
 } RFStatInfo;
 
 static const RFStatInfo kRFStatInfo[RFStatCount] = {
-    [RFStatFeedAds] = {@"Promoted Posts", @"megaphone.fill"},
-    [RFStatCommentAds] = {@"Ads in Comments", @"text.bubble.fill"},
+    [RFStatFeedAds] = {@"Promoted posts", @"megaphone.fill"},
+    [RFStatCommentAds] = {@"Ads in comments", @"text.bubble.fill"},
     [RFStatRecommended] = {@"Recommendations", @"sparkles"},
-    [RFStatVideosForYou] = {@"Videos for You", @"play.rectangle.fill"},
-    [RFStatNSFW] = {@"NSFW Posts", @"eye.slash.fill"},
-    [RFStatKeywordPosts] = {@"Posts with Keywords", @"text.magnifyingglass"},
-    [RFStatKeywordComments] = {@"Comments with Keywords", @"bubble.left.and.bubble.right.fill"},
-    [RFStatExtraCards] = {@"Extra Feed Cards", @"rectangle.stack.fill"},
+    [RFStatVideosForYou] = {@"Videos for you", @"play.rectangle.fill"},
+    [RFStatNSFW] = {@"NSFW posts", @"eye.slash.fill"},
+    [RFStatKeywordPosts] = {@"Posts with keywords", @"text.magnifyingglass"},
+    [RFStatKeywordComments] = {@"Comments with keywords", @"bubble.left.and.bubble.right.fill"},
+    [RFStatExtraCards] = {@"Extra cards", @"rectangle.stack.fill"},
 };
 
 static UIColor *RFStatColor(RFStat stat) {
@@ -194,7 +194,7 @@ typedef NS_ENUM(NSInteger, RFStatsSection) { RFStatsSectionTotal, RFStatsSection
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-  return section == RFStatsSectionFilters ? @"By Filter" : nil;
+  return section == RFStatsSectionFilters ? @"By filter" : nil;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
@@ -278,7 +278,7 @@ typedef NS_ENUM(NSInteger, RFStatsSection) { RFStatsSectionTotal, RFStatsSection
   if (indexPath.section == RFStatsSectionReset) {
     UITableViewCell *cell = [self styledCell:[[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
                                                                     reuseIdentifier:nil]];
-    cell.textLabel.text = @"Reset Stats";
+    cell.textLabel.text = @"Reset stats";
     cell.textLabel.textAlignment = NSTextAlignmentCenter;
     BOOL any = self.total > 0;
     cell.textLabel.textColor = any ? UIColor.systemRedColor : UIColor.tertiaryLabelColor;
@@ -308,7 +308,7 @@ typedef NS_ENUM(NSInteger, RFStatsSection) { RFStatsSectionTotal, RFStatsSection
       [UIAlertController alertControllerWithTitle:nil
                                           message:@"All counts go back to zero and start again from today."
                                    preferredStyle:UIAlertControllerStyleActionSheet];
-  [sheet addAction:[UIAlertAction actionWithTitle:@"Reset Stats"
+  [sheet addAction:[UIAlertAction actionWithTitle:@"Reset stats"
                                             style:UIAlertActionStyleDestructive
                                           handler:^(UIAlertAction *action) {
                                             RFStatsReset();

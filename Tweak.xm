@@ -4,9 +4,13 @@
 #import <os/lock.h>
 #import "ColoredComments.h"
 #import "DebugMenu.h"
+#import "FeedCache.h"
+#import "FeedPosition.h"
 #import "JSONFilter.h"
 #import "LinkPanel.h"
 #import "Preferences.h"
+#import "PostPageFeed.h"
+#import "ScreenRestore.h"
 #import "Redgifs.h"
 #import "SwipeCollapse.h"
 
@@ -35,6 +39,18 @@ extern "C" void RFReloadPreferences(void) {
   prefs.redgifsDirect = [defaults boolForKey:kRedditFilterRedgifsDirect];
   prefs.redgifsHD = [defaults boolForKey:kRedditFilterRedgifsHD];
   prefs.redgifsHDWiFiOnly = [defaults boolForKey:kRedditFilterRedgifsHDWiFiOnly];
+  // Keep feed position: the kept posts were filtered with the old settings, so a change forgets them
+  // (otherwise posts the new settings hide could come back). Not at launch, only when they change.
+  static NSArray *lastFilters;
+  NSArray *filters = @[ @(prefs.promoted), @(prefs.recommended), @(prefs.nsfw), @(prefs.videosForYou),
+                        @(prefs.extraCards), keywords ?: @[] ];
+  if (lastFilters && ![lastFilters isEqualToArray:filters]) RFFeedCacheForget();
+  lastFilters = filters;
+  // Likewise the kept comments, filtered with the old comment settings.
+  static NSArray *lastCommentFilters;
+  NSArray *commentFilters = @[ @(prefs.keywordComments), @(prefs.keywordCommentReplies), keywords ?: @[] ];
+  if (lastCommentFilters && ![lastCommentFilters isEqualToArray:commentFilters]) RFScreenRestoreForgetComments();
+  lastCommentFilters = commentFilters;
   os_unfair_lock_lock(&globalPrefsLock);
   globalPrefs = prefs;
   os_unfair_lock_unlock(&globalPrefsLock);
@@ -44,6 +60,11 @@ extern "C" void RFReloadPreferences(void) {
   RFSetColoredComments([defaults boolForKey:kRedditFilterColoredComments],
                        [defaults boolForKey:kRedditFilterColoredCommentsApollo]);
   RFSetHideLinkPanel([defaults boolForKey:kRedditFilterHideLinkPanel]);
+  RFSetHidePostPageFeed(prefs.recommended); // "From your feed" below a post's comments
+  RFSetKeepFeedPosition([defaults boolForKey:kRedditFilterKeepFeedPosition]);
+  RFSetRestoreScreens([defaults boolForKey:kRedditFilterKeepFeedPosition] &&
+                      [defaults boolForKey:kRedditFilterRestoreScreens]);
+  RFSetRestoreOptions([defaults boolForKey:kRedditFilterRestoreAfterSwipe], [defaults integerForKey:kRedditFilterRestoreHours]);
   RFSetSwipeCollapse([defaults boolForKey:kRedditFilterSwipeToCollapse],
                      [defaults boolForKey:kRedditFilterTapToCollapse],
                      [defaults boolForKey:kRedditFilterSwipeCollapseHaptics],
@@ -368,9 +389,33 @@ static BOOL RFIsAPIHost(NSString *host) {
   os_unfair_lock_lock(&globalPrefsLock);
   RFPrefs prefs = globalPrefs;
   os_unfair_lock_unlock(&globalPrefsLock);
-  if (!completionHandler || !RFPrefsAnyEnabled(prefs) || !RFIsAPIHost(host)) return %orig;
+  NSString *operation = completionHandler && RFIsAPIHost(host) ? RFOperationName(request) : nil;
+  // Keep feed position: every request's login token says whether Reddit's in incognito.
+  if (operation && RFFeedCacheEnabled()) RFFeedCacheNoteRequest(operation, request);
 
-  NSString *operation = RFOperationName(request);
+
+  // Keep feed position: the pages of Home's feeds are kept, and each feed's first page after iOS closed
+  // the app starts where you were (FeedCache.m). Wraps the app's handler, so it sees each page as it's
+  // finally handed over (filtered, so kept posts aren't filtered or counted twice).
+  if (RFFeedCacheEnabled() && RFFeedCacheKeepsOperation(operation)) {
+    void (^appHandler)(NSData *, NSURLResponse *, NSError *) = completionHandler;
+    unsigned generation = RFFeedCacheGeneration(); // as it's asked for, with these filters and this account
+    completionHandler = ^(NSData *data, NSURLResponse *response, NSError *error) {
+      if (RFIsOK(response, error)) data = RFFeedCachePageFrom(operation, request, data, generation) ?: data;
+      appHandler(data, response, error);
+    };
+  }
+  // Restore open community and post: the comments of each post opened, to note where you were in them.
+  if (RFScreenRestoreWantsComments() && [operation isEqualToString:@"PostInfoByIdComments"]) {
+    void (^appHandler)(NSData *, NSURLResponse *, NSError *) = completionHandler;
+    completionHandler = ^(NSData *data, NSURLResponse *response, NSError *error) {
+      if (RFIsOK(response, error)) RFScreenRestoreCommentsPage(request, data);
+      appHandler(data, response, error);
+    };
+  }
+
+  if (!completionHandler || !RFPrefsAnyEnabled(prefs) || !RFIsAPIHost(host)) return %orig(request, completionHandler);
+
   if ([operation isEqualToString:@"FeedPostDetailsByIds"]) RFRememberPostDetailsRequest(request);
 
   NSURLSession *session = self;
@@ -577,6 +622,10 @@ BOOL RFCleanCachedExperiments(void) {
     kRedditFilterColoredComments : @NO,
     kRedditFilterColoredCommentsApollo : @NO,
     kRedditFilterHideLinkPanel : @NO,
+    kRedditFilterKeepFeedPosition : @NO,
+    kRedditFilterRestoreScreens : @NO,
+    kRedditFilterRestoreAfterSwipe : @NO,
+    kRedditFilterRestoreHours : @12,
     kRedditFilterSafariLinks : @NO,
     kRedditFilterCheckUpdates : @YES,
   }];

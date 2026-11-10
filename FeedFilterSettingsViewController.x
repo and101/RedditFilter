@@ -2,6 +2,7 @@
 #import <objc/runtime.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import "FeedFilterSettingsViewController.h"
+#import "ScreenRestore.h"
 #import "KeywordsViewController.h"
 #import "DebugMenu.h"
 #import "RFBackup.h"
@@ -29,7 +30,7 @@ typedef NS_ENUM(NSInteger, RFToggleTag) {
   RFPromoted, RFRecommended, RFNSFW, RFVideos, RFExtraCards,
   RFAwards, RFScores, RFColoured, RFApollo, RFKeywordComments, RFKeywordReplies,
   RFUpdates, RFDirect, RFSD, RFMobileSD, RFAutoMod, RFDiagnostics,
-  RFSwipe, RFLeft, RFRight, RFHaptics, RFTap, RFLinkPanel, RFSafariLinks,
+  RFSwipe, RFLeft, RFRight, RFHaptics, RFTap, RFKeepFeed, RFRestoreScreens, RFRestoreAfterSwipe,
 };
 static const RFToggleRow kToggleRows[] = {
     {kRedditFilterPromoted, @"Promoted", @"Show ads in feeds and comments", @"rpl3/tag,icon_tag", YES},
@@ -51,14 +52,14 @@ static const RFToggleRow kToggleRows[] = {
     {kRedditFilterKeywordCommentReplies, @"Hide replies too", @"Also hide the replies below them",
      @"rpl3/reply,icon_reply", NO, kRedditFilterKeywordComments},
     {kRedditFilterCheckUpdates, @"Check for updates",
-                                       @"Tap to check. Switch on for daily",
+                                       @"Switch on to check daily, or tap to check now",
                                        @"rpl3/download,rpl3/notifications", NO},
-    {kRedditFilterRedgifsDirect, @"Direct-play RedGIFs", @"Plays with sound, but can use more data",
+    {kRedditFilterRedgifsDirect, @"Play RedGIFs directly", @"Plays with sound, but can use more data",
      @"rpl3/volumeOn,rpl3/play", NO},
     // Saved as "prefer HD", so the switch is the opposite.
     {kRedditFilterRedgifsHD, @"Prefer SD", @"Uses about a tenth of the data of HD",
      @"rpl3/video,icon_video,icon_play", YES, kRedditFilterRedgifsDirect},
-    {kRedditFilterRedgifsHDWiFiOnly, @"Prefer SD on mobile data", @"Also in Low Data Mode. HD on Wi-Fi",
+    {kRedditFilterRedgifsHDWiFiOnly, @"Prefer SD on mobile data", @"And in Low Data Mode; HD on Wi-Fi",
      @"rf/wifi", NO, kRedditFilterRedgifsHD},
     {kRedditFilterAutoCollapseAutoMod, @"AutoMod", @"Always collapse AutoMod comments", @"rpl3/mod,icon_mod", NO},
     {kRedditFilterDiagnostics, @"Diagnostics",
@@ -79,10 +80,12 @@ static const RFToggleRow kToggleRows[] = {
     {kRedditFilterTapToCollapse, @"Tap to collapse too",
      @"Long press collapses the whole thread", @"rpl3/comment,icon_comment", NO,
      kRedditFilterSwipeToCollapse},
-    {kRedditFilterHideLinkPanel, @"Hide panel on opened links", @"Full page. Votes stay on the post",
-     @"rpl3/link,icon_link", NO},
-    {kRedditFilterSafariLinks, @"Open article links in Safari", @"Opens an in-app Safari sheet",
-     @"rpl3/link,icon_link", NO},
+    {kRedditFilterKeepFeedPosition, @"Keep feed position", @"Stay where you were on Home",
+     @"rpl3/home,icon_home", NO},
+    {kRedditFilterRestoreScreens, @"Reopen community and post", @"Communities, profiles and posts too",
+     @"rpl3/comment,icon_comment", NO, kRedditFilterKeepFeedPosition},
+    {kRedditFilterRestoreAfterSwipe, @"Restore after swiping away", @"Not only when iOS closed Reddit",
+     @"rpl3/swipeUp,rpl3/refresh,icon_refresh", NO, kRedditFilterKeepFeedPosition},
 };
 static const NSInteger kToggleRowCount = sizeof(kToggleRows) / sizeof(kToggleRows[0]);
 static const NSInteger kAboutUpdateRow = 1;
@@ -156,20 +159,33 @@ void RFApplySettingsCardTheme(UIView *view) {
 
 static NSString *const kRootCellID = @"RFRootCellID"; // the root page's shorter link rows
 
+// The value on a choice row: opens its menu from a tap anywhere on the row, like iOS's pop-up buttons.
+@interface RFMenuButton : UIButton
+@end
+@implementation RFMenuButton
+- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
+  UIView *row = self.superview;
+  return row ? CGRectContainsPoint(row.bounds, [self convertPoint:point toView:row]) : [super pointInside:point withEvent:event];
+}
+@end
+
 @interface RFSettingsCell : UITableViewCell
 @property(nonatomic, strong) UILabel *mainLabel;
 @property(nonatomic, strong) UILabel *detailLabel;
 @property(nonatomic, strong) UIImageView *rowIcon;
 @property(nonatomic, strong) UISwitch *accessorySwitch;
 @property(nonatomic, strong) UIImageView *disclosure;
+@property(nonatomic, strong) RFMenuButton *menuButton;
 @property(nonatomic, copy) NSString *iconKey; // the icon this row wants, as cells get reused
 - (void)showDisclosure:(BOOL)show;
+- (void)showMenu:(UIMenu *)menu value:(NSString *)value;
 @end
 
 @implementation RFSettingsCell {
   // The text ends before the switch, or before the arrow on rows that show one instead.
   NSLayoutConstraint *_labelsBeforeSwitch;
   NSLayoutConstraint *_labelsBeforeDisclosure;
+  NSLayoutConstraint *_labelsBeforeMenu;
 }
 - (instancetype)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)identifier {
   self = [super initWithStyle:style reuseIdentifier:identifier];
@@ -200,15 +216,19 @@ static NSString *const kRootCellID = @"RFRootCellID"; // the root page's shorter
   _disclosure.tintColor = UIColor.secondaryLabelColor;
   RFApplyTheme(_disclosure, @selector(setTintColor:), @selector(metaTextColor));
   _disclosure.hidden = YES;
+  _menuButton = [RFMenuButton buttonWithType:UIButtonTypeSystem];
+  _menuButton.showsMenuAsPrimaryAction = YES;
+  _menuButton.hidden = YES;
   UIStackView *labels = [[UIStackView alloc] initWithArrangedSubviews:@[_mainLabel, _detailLabel]];
   labels.axis = UILayoutConstraintAxisVertical;
   labels.spacing = 0;
-  for (UIView *view in @[_rowIcon, labels, _accessorySwitch, _disclosure]) {
+  for (UIView *view in @[_rowIcon, labels, _accessorySwitch, _disclosure, _menuButton]) {
     view.translatesAutoresizingMaskIntoConstraints = NO;
     [self.contentView addSubview:view];
   }
   _labelsBeforeSwitch = [labels.trailingAnchor constraintEqualToAnchor:_accessorySwitch.leadingAnchor constant:-12];
   _labelsBeforeDisclosure = [labels.trailingAnchor constraintEqualToAnchor:_disclosure.leadingAnchor constant:-12];
+  _labelsBeforeMenu = [labels.trailingAnchor constraintEqualToAnchor:_menuButton.leadingAnchor constant:-8];
   // Root links leave room for About; text can still grow at larger sizes.
   BOOL root = [identifier isEqualToString:kRootCellID];
   CGFloat padding = root ? 7.0 : 10.0;
@@ -227,9 +247,11 @@ static NSString *const kRootCellID = @"RFRootCellID"; // the root page's shorter
     [_accessorySwitch.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
     [_disclosure.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-20],
     [_disclosure.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
+    [_menuButton.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-16],
+    [_menuButton.centerYAnchor constraintEqualToAnchor:self.contentView.centerYAnchor],
   ]];
   // The switch and the arrow keep their own size, so the text takes up the rest of the row.
-  for (UIView *view in @[_accessorySwitch, _disclosure]) {
+  for (UIView *view in @[_accessorySwitch, _disclosure, _menuButton]) {
     [view setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
     [view setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
   }
@@ -239,10 +261,40 @@ static NSString *const kRootCellID = @"RFRootCellID"; // the root page's shorter
 - (void)showDisclosure:(BOOL)show {
   self.accessorySwitch.hidden = show;
   self.disclosure.hidden = !show;
-  // Deactivate first so the two never conflict.
+  self.menuButton.hidden = YES;
+  self.menuButton.menu = nil;
+  self.accessibilityValue = nil;
+  // Deactivate first so they never conflict.
+  _labelsBeforeMenu.active = NO;
   (show ? _labelsBeforeSwitch : _labelsBeforeDisclosure).active = NO;
   (show ? _labelsBeforeDisclosure : _labelsBeforeSwitch).active = YES;
   self.selectionStyle = show ? UITableViewCellSelectionStyleDefault : UITableViewCellSelectionStyleNone;
+}
+- (void)showMenu:(UIMenu *)menu value:(NSString *)value {
+  self.accessorySwitch.hidden = YES;
+  self.disclosure.hidden = YES;
+  self.menuButton.hidden = NO;
+  _labelsBeforeSwitch.active = NO;
+  _labelsBeforeDisclosure.active = NO;
+  _labelsBeforeMenu.active = YES;
+  UIButtonConfiguration *config = [UIButtonConfiguration plainButtonConfiguration];
+  config.title = value;
+  config.image = [UIImage systemImageNamed:@"chevron.up.chevron.down"
+                         withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:11 weight:UIImageSymbolWeightSemibold]];
+  config.imagePlacement = NSDirectionalRectEdgeTrailing;
+  config.imagePadding = 4;
+  config.contentInsets = NSDirectionalEdgeInsetsMake(6, 4, 6, 4);
+  config.baseForegroundColor = self.detailLabel.textColor;
+  config.titleTextAttributesTransformer = ^NSDictionary *(NSDictionary *attributes) {
+    NSMutableDictionary *updated = [attributes mutableCopy];
+    updated[NSFontAttributeName] = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+    return updated;
+  };
+  self.menuButton.configuration = config;
+  self.menuButton.menu = menu;
+  // VoiceOver reads the row as one: its title and the current choice.
+  self.accessibilityValue = value;
+  self.selectionStyle = UITableViewCellSelectionStyleNone;
 }
 @end
 
@@ -381,7 +433,8 @@ typedef NS_ENUM(NSInteger, RFSection) {
   RFSectionBackup,
   RFSectionAbout,
   RFSectionDebug,
-  RFSectionAppearance, RFSectionRootFilters, RFSectionDisplay, RFSectionMore,
+  RFSectionAppearance, RFSectionRootFilters, RFSectionDisplay, RFSectionMore, RFSectionFeed,
+  RFSectionExperimental, RFSectionRestoreOptions,
 };
 
 // The IPA includes the Safari extension unless it was built without it.
@@ -397,7 +450,7 @@ static BOOL RFHasSafariExtension(void) {
 
 typedef NS_ENUM(NSInteger, RFPage) {
   RFPageRoot, RFPagePosts, RFPageAppearance, RFPageCollapse, RFPageRedgifs,
-  RFPageBackup, RFPageDiagnostics, RFPageAbout,
+  RFPageBackup, RFPageDiagnostics, RFPageAbout, RFPageExperimental,
 };
 static char kRFPageKey, kRFSnapshotKey;
 static RFPage RFCurrentPage(id settings) {
@@ -405,7 +458,7 @@ static RFPage RFCurrentPage(id settings) {
 }
 static NSString *RFPageTitle(RFPage page) {
   return @[@"RedditFilter", @"Posts and ads", @"Appearance", @"Collapsing comments", @"RedGIFs",
-           @"Backup", @"Diagnostics", @"About"][page];
+           @"Backup", @"Diagnostics", @"About", @"Experimental features"][page];
 }
 static NSArray *RFDebugSnapshot(id settings) {
   return objc_getAssociatedObject(settings, &kRFSnapshotKey) ?: @[];
@@ -418,13 +471,15 @@ static void RFRefreshSnapshot(id settings) {
 static NSArray<NSNumber *> *RFSections(id settings) {
   switch (RFCurrentPage(settings)) {
     case RFPagePosts: return @[@(RFSectionFilters)];
+    case RFPageExperimental: return @[@(RFSectionFeed), @(RFSectionRestoreOptions)];
     case RFPageAppearance: return @[@(RFSectionAppearance)];
     case RFPageCollapse: return @[@(RFSectionSwipe), @(RFSectionCollapse)];
     case RFPageRedgifs: return @[@(RFSectionRedgifs)];
     case RFPageBackup: return @[@(RFSectionBackup)];
     case RFPageDiagnostics: return @[@(RFSectionDebug)];
     case RFPageAbout: return @[@(RFSectionAbout)];
-    case RFPageRoot: return @[@(RFSectionStats), @(RFSectionRootFilters), @(RFSectionDisplay), @(RFSectionMore)];
+    case RFPageRoot:
+      return @[@(RFSectionStats), @(RFSectionRootFilters), @(RFSectionDisplay), @(RFSectionExperimental), @(RFSectionMore)];
   }
   return @[];
 }
@@ -432,9 +487,11 @@ static NSArray<NSNumber *> *RFSections(id settings) {
 static NSArray<NSNumber *> *RFTags(RFSection section) {
   switch (section) {
     case RFSectionFilters: return @[@(RFPromoted), @(RFRecommended), @(RFNSFW), @(RFVideos), @(RFExtraCards)];
-    case RFSectionAppearance: return @[@(RFAwards), @(RFScores), @(RFColoured), @(RFApollo), @(RFLinkPanel), @(RFSafariLinks)];
+    case RFSectionAppearance: return @[@(RFAwards), @(RFScores), @(RFColoured), @(RFApollo)]; // then Article links
     case RFSectionSwipe: return @[@(RFSwipe), @(RFLeft), @(RFRight), @(RFHaptics), @(RFTap)];
     case RFSectionCollapse: return @[@(RFAutoMod)];
+    case RFSectionFeed: return @[@(RFKeepFeed), @(RFRestoreScreens)];
+    case RFSectionRestoreOptions: return @[@(RFRestoreAfterSwipe)]; // then the Restore for row
     case RFSectionRedgifs: return @[@(RFDirect), @(RFSD), @(RFMobileSD)];
     default: return @[];
   }
@@ -444,6 +501,7 @@ static RFPage RFDestination(id settings, NSIndexPath *path) {
   RFSection section = [RFSections(settings)[path.section] integerValue];
   if (section == RFSectionRootFilters && path.row == 0) return RFPagePosts;
   if (section == RFSectionDisplay) return [@[@(RFPageAppearance), @(RFPageCollapse), @(RFPageRedgifs)][path.row] integerValue];
+  if (section == RFSectionExperimental) return RFPageExperimental;
   if (section == RFSectionMore) {
     NSInteger row = path.row - (RFHasSafariExtension() ? 1 : 0);
     if (row >= 0) return [@[@(RFPageBackup), @(RFPageDiagnostics), @(RFPageAbout)][row] integerValue];
@@ -460,17 +518,40 @@ static NSString *RFHeaderText(id settings, NSInteger section) {
   switch (RFSectionAt(settings, section)) {
     case RFSectionRootFilters: return @"FILTERS";
     case RFSectionDisplay: return @"DISPLAY";
+    case RFSectionExperimental: return @"EXPERIMENTAL";
     case RFSectionMore: return @"MORE";
     default: return nil;
   }
   return nil;
 }
 
+// A Diagnostics readout row: a plain UIKit cell (it has to keep working when Reddit's own classes change),
+// the same for every row: a 15 pt semibold title over 11 pt monospaced details.
+static UITableViewCell *RFDiagnosticCell(UITableView *tableView, NSString *identifier) {
+  UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:identifier];
+  if (!cell) {
+    cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:identifier];
+    cell.detailTextLabel.numberOfLines = 0;
+    cell.detailTextLabel.font = [UIFont monospacedSystemFontOfSize:11.0 weight:UIFontWeightRegular];
+    cell.textLabel.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];
+  }
+  cell.accessoryView = nil;
+  cell.selectionStyle = UITableViewCellSelectionStyleNone;
+  return cell;
+}
+
 static NSString *RFFooterText(id settings, NSInteger section) {
   switch (RFSectionAt(settings, section)) {
     case RFSectionStats: return nil;
-    case RFSectionFilters: return @"Turn a switch off to hide that content";
+    case RFSectionFilters: return @"Turn a switch off to hide that content.";
     case RFSectionCollapse: return nil;
+    case RFSectionFeed:
+      return @"Reddit jumps back to the top of Home after 10 minutes away. This keeps your place in For You, "
+             @"Following and Popular, even after Reddit closes. Pull down to refresh.\n\n"
+             @"Reopened posts start at the top, with a button back to where you were in the comments.";
+    case RFSectionRestoreOptions:
+      return @"Restore for is how long your place is kept after you leave Reddit.";
+    case RFSectionExperimental: return nil;
     case RFSectionSwipe:
       return @"Turn on both sides to collapse either way. Swiping a collapsed comment or the post itself still "
              @"changes post or goes back. With swipe to collapse off, a tap collapses comments as usual. "
@@ -480,17 +561,13 @@ static NSString *RFFooterText(id settings, NSInteger section) {
              @"can't be reached, Reddit's silent version plays. HD plays when a video has no SD version, and "
              @"videos already loaded keep their quality if your network changes.";
     case RFSectionAppearance:
-      return @"In-app Safari uses native Safari content blockers enabled in iOS Settings. "
-             @"A Safari web extension alone may not provide this blocking. Tap Done to return to Reddit. "
-             @"The separate Open Reddit links here extension handles links coming from Safari. With Open "
-             @"article links in Safari on, Hide panel on opened links only matters when an article still "
-             @"opens in Reddit's own screen.";
+      return @"Safari opens articles in an in-app sheet that uses your Safari content blockers.";
     case RFSectionRootFilters:
     case RFSectionDisplay:
     case RFSectionMore:
       return nil;
     case RFSectionBackup:
-      return @"A backup includes your settings, keywords and stats, but no account details.";
+      return @"Backups hold no account details.";
     case RFSectionDebug:
       if (!RFDiagnosticsEnabled())
         return @"If posts or ads come back, turn this on, use Reddit for a minute, then add what shows here "
@@ -499,7 +576,7 @@ static NSString *RFFooterText(id settings, NSInteger section) {
              @"the new location. Copy JSON gives the response, which can include usernames and post text, and "
              @"Share report never includes it. Nothing leaves your device unless you copy or share it, and "
              @"it's cleared when Reddit closes or you turn this off.";
-    case RFSectionAbout: return @"Based on original work from level3tjg and NicholasBly";
+    case RFSectionAbout: return @"Based on original work by level3tjg and NicholasBly.";
   }
   return nil;
 }
@@ -541,6 +618,73 @@ static NSString *RFVersionText(void) {
 }
 
 static NSString *const kLinkCellID = @"RFLinkCellID";
+
+// Article links: one choice, saved as the two switches it stands for. Safari hides the panel too, so an
+// article that still opens in Reddit's viewer (Safari couldn't take it) is full page as well.
+typedef NS_ENUM(NSInteger, RFArticleChoice) { RFArticleReddit, RFArticleFullPage, RFArticleSafari };
+static NSString *RFArticleChoiceName(RFArticleChoice choice) {
+  return @[ @"Reddit's viewer", @"Reddit's viewer, full page", @"Safari" ][choice];
+}
+static RFArticleChoice RFCurrentArticleChoice(void) {
+  NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+  if ([defaults boolForKey:kRedditFilterSafariLinks]) return RFArticleSafari;
+  return [defaults boolForKey:kRedditFilterHideLinkPanel] ? RFArticleFullPage : RFArticleReddit;
+}
+static void RFSetArticleChoice(RFArticleChoice choice) {
+  NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+  [defaults setBool:choice == RFArticleSafari forKey:kRedditFilterSafariLinks];
+  [defaults setBool:choice != RFArticleReddit forKey:kRedditFilterHideLinkPanel];
+  RFReloadPreferences();
+}
+
+// The Restore for choices (hours, 0 = no limit) and their names.
+static NSArray<NSNumber *> *RFRestoreTimes(void) { return @[ @12, @24, @0 ]; }
+static NSString *RFRestoreTimeName(NSInteger hours) {
+  return hours > 0 ? [NSString stringWithFormat:@"%ld hours", (long)hours] : @"No limit";
+}
+
+// A choice row: the title on the left, the current value with a pop-up menu of the choices on the right.
+static UITableViewCell *RFChoiceCell(UITableView *tableView, NSString *title, NSString *icons, NSString *symbol,
+                                     NSArray<NSString *> *names, NSInteger current, void (^choose)(NSInteger)) {
+  RFSettingsCell *cell = [tableView dequeueReusableCellWithIdentifier:kLinkCellID];
+  cell.accessibilityLabel = title;
+  RFMainLabel(cell).text = title;
+  RFDetailLabel(cell).text = nil;
+  RFSetIcon(cell, icons, symbol);
+  NSMutableArray<UIAction *> *actions = [NSMutableArray array];
+  __weak UITableView *weakTable = tableView;
+  [names enumerateObjectsUsingBlock:^(NSString *name, NSUInteger index, BOOL *stop) {
+    UIAction *action = [UIAction actionWithTitle:name image:nil identifier:nil handler:^(UIAction *chosen) {
+      choose((NSInteger)index);
+      [weakTable reloadData];
+    }];
+    action.state = (NSInteger)index == current ? UIMenuElementStateOn : UIMenuElementStateOff;
+    [actions addObject:action];
+  }];
+  UIMenu *menu = [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsSingleSelection children:actions];
+  [cell showMenu:menu value:(current >= 0 && current < (NSInteger)names.count) ? names[current] : @""];
+  return cell;
+}
+
+static UITableViewCell *RFArticleLinksCell(UITableView *tableView) {
+  NSArray *names = @[ RFArticleChoiceName(RFArticleReddit), RFArticleChoiceName(RFArticleFullPage),
+                      RFArticleChoiceName(RFArticleSafari) ];
+  return RFChoiceCell(tableView, @"Article links", @"rpl3/link,icon_link", @"link", names, RFCurrentArticleChoice(),
+                      ^(NSInteger index) { RFSetArticleChoice((RFArticleChoice)index); });
+}
+
+static UITableViewCell *RFRestoreForCell(UITableView *tableView) {
+  NSArray<NSNumber *> *times = RFRestoreTimes();
+  NSInteger current = [times indexOfObject:@([NSUserDefaults.standardUserDefaults integerForKey:kRedditFilterRestoreHours])];
+  NSMutableArray *names = [NSMutableArray array];
+  for (NSNumber *hours in times) [names addObject:RFRestoreTimeName(hours.integerValue)];
+  return RFChoiceCell(tableView, @"Restore for", @"rpl3/clock,rpl3/history,icon_clock", @"clock", names,
+                      current == NSNotFound ? -1 : current, ^(NSInteger index) {
+                        [NSUserDefaults.standardUserDefaults setInteger:times[index].integerValue
+                                                                 forKey:kRedditFilterRestoreHours];
+                        RFReloadPreferences();
+                      });
+}
 
 // A row that opens something when tapped. It's the same cell as the switch rows, with the switch
 // swapped for a disclosure arrow, so the icons and text line up with them.
@@ -890,6 +1034,8 @@ static NSString *RFBackupSummaryMessage(RFBackupSummary *summary) {
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
   RFSection kind = RFSectionAt(self, section);
+  if (kind == RFSectionRestoreOptions || kind == RFSectionAppearance) return RFTags(kind).count + 1;
+  if (kind == RFSectionExperimental) return 1;
   if (RFTags(kind).count) return RFTags(kind).count;
   switch (kind) {
     case RFSectionStats: return 1;
@@ -897,7 +1043,7 @@ static NSString *RFBackupSummaryMessage(RFBackupSummary *summary) {
     case RFSectionDisplay: return 3;
     case RFSectionMore: return 3 + RFHasSafariExtension();
     case RFSectionBackup: return 2;
-    case RFSectionDebug: return 1 + (RFDiagnosticsEnabled() ? RFDebugSnapshot(self).count + 2 : 0);
+    case RFSectionDebug: return 2 + (RFDiagnosticsEnabled() ? RFDebugSnapshot(self).count + 2 : 0);
     case RFSectionAbout: return kAboutRowCount + 1;
     default: return 0;
   }
@@ -926,6 +1072,15 @@ static NSString *RFBackupSummaryMessage(RFBackupSummary *summary) {
       case RFPageBackup: subtitle = @"Export or import your settings"; icon = @"rpl3/download"; symbol = @"arrow.up.arrow.down"; break;
       case RFPageDiagnostics: subtitle = RFDiagnosticsEnabled() ? @"On" : @"Off"; icon = @"rpl3/bug"; symbol = @"ladybug"; break;
       case RFPageAbout: subtitle = RFVersionText(); icon = @"rpl3/info"; symbol = @"info.circle"; break;
+      case RFPageExperimental: {
+        NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+        BOOL keep = [defaults boolForKey:kRedditFilterKeepFeedPosition];
+        subtitle = !keep ? @"Off"
+                   : [defaults boolForKey:kRedditFilterRestoreScreens] ? @"Feed position, community and post"
+                                                                       : @"Feed position";
+        icon = @"rpl3/lab,rpl3/beaker,rpl3/science"; symbol = @"flask";
+        break;
+      }
       default: break;
     }
     return RFLinkCell(tableView, RFPageTitle(destination), subtitle, icon, symbol);
@@ -935,12 +1090,30 @@ static NSString *RFBackupSummaryMessage(RFBackupSummary *summary) {
   if (section == RFSectionStats) return RFStatsCell(tableView);
   if (section == RFSectionBackup) {
     return indexPath.row == 0
-               ? RFLinkCell(tableView, @"Export Settings", @"Save your settings, keywords and stats",
+               ? RFLinkCell(tableView, @"Export settings", @"Save your settings, keywords and stats",
                             @"rpl3/upload,rpl3/share", @"square.and.arrow.up")
-               : RFLinkCell(tableView, @"Import Settings", @"Restore them from a backup file",
+               : RFLinkCell(tableView, @"Import settings", @"Restore them from a backup file",
                             @"rpl3/download", @"square.and.arrow.down");
   }
-  if (section == RFSectionDebug && tag < 0) return [self debugCellForRow:indexPath.row - 1 inTableView:tableView];
+  if (section == RFSectionAppearance && tag < 0)
+    return RFArticleLinksCell(tableView);
+  if (section == RFSectionRestoreOptions && tag < 0) {
+    UITableViewCell *cell = RFRestoreForCell(tableView);
+    BOOL enabled = [NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterKeepFeedPosition];
+    cell.contentView.alpha = enabled ? 1.0 : 0.4;
+    cell.userInteractionEnabled = enabled;
+    return cell;
+  }
+  if (section == RFSectionDebug && indexPath.row == 1) {
+    // How Reddit was last closed (Keep feed position only reopens screens after iOS closed it).
+    UITableViewCell *cell = RFDiagnosticCell(tableView, @"RFLastCloseCell");
+    cell.textLabel.text = @"Last closed";
+    cell.textLabel.textColor = [UIColor labelColor];
+    cell.detailTextLabel.text = RFLastCloseDescription();
+    cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
+    return cell;
+  }
+  if (section == RFSectionDebug && tag < 0) return [self debugCellForRow:indexPath.row - 2 inTableView:tableView];
   RFSettingsCell *cell = [tableView dequeueReusableCellWithIdentifier:kToggleCellID
                                                                    forIndexPath:indexPath];
   const RFToggleRow *row = RFToggleRowForTag(tag);
@@ -978,6 +1151,13 @@ static NSString *RFBackupSummaryMessage(RFBackupSummary *summary) {
     const RFToggleRow *other = RFToggleRowForTag(RFToggleTagAt(self, indexPath));
     if (other && other->requires)
       RFSetToggleCellEnabled((RFSettingsCell *)[self.tableView cellForRowAtIndexPath:indexPath], other);
+    // The Restore for row follows Keep feed position too.
+    if (RFSectionAt(self, indexPath.section) == RFSectionRestoreOptions && RFToggleTagAt(self, indexPath) < 0) {
+      UITableViewCell *cell = [self.tableView cellForRowAtIndexPath:indexPath];
+      BOOL enabled = [NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterKeepFeedPosition];
+      cell.contentView.alpha = enabled ? 1.0 : 0.4;
+      cell.userInteractionEnabled = enabled;
+    }
   }
 }
 
@@ -1073,17 +1253,7 @@ static NSString *RFBackupSummaryMessage(RFBackupSummary *summary) {
   
   // Deliberately a plain UIKit cell, not a Reddit class: the whole point of
   // this screen is to keep working when Reddit's own classes/schema change.
-  UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:kRFDebugCellID];
-  if (!cell) {
-    cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
-                                  reuseIdentifier:kRFDebugCellID];
-    cell.detailTextLabel.numberOfLines = 0;
-    cell.detailTextLabel.font = [UIFont monospacedSystemFontOfSize:11.0
-                                                            weight:UIFontWeightRegular];
-    cell.textLabel.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];
-  }
-  cell.accessoryView = nil;
-  cell.selectionStyle = UITableViewCellSelectionStyleNone;
+  UITableViewCell *cell = RFDiagnosticCell(tableView, kRFDebugCellID);
 
   NSArray<NSDictionary *> *snapshot = RFDebugSnapshot(self);
   
@@ -1133,12 +1303,12 @@ static NSString *RFBackupSummaryMessage(RFBackupSummary *summary) {
     cell.textLabel.textColor = [UIColor labelColor];
     cell.textLabel.text = record[kRFDebugOp];
     if (unfiltered.count == 0) {
-      cell.detailTextLabel.text = @"\u2713 none seen";
+      cell.detailTextLabel.text = @"\u2713 None seen";
       cell.detailTextLabel.textColor = [UIColor systemGreenColor];
     } else {
       NSInteger total = [record[kRFDebugMisses] integerValue];
       cell.detailTextLabel.text = [NSString
-          stringWithFormat:@"\u2717 %ld GraphQL request%@ not filtered (add the address to RFIsAPIHost)\n%@", (long)total,
+          stringWithFormat:@"\u2717 %ld GraphQL request%@ not filtered\n%@", (long)total,
                            total == 1 ? @"" : @"s", [unfiltered componentsJoinedByString:@"\n"]];
       cell.detailTextLabel.textColor = [UIColor systemRedColor];
     }
@@ -1149,7 +1319,7 @@ static NSString *RFBackupSummaryMessage(RFBackupSummary *summary) {
     cell.textLabel.textColor = [UIColor labelColor];
     cell.textLabel.text = record[kRFDebugOp];
     if (feedCards.count == 0) {
-      cell.detailTextLabel.text = @"\u2713 only posts and ads so far";
+      cell.detailTextLabel.text = @"\u2713 Only posts and ads so far";
       cell.detailTextLabel.textColor = [UIColor systemGreenColor];
     } else {
       NSMutableArray<NSString *> *known = [NSMutableArray array], *unknown = [NSMutableArray array];
@@ -1180,26 +1350,27 @@ static NSString *RFBackupSummaryMessage(RFBackupSummary *summary) {
   NSString *detail;
   UIColor *detailColor;
   if (!seen) {
-    detail = [NSString stringWithFormat:@"untested\nexpected: %@", expected];
+    detail = [NSString stringWithFormat:@"Untested\nExpected: %@", expected];
     detailColor = [UIColor secondaryLabelColor];
   } else if (lastResolved) {
     detail = [NSString stringWithFormat:@"\u2713 OK \u00b7 %ld hit%@",
                                         (long)hits, hits == 1 ? @"" : @"s"];
     if (misses > 0)
-      detail = [detail stringByAppendingFormat:@"  (recovered after %ld miss%@)",
+      detail = [detail stringByAppendingFormat:@" \u00b7 recovered after %ld miss%@",
                                                (long)misses, misses == 1 ? @"" : @"es"];
     if (redditErrors > 0)
       detail = [detail stringByAppendingFormat:@" \u00b7 %ld Reddit error%@", (long)redditErrors,
                                                redditErrors == 1 ? @"" : @"s"];
     detailColor = [UIColor systemGreenColor];
   } else if (misses == 0) {
-    detail = [NSString stringWithFormat:@"only Reddit errors so far \u00b7 %ld", (long)redditErrors];
+    detail = [NSString stringWithFormat:@"Only Reddit errors so far \u00b7 %ld error%@", (long)redditErrors,
+                                        redditErrors == 1 ? @"" : @"s"];
     detailColor = [UIColor secondaryLabelColor];
   } else {
-    detail = [NSString stringWithFormat:@"\u2717 MISS \u00b7 %ld miss%@ \u00b7 fallback active",
+    detail = [NSString stringWithFormat:@"\u2717 Missed \u00b7 %ld miss%@ \u00b7 using fallback",
                                         (long)misses, misses == 1 ? @"" : @"es"];
     if (discovered.length) {
-      detail = [detail stringByAppendingFormat:@"\n\u2192 %@", discovered];
+      detail = [detail stringByAppendingFormat:@"\nFound at: %@", discovered];
       UIButton *copyButton = [UIButton buttonWithType:UIButtonTypeSystem];
       [copyButton setTitle:@"Copy" forState:UIControlStateNormal];
       copyButton.titleLabel.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightSemibold];
@@ -1210,13 +1381,13 @@ static NSString *RFBackupSummaryMessage(RFBackupSummary *summary) {
       [copyButton sizeToFit];
       cell.accessoryView = copyButton;
     } else {
-      detail = [detail stringByAppendingFormat:@"\ncould not auto-locate a new path\nexpected: %@",
+      detail = [detail stringByAppendingFormat:@"\nNew path not found\nExpected: %@",
                                                expected];
                                                
       // Show the "Copy JSON" button if we captured a payload
       NSString *failedJSON = record[kRFDebugFailedJSON];
       if (failedJSON.length > 0) {
-          detail = [detail stringByAppendingString:@"\n\u2192 raw payload captured"];
+          detail = [detail stringByAppendingString:@"\nResponse captured (Copy JSON)"];
           UIButton *copyJsonButton = [UIButton buttonWithType:UIButtonTypeSystem];
           [copyJsonButton setTitle:@"Copy JSON" forState:UIControlStateNormal];
           copyJsonButton.titleLabel.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightSemibold];

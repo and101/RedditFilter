@@ -116,7 +116,8 @@ static BOOL RFArticleWebViewIsVisible(WKWebView *webView, UIViewController *dest
   UICollectionView *collection = nil;
   BOOL reachedRoot = NO;
   for (UIView *view = webView; view; view = view.superview) {
-    if (view.hidden || view.alpha <= 0.01) return NO;
+    // Reddit keeps the web view itself hidden until the page has loaded, so only its ancestors count.
+    if (view != webView && (view.hidden || view.alpha <= 0.01)) return NO;
     if (!article && [view isKindOfClass:articleClass]) article = view;
     if (!cell && [view isKindOfClass:UICollectionViewCell.class]) cell = (UICollectionViewCell *)view;
     if (!collection && [view isKindOfClass:UICollectionView.class]) collection = (UICollectionView *)view;

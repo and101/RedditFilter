@@ -39,6 +39,9 @@ static NSString *const kRFBackupSettingKeys[] = {
     kRedditFilterColoredComments,
     kRedditFilterColoredCommentsApollo,
     kRedditFilterHideLinkPanel,
+    kRedditFilterKeepFeedPosition,
+    kRedditFilterRestoreScreens,
+    kRedditFilterRestoreAfterSwipe,
     kRedditFilterSafariLinks,
     kRedditFilterCheckUpdates,
     kRedditFilterDiagnostics,
@@ -94,6 +97,12 @@ static BOOL RFBackupSameKeyword(NSString *a, NSString *b) {
   return [a compare:b options:NSCaseInsensitiveSearch | NSDiacriticInsensitiveSearch] == NSOrderedSame;
 }
 
+// Settings that are a number from a short list rather than on or off.
+static NSArray<NSNumber *> *RFBackupAllowedNumbers(NSString *key) {
+  if ([key isEqualToString:kRedditFilterRestoreHours]) return @[ @0, @12, @24 ];
+  return nil;
+}
+
 NSArray<NSString *> *RFBackupSettingKeys(void) {
   static NSArray *keys;
   static dispatch_once_t once;
@@ -104,13 +113,14 @@ NSArray<NSString *> *RFBackupSettingKeys(void) {
 }
 
 BOOL RFBackupHandlesKey(NSString *key) {
-  if ([key isEqualToString:kRedditFilterKeywords]) return YES;
+  if ([key isEqualToString:kRedditFilterKeywords] || RFBackupAllowedNumbers(key)) return YES;
   return [RFBackupSettingKeys() containsObject:key];
 }
 
 NSData *RFBackupExport(NSUserDefaults *defaults) {
   NSMutableDictionary *settings = [NSMutableDictionary dictionaryWithCapacity:kRFBackupSettingKeyCount];
   for (NSString *key in RFBackupSettingKeys()) settings[key] = @([defaults boolForKey:key]);
+  settings[kRedditFilterRestoreHours] = @([defaults integerForKey:kRedditFilterRestoreHours]);
 
   NSMutableArray *keywords = [NSMutableArray array];
   for (id keyword in [defaults arrayForKey:kRedditFilterKeywords])
@@ -191,6 +201,15 @@ RFBackupSummary *RFBackupParse(NSData *data, NSError **error) {
     // Unknown keys are ignored, so a newer backup still loads here.
     if (!RFBackupHandlesKey(key) || [key isEqualToString:kRedditFilterKeywords]) continue;
     id value = settings[key];
+    NSArray<NSNumber *> *allowed = RFBackupAllowedNumbers(key);
+    if (allowed) {
+      if (!RFBackupIsInteger(value) || ![allowed containsObject:@([value integerValue])]) {
+        if (error) *error = RFBackupError(@"The settings in this backup are damaged.");
+        return nil;
+      }
+      knownSettings[key] = @([value integerValue]);
+      continue;
+    }
     if (!RFBackupIsBoolean(value)) {
       if (error) *error = RFBackupError(@"The settings in this backup are damaged.");
       return nil;
@@ -256,7 +275,10 @@ BOOL RFBackupApply(RFBackupSummary *summary, NSUserDefaults *defaults, NSError *
   // Validate everything before the first write, so a bad file can't leave half a restore.
   if (summary.hasStats && !RFStatsValidate(summary.stats, error)) return NO;
 
-  for (NSString *key in summary.settings) [defaults setBool:summary.settings[key].boolValue forKey:key];
+  for (NSString *key in summary.settings) {
+    if (RFBackupAllowedNumbers(key)) [defaults setInteger:summary.settings[key].integerValue forKey:key];
+    else [defaults setBool:summary.settings[key].boolValue forKey:key];
+  }
   if (summary.hasKeywords) [defaults setObject:summary.keywords forKey:kRedditFilterKeywords];
 
   // Swiping needs a side, just as when the switches are changed by hand.

@@ -45,38 +45,41 @@ To open RedditFilter, long press the sidebar button at the top left of Reddit, o
 
 ### Filters
 
-- **Posts and ads**: hide promoted posts and comment ads, recommendations, NSFW posts, the Videos for you carousel, and extra cards such as suggested communities, promos and surveys. These switches show that content when on, so turn one off to hide it. A For You page left short by hidden posts is topped up from the next page.
+- **Posts and ads**: hide promoted posts and comment ads, recommendations (including the endless **From your feed** list below a post's comments), NSFW posts, the Videos for you carousel, and extra cards such as suggested communities, promos and surveys. These switches show that content when on, so turn one off to hide it. A For You page left short by hidden posts is topped up from the next page.
 - **Keywords**: hide posts that mention a word or phrase. Matching is whole-word and ignores capitals, and it checks a post's full text, not just the title and preview. With **Filter comments too**, comments that mention a keyword are hidden with their replies, or replaced by a placeholder if you want to keep the replies.
 
 ### Display
 
 - **Appearance**: hide awards and scores on posts and comments, and give each reply level its own colour with **Coloured comment threads**. **Apollo style** colours only each comment's own line.
-- **Hide panel on opened links**: when you open a link from its post page, Reddit covers the bottom of the page with a votes and comments panel. This hides it, so the page fills the screen. Votes and comments stay on the post page. It works for any site, including RedGIFs.
-- **Open article links in Safari**: an optional switch under **Appearance** opens article links in an **in-app Safari sheet**, with **Done** returning to Reddit. It can use enabled native Safari content blockers. See [Safari article links](#safari-article-links) for setup and limits.
+- **Article links**: choose how links opened from a post show: **Reddit's viewer**, **Reddit's viewer, full page** (without the votes and comments panel), or **Safari**, an in-app Safari sheet that uses your Safari content blockers. See [Safari article links](#safari-article-links). The Safari option is by [dukevin](https://github.com/dukevin).
 - **Swipe to collapse**: swipe a comment to collapse it and its replies, or swipe further to collapse the whole thread. Choose left, right or both, with optional haptics. **Tap to collapse too** keeps tap and long press, and **AutoMod** always collapses AutoMod comments.
-- **Direct-play RedGIFs**: Reddit's copies of RedGIFs videos have no sound, so this plays the originals from RedGIFs instead. **Prefer SD** and **Prefer SD on mobile data** keep data use down. Your device connects to RedGIFs directly, and Reddit's silent version plays if RedGIFs can't be reached.
+- **Play RedGIFs directly**: Reddit's copies of RedGIFs videos have no sound, so this plays the originals from RedGIFs instead. **Prefer SD** and **Prefer SD on mobile data** keep data use down. Your device connects to RedGIFs directly, and Reddit's silent version plays if RedGIFs can't be reached.
+
+### Experimental features
+
+These are new, so they're off by default. They work in any app language.
+
+- **Keep feed position**: stay where you were in For You, Following and Popular, even after Reddit closes. Reddit normally jumps back to the top after 10 minutes away. Pull down to refresh.
+- **Reopen community and post**: brings back the communities, profiles and posts you had open, up to six screens deep, on Home or in the You tab. Posts open at the top, with a **Back to where you were** button that scrolls to the comment you were reading. Communities use their default sort. If you open Reddit from a notification or a link, that screen is shown instead.
+- **Restore after swiping away** and **Restore for**: by default, your place only comes back if iOS closed Reddit, for 12 hours. You can also have it back after swiping Reddit away, and keep it for 24 hours or with no limit.
 
 ### More
 
 - **Open Reddit links here**: a separate Safari extension opens incoming Reddit links from Safari in the app, asking first each time. It does not block ads or enable the article browser.
 - **Stats**: see how much has been hidden in total, today and by filter. It stays on your device.
 - **Backup**: export your settings, keywords and stats to a file, and import them later. No account details are included.
-- **Diagnostics**: check whether RedditFilter still finds posts and ads in Reddit's responses, inspect article-browser handoffs, and share a report with a bug report. Nothing leaves your device unless you share it.
+- **Diagnostics**: check whether RedditFilter still finds posts and ads in Reddit's responses, see how Reddit was last closed, check Safari article links, and share a report with a bug report. Nothing leaves your device unless you share it.
 - **Update check**: RedditFilter checks GitHub once a day for a new release. Turn it off under **About**.
 
 ## Safari article links
 
-Turn on **Appearance → Open article links in Safari** to read supported article links in Apple's in-app Safari browser. The app stays open, and **Done** returns to the original Reddit screen. Other link types, login and native videos keep Reddit's usual behavior. If the article route is unrecognized or Safari cannot be presented safely, the native Reddit browser stays available.
+Choose **Appearance → Article links → Safari** to read articles in Apple's in-app Safari sheet; **Done** returns to Reddit. If Safari can't take a link, it opens in Reddit's viewer, full page. Login, videos and other links work as usual.
 
-For filtering, install an app that supplies **native Safari content-blocking extensions**, enable those blockers in **Settings → Apps → Safari → Extensions** (or **Settings → Safari → Extensions** on older iOS), and enable the provider's desired filter lists. [Apple's in-app Safari controller supports content blocking](https://developer.apple.com/documentation/safariservices/sfsafariviewcontroller). RedditFilter does not supply website-blocking rules. A Safari web extension or DNS service alone does not establish that its filtering will work in this sheet; check that the provider includes a native Safari content blocker. Features that require the full Safari app may be unavailable here.
+For ad blocking, install an app with **native Safari content blockers** and turn them on in **Settings → Apps → Safari → Extensions**. RedditFilter supplies no blocking rules, and a Safari web extension or DNS blocker on its own may not work in the sheet.
 
-**Open Reddit links here** works in the other direction: the bundled Safari extension sends a Reddit page from Safari to RedditFilter. Its setup and website permissions are separate from the article setting and from your content blockers.
+**Open Reddit links here** is separate: it sends Reddit pages from Safari to RedditFilter.
 
-If the App Store Reddit app is also installed and a link opens there, open RedditFilter directly and confirm that its settings button is present before testing the article switch. For an incoming Reddit link, paste the URL into a new Safari tab, enable the **RedditFilter** extension and allow its Reddit website permissions, then accept the open-app prompt. The extension needs the page to reach Safari; it cannot redirect a link that iOS already handed directly to another app. After cancelling its prompt twice, use a new tab to try again. Removing the official app is not required to test article links inside RedditFilter.
-
-Simulator checks and the remaining device checks are listed in [the article Safari validation matrix](tests/ARTICLE_SAFARI_VALIDATION.md). A passing simulator test does not verify real website blocking or every Reddit route on every iOS version.
-
-If an article unexpectedly keeps Reddit's browser, turn on **Diagnostics**, retry the link, then inspect **Article links in Safari** and use **Share report** when reporting the issue. The report includes Reddit and iOS versions. The article summary records route and handoff outcomes, without recording article URLs or page content.
+If an article stays in Reddit's viewer, turn on **Diagnostics**, try the link again, and check **Article links** (no URLs are recorded). Device checks are listed in [the validation matrix](tests/ARTICLE_SAFARI_VALIDATION.md).
 
 ## Logging in
 
@@ -115,6 +118,8 @@ For jailbroken devices, `make package` builds a deb (add `THEOS_PACKAGE_SCHEME=r
 
 ## Credits
 
-Based on original work from [level3tjg](https://github.com/level3tjg/RedditFilter) and [NicholasBly](https://github.com/NicholasBly/RedditFilter).
+Based on original work by [level3tjg](https://github.com/level3tjg/RedditFilter) and [NicholasBly](https://github.com/NicholasBly/RedditFilter).
+
+In-app Safari for article links by [dukevin](https://github.com/dukevin) ([#1](https://github.com/and101/RedditFilter/pull/1)).
 
 The sideloaded IPA includes [RedditSideloadFix](https://github.com/level3tjg/RedditSideloadFix) by level3tjg (MIT), with fixes, and [fishhook](https://github.com/facebook/fishhook) (BSD).

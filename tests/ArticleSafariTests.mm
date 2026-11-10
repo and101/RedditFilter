@@ -191,6 +191,9 @@ static void TestModernArticleFallback(UIWindow *window) {
   article.hidden = YES;
   Check(!RFArticleWebViewIsVisible(webView, destination, TestArticleView.class), @"Reject a hidden article ancestor");
   article.hidden = NO;
+  webView.hidden = YES;
+  Check(RFArticleWebViewIsVisible(webView, destination, TestArticleView.class), @"Accept a web view hidden while it loads");
+  webView.hidden = NO;
   cell.frame = CGRectOffset(collection.bounds, 0, CGRectGetHeight(collection.bounds));
   Check(!RFArticleWebViewIsVisible(webView, destination, TestArticleView.class), @"Reject an attached neighboring article outside the viewport center");
   cell.frame = collection.bounds;
@@ -334,20 +337,20 @@ static void TestArticleDiagnostics(void) {
   [debug setArticleSafariHooks:RFArticleSafariHookLegacy | RFArticleSafariHookPush | RFArticleSafariHookStart];
   [debug recordArticleSafariResult:RFArticleSafariModernPresented];
   NSString *report = debug.reportText;
-  Check([report containsString:@"Article links in Safari:"] && [report containsString:@"Legacy hook: found"] &&
-        [report containsString:@"Article policy hook: missing"] && [report containsString:@"Post-page article: Safari presented"],
+  Check([report containsString:@"Article links:"] && [report containsString:@"Legacy hook: found"] &&
+        [report containsString:@"Article policy hook: missing"] && [report containsString:@"Safari presented (post-page article)"],
         @"The existing report describes hook availability separately from the observed outcome");
   Check(![report containsString:@"example.com"] && ![report containsString:@"private="] &&
         ![report containsString:@"not-in-report"], @"Article diagnostics contain no URL, query or fragment history");
   [debug recordArticleSafariResult:(RFArticleSafariResult)999];
   Check([debug.reportText isEqualToString:report], @"Unknown outcome values cannot enter the report");
   [debug reset];
-  Check([debug.reportText containsString:@"No article attempt observed"] && [debug.reportText containsString:@"Legacy hook: found"],
+  Check([debug.reportText containsString:@"Last result: none yet"] && [debug.reportText containsString:@"Legacy hook: found"],
         @"Reset clears activity but retains static compatibility");
   [debug recordArticleSafariResult:RFArticleSafariURLNotReady];
   RFSetDiagnosticsEnabled(NO);
   [debug recordArticleSafariResult:RFArticleSafariPresentationDeclined];
-  Check([debug.reportText containsString:@"No article attempt observed"] && ![debug.reportText containsString:@"presentation declined"],
+  Check([debug.reportText containsString:@"Last result: none yet"] && ![debug.reportText containsString:@"presentation declined"],
         @"Turning Diagnostics off clears the last outcome and stops recording");
 }
 

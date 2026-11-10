@@ -32,8 +32,13 @@ NSString *const kRFDebugSummary = @"summary";
 static NSString *const kRFUnfilteredRow = @"Unfiltered requests";
 // The row that lists feed cards that aren't posts or ads. Always last.
 static NSString *const kRFFeedCardsRow = @"Other feed cards";
-static NSString *const kRFArticleSafariRow = @"Article links in Safari";
+static NSString *const kRFArticleSafariRow = @"Article links";
 static const NSUInteger kRFMaxCardTypes = 30;
+
+// "1 card", "3 cards".
+static NSString *RFCountOf(NSNumber *count, NSString *thing) {
+  return [NSString stringWithFormat:@"%ld %@%@", (long)count.integerValue, thing, count.integerValue == 1 ? @"" : @"s"];
+}
 
 // Bounds for discovery so a broken path can never turn into an expensive walk
 // on every response.
@@ -207,27 +212,29 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
 // Caller is on _queue. This is a single fixed outcome, not a browsing history.
 - (NSString *)articleSafariSummary {
   NSArray<NSString *> *results = @[
-    @"No article attempt observed with Diagnostics on",
-    @"Legacy article: Safari presented",
-    @"Post-page article: Safari presented",
-    @"Native behavior kept: option off or transition cancelled",
-    @"Native behavior kept: URL is not eligible HTTP(S)",
-    @"Native behavior kept: expected getter missing",
-    @"Native behavior kept: presenter, scene or transition unavailable",
-    @"Native behavior kept: navigation stack changed",
-    @"Native behavior kept: no visible initial article",
-    @"Native behavior kept: initial article URL not ready",
-    @"Native behavior kept: multiple visible article candidates",
-    @"Native behavior kept: Safari presentation declined",
-    @"Post-page Safari presented; original post restored",
-    @"Native stack preserved after presentation or navigation changed",
+    @"none yet with Diagnostics on",
+    @"Safari presented (legacy article)",
+    @"Safari presented (post-page article)",
+    @"native behaviour kept (option off or transition cancelled)",
+    @"native behaviour kept (URL isn't HTTP or HTTPS)",
+    @"native behaviour kept (expected getter missing)",
+    @"native behaviour kept (presenter, scene or transition unavailable)",
+    @"native behaviour kept (navigation stack changed)",
+    @"native behaviour kept (no visible initial article)",
+    @"native behaviour kept (initial article URL not ready)",
+    @"native behaviour kept (several visible article candidates)",
+    @"native behaviour kept (Safari presentation declined)",
+    @"Safari presented (post-page article, original post restored)",
+    @"native stack kept (presentation or navigation changed)",
   ];
   NSString *(^found)(RFArticleSafariHooks) = ^NSString *(RFArticleSafariHooks hook) {
     return (_articleSafariHooks & hook) ? @"found" : @"missing";
   };
   return [NSString stringWithFormat:@"Setting: %@\nLegacy hook: %@\nPost-page push hook: %@\n"
                                     @"Article load hook: %@\nArticle policy hook: %@\nLast result: %@",
-      [NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterSafariLinks] ? @"on" : @"off",
+      [NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterSafariLinks]      ? @"Safari"
+      : [NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterHideLinkPanel] ? @"Reddit's viewer, full page"
+                                                                                     : @"Reddit's viewer",
       found(RFArticleSafariHookLegacy), found(RFArticleSafariHookPush), found(RFArticleSafariHookStart),
       found(RFArticleSafariHookPolicy), results[_articleSafariResult]];
 }
@@ -242,7 +249,7 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
   for (NSString *type in types)
     [lines addObject:[NSString stringWithFormat:@"%@ %@ \u00b7 %@ \u00b7 %@",
                                                 [_feedCards[type][@"known"] boolValue] ? @"\u2713" : @"?", type,
-                                                _feedCards[type][@"count"], _feedCards[type][@"op"]]];
+                                                RFCountOf(_feedCards[type][@"count"], @"card"), _feedCards[type][@"op"]]];
   return lines;
 }
 
@@ -261,7 +268,7 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
         }];
         NSMutableArray *lines = [NSMutableArray array];
         for (NSString *key in keys)
-          [lines addObject:[NSString stringWithFormat:@"%@ \u00b7 %@ \u00b7 last %@", key, _unfiltered[key][@"count"],
+          [lines addObject:[NSString stringWithFormat:@"%@ \u00b7 %@ \u00b7 last %@", key, RFCountOf(_unfiltered[key][@"count"], @"request"),
                                                       _unfiltered[key][@"op"]]];
         record[kRFDebugUnfiltered] = lines;
       }
@@ -286,7 +293,7 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
     if (summary) {
       [lines addObject:[NSString stringWithFormat:@"%@:\n%@", op, summary]];
     } else if (unfiltered) {
-      [lines addObject:[NSString stringWithFormat:@"%@: %@", op, unfiltered.count ? @"" : @"none"]];
+      [lines addObject:[NSString stringWithFormat:@"%@: %@", op, unfiltered.count ? @"add these addresses to RFIsAPIHost" : @"none"]];
       for (NSString *line in unfiltered) [lines addObject:[@"  " stringByAppendingString:line]];
     } else if (feedCards) {
       [lines addObject:[NSString stringWithFormat:@"%@: %@", op, feedCards.count ? @"" : @"none"]];

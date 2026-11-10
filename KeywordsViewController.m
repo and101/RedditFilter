@@ -142,7 +142,7 @@ typedef NS_ENUM(NSInteger, RFKeywordSection) { RFKeywordSectionOptions, RFKeywor
   UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Clear all keywords?"
                                                                  message:message
                                                           preferredStyle:UIAlertControllerStyleActionSheet];
-  [alert addAction:[UIAlertAction actionWithTitle:@"Clear All"
+  [alert addAction:[UIAlertAction actionWithTitle:@"Clear all"
                                             style:UIAlertActionStyleDestructive
                                           handler:^(UIAlertAction *action) {
                                             [self.keywords removeAllObjects];
@@ -239,7 +239,7 @@ typedef NS_ENUM(NSInteger, RFKeywordSection) { RFKeywordSectionOptions, RFKeywor
   cell.selectionStyle = UITableViewCellSelectionStyleNone;
 
   if (indexPath.section == RFKeywordSectionClear) {
-    cell.textLabel.text = @"Clear All Keywords";
+    cell.textLabel.text = @"Clear all keywords";
     cell.textLabel.textAlignment = NSTextAlignmentCenter;
     cell.textLabel.textColor = UIColor.systemRedColor;
     cell.selectionStyle = UITableViewCellSelectionStyleDefault;
