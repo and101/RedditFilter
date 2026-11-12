@@ -12,6 +12,7 @@
 
 // LinkPanel.x hooks Reddit's player, which isn't part of this test.
 void RFSetHideLinkPanel(BOOL hide) {}
+void RFSetHideRefreshPill(BOOL hide) {}
 // FeedPosition.x hooks Reddit's scene delegate, which isn't part of this test.
 void RFSetKeepFeedPosition(BOOL keep) {}
 // PostPageFeed.x hides part of Reddit's post page, which isn't part of this test.
@@ -21,7 +22,10 @@ void RFSetRestoreScreens(BOOL restore) {}
 void RFSetRestoreOptions(BOOL afterSwipe, NSInteger hours) {}
 BOOL RFScreenRestoreWantsComments(void) { return NO; }
 NSData *RFScreenRestoreCommentsPage(NSURLRequest *request, NSData *page) { return nil; }
-NSData *RFScreenRestoreSearchPage(NSURLRequest *request, NSData *page) { return nil; }
+NSData *RFScreenRestoreSearchPage(NSURLRequest *request, NSData *page, unsigned generation, unsigned long long order) { return nil; }
+unsigned long long RFScreenRestoreNextSearchOrder(void) { return 0; }
+unsigned RFScreenRestoreSearchGeneration(void) { return 0; }
+void RFScreenRestoreCustomFeedRequest(NSURLRequest *request) {}
 void RFScreenRestoreForgetComments(void) {}
 
 // Browser login lives in LoginHelper.x, which isn't part of this test.

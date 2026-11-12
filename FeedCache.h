@@ -40,6 +40,12 @@ NSData *RFFeedReplayPage(NSDictionary *cache, NSData *freshPage, NSArray **keptE
 // comment (@"id": t1_..., @"author", @"depth": 0 for top level) and one per "N more replies" row
 // (@"more": @YES). nil if the response can't be read.
 NSArray<NSDictionary *> *RFCommentRows(NSData *response);
+// `rows` with the "more" row Reddit opened with `cursor` ("N more replies", or the next page at the end)
+// replaced by what it got (`opened`, rows of the answer to that request), as the page shows them. nil if no
+// row has that cursor. Rows opened under a comment (not the next page) get "inReplies": YES.
+NSArray<NSDictionary *> *RFMergeCommentRows(NSArray<NSDictionary *> *rows, NSString *cursor, NSArray<NSDictionary *> *opened);
+// Whether Reddit has another page of comments for the end of `rows` (it loads it as you get there).
+BOOL RFCommentRowsHaveNextPage(NSArray<NSDictionary *> *rows);
 
 // Which row a comment's label on screen belongs to ("By author, 2 hours ago, 7 votes, Level 2"), the one
 // nearest `near` if the author has more than one at that level. NSNotFound if none.
@@ -55,6 +61,10 @@ NSUInteger RFCommentRowForCell(NSArray<NSDictionary *> *rows, NSArray<NSString *
 // The posts in a search's results (SearchDynamic): @{@"id": t3_..., @"title", @"community" (when given)}, once
 // each. nil if the response can't be read.
 NSArray<NSDictionary *> *RFSearchResultPosts(NSData *response);
+
+// What a search request (SearchDynamic's body) searched for, and in which community: @{@"query": text,
+// @"community": name, or "" for all of Reddit}. nil if it can't be read, or for a later page of results.
+NSDictionary<NSString *, NSString *> *RFSearchRequestScope(NSData *body);
 
 // Which of those posts a screen shows: the one whose title is among the screen's texts, and (when two share
 // a title) whose community is too. nil if none, or it can't be told.

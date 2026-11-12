@@ -8,6 +8,7 @@
 #import "FeedPosition.h"
 #import "JSONFilter.h"
 #import "LinkPanel.h"
+#import "RefreshPill.h"
 #import "Preferences.h"
 #import "PostPageFeed.h"
 #import "ScreenRestore.h"
@@ -60,6 +61,7 @@ extern "C" void RFReloadPreferences(void) {
   RFSetColoredComments([defaults boolForKey:kRedditFilterColoredComments],
                        [defaults boolForKey:kRedditFilterColoredCommentsApollo]);
   RFSetHideLinkPanel([defaults boolForKey:kRedditFilterHideLinkPanel]);
+  RFSetHideRefreshPill([defaults boolForKey:kRedditFilterRefreshPill]);
   RFSetHidePostPageFeed(prefs.recommended); // "From your feed" below a post's comments
   RFSetKeepFeedPosition([defaults boolForKey:kRedditFilterKeepFeedPosition]);
   RFSetRestoreScreens([defaults boolForKey:kRedditFilterKeepFeedPosition] &&
@@ -406,19 +408,29 @@ static BOOL RFIsAPIHost(NSString *host) {
     };
   }
   // Restore open community and post: the comments of each post opened, to note where you were in them.
-  if (RFScreenRestoreWantsComments() && [operation isEqualToString:@"PostInfoByIdComments"]) {
+  BOOL restoreWatches = RFScreenRestoreWantsComments();
+  if (restoreWatches && [operation isEqualToString:@"PostInfoByIdComments"]) {
     void (^appHandler)(NSData *, NSURLResponse *, NSError *) = completionHandler;
     completionHandler = ^(NSData *data, NSURLResponse *response, NSError *error) {
       if (RFIsOK(response, error)) RFScreenRestoreCommentsPage(request, data);
       appHandler(data, response, error);
     };
   }
-  // and each search's results, to name a post opened from them in the full-screen viewer.
-  if (RFScreenRestoreWantsComments() && [operation isEqualToString:@"SearchDynamic"]) {
+  // and each custom feed's request, to name the custom feed screen it's for,
+  if (restoreWatches && ([operation isEqualToString:@"FetchMulti"] || [operation isEqualToString:@"MultiredditPostsSdui"]))
+    RFScreenRestoreCustomFeedRequest(request);
+  // and each search's results, to name a post opened from them in the full-screen viewer (only needed
+  // when leaving, so read after the app has them).
+  if (restoreWatches && [operation isEqualToString:@"SearchDynamic"]) {
     void (^appHandler)(NSData *, NSURLResponse *, NSError *) = completionHandler;
+    unsigned searchGeneration = RFScreenRestoreSearchGeneration();
+    unsigned long long searchOrder = RFScreenRestoreNextSearchOrder();
     completionHandler = ^(NSData *data, NSURLResponse *response, NSError *error) {
-      if (RFIsOK(response, error)) RFScreenRestoreSearchPage(request, data);
       appHandler(data, response, error);
+      if (RFIsOK(response, error))
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+          RFScreenRestoreSearchPage(request, data, searchGeneration, searchOrder);
+        });
     };
   }
 
@@ -622,6 +634,7 @@ BOOL RFCleanCachedExperiments(void) {
     kRedditFilterSwipeRightToCollapse : @NO,
     kRedditFilterVideosForYou : @NO,
     kRedditFilterExtraCards : @NO,
+    kRedditFilterRefreshPill : @NO,
     kRedditFilterKeywordComments : @NO,
     kRedditFilterKeywordCommentReplies : @YES,
     kRedditFilterRedgifsDirect : @NO,

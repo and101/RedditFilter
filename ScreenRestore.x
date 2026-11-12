@@ -1,9 +1,11 @@
 // Restore open community and post.
 //
 // Keep feed position brings Home's feeds back after iOS closes Reddit in the background. This goes one
-// step further: the communities, profiles, searches and posts open on Home (in any order, a few deep), or
-// on top of your own profile in the You tab, are opened again, and the top post offers to jump back to
-// where you were in its comments. The screen where a search is typed is skipped.
+// step further: the communities, custom feeds, profiles, searches and posts open on Home (in any order, a
+// few deep), or on top of your own profile in the You tab or the Inbox, are opened again, and the top post offers to jump
+// back to where you were in its comments. The screen where a search is typed is skipped, and a screen that
+// can't be reopened ends what's kept (the screens below it still are). If Reddit opens a screen of its own
+// at launch (a notification or a link), what was open waits until you go back to Home.
 //
 // How the app was closed: iOS keeps a snapshot of the app's window for its card in the app switcher.
 // When iOS closes the app in the background the card stays, and so does the snapshot; swiping the card
@@ -46,7 +48,10 @@ static NSString *const kRFPreviewClass = @"PreviewModeViewController.PreviewMode
 static NSString *const kRFPostClass = @"PDP_Impl.PDPViewController";
 static NSString *const kRFSearchClass = @"Search_Core_Impl.SearchResultsViewController"; // a search's results
 static NSString *const kRFTypeaheadClass = @"Search_Core_Impl.TypeaheadViewController";   // typing a search
+static NSString *const kRFCustomFeedClass = @"MultiFeed.MultiPageViewController";         // a custom feed
 static NSString *const kRFYouTabID = @"reddit_tab_bar__profile_button";
+static NSString *const kRFInboxTabID = @"reddit_tab_bar__inbox_button";
+static NSString *const kRFInboxClass = @"MainTabBar_Inbox.InboxViewController";
 
 static BOOL gRestoreScreens; // the setting; main thread, like the two below
 static BOOL gAfterSwipe;       // restore even after Reddit was swiped away (or ended while open)
@@ -62,7 +67,33 @@ static NSMutableArray<NSString *> *gCommentPosts;                // oldest first
 static NSMutableSet<NSString *> *gTruncatedPosts;                // posts with only the first few comments; guarded by gRowsLock
 static NSMutableDictionary<NSString *, NSDate *> *gRowsAt;        // when each post's rows came; guarded by gRowsLock
 static NSMutableDictionary<NSString *, NSString *> *gCommentAccounts; // and the account that asked; guarded by gRowsLock
+// The comment a post was opened at (from the Inbox, or a comment link): Reddit shows that comment's thread
+// first, highlighted. Post ID -> comment ID, from its latest comments asked for; guarded by gRowsLock.
+static NSMutableDictionary<NSString *, NSString *> *gCommentFocus;
 static NSArray<NSDictionary *> *gSearchPosts; // the posts of the last few searches' results; guarded by gRowsLock
+// Where a search results screen looked: a community, or "" for all of Reddit (an associated object, set
+// from its request; RFNoteSearchScope).
+static const void *kRFSearchScopeKey = &kRFSearchScopeKey;
+static unsigned gSearchGeneration; // goes up as the searches are forgotten; guarded by gRowsLock
+
+// Each search request's number, in the order they're made: an older answer doesn't undo a newer one's
+// scope on the same screen (kRFSearchScopeOrderKey).
+static const void *kRFSearchScopeOrderKey = &kRFSearchScopeOrderKey;
+static unsigned long long gSearchOrder; // guarded by gRowsLock
+
+unsigned long long RFScreenRestoreNextSearchOrder(void) {
+  os_unfair_lock_lock(&gRowsLock);
+  unsigned long long order = ++gSearchOrder;
+  os_unfair_lock_unlock(&gRowsLock);
+  return order;
+}
+
+unsigned RFScreenRestoreSearchGeneration(void) {
+  os_unfair_lock_lock(&gRowsLock);
+  unsigned generation = gSearchGeneration;
+  os_unfair_lock_unlock(&gRowsLock);
+  return generation;
+}
 
 #pragma mark - Small helpers
 
@@ -110,7 +141,7 @@ static void RFWriteFile(NSString *file, NSData *data, void (^completion)(void)) 
 // Removes what's kept of the open screens (turned off, incognito, another account).
 static void RFForgetScreens(void) {
   dispatch_async(RFRestoreQueue(), ^{
-    for (NSString *file in @[ @"Screens.json", @"LastScreen.jpg", @"Comments.json" ]) RFWriteNow(file, nil);
+    for (NSString *file in @[ @"Screens.json", @"LastScreen.jpg", @"Comments.json", @"Parked.json" ]) RFWriteNow(file, nil);
   });
 }
 
@@ -133,13 +164,39 @@ static NSString *RFCommunityName(id holder) {
   return [name isKindOfClass:NSString.class] && [name length] ? name : nil;
 }
 
+// Text that can go into a link as it is: letters, digits, "_" (and "-" if `dash`), min to max long.
+static BOOL RFIsLinkName(id name, NSUInteger min, NSUInteger max, BOOL dash) {
+  static NSCharacterSet *plain, *dashed;
+  if (!plain) {
+    NSString *letters = @"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
+    plain = [NSCharacterSet characterSetWithCharactersInString:letters].invertedSet;
+    dashed = [NSCharacterSet characterSetWithCharactersInString:[letters stringByAppendingString:@"-"]].invertedSet;
+  }
+  return [name isKindOfClass:NSString.class] && [name length] >= min && [name length] <= max &&
+         [name rangeOfCharacterFromSet:dash ? dashed : plain].location == NSNotFound;
+}
+
 // A Reddit username: what a profile link can be made from.
-static BOOL RFIsUsername(id name) {
-  static NSCharacterSet *other;
-  if (!other) other = [NSCharacterSet characterSetWithCharactersInString:
-                          @"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"].invertedSet;
-  return [name isKindOfClass:NSString.class] && [name length] >= 3 && [name length] <= 20 &&
-         [name rangeOfCharacterFromSet:other].location == NSNotFound;
+static BOOL RFIsUsername(id name) { return RFIsLinkName(name, 3, 20, YES); }
+// A community's name: what a community link can be made from (a profile's own is "u_" and its username).
+static BOOL RFIsCommunityName(id name) { return RFIsLinkName(name, 2, 22, YES); }
+// A custom feed's name (its link is /user/<owner>/m/<name>/).
+static BOOL RFIsCustomFeedName(id name) { return RFIsLinkName(name, 1, 50, NO); }
+
+// A custom feed screen's owner and name, noted as it's set up: @{user, name}, or nil.
+static const void *kRFCustomFeedKey = &kRFCustomFeedKey;
+static NSDictionary *RFCustomFeed(UIViewController *vc) {
+  return objc_getAssociatedObject(vc, kRFCustomFeedKey);
+}
+
+static void RFNoteCustomFeed(UIViewController *vc, NSString *path) {
+  // "/user/<owner>/m/<name>/"
+  NSArray *parts = [[path stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"/"]]
+      componentsSeparatedByString:@"/"];
+  if (parts.count != 4 || ![[parts[0] lowercaseString] isEqualToString:@"user"] || ![[parts[2] lowercaseString] isEqualToString:@"m"])
+    return;
+  if (RFIsUsername(parts[1]) && RFIsCustomFeedName(parts[3]))
+    objc_setAssociatedObject(vc, kRFCustomFeedKey, @{@"user" : parts[1], @"name" : parts[3]}, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 static const void *kRFProfileNameKey = &kRFProfileNameKey;
@@ -237,6 +294,14 @@ static NSString *gSignals = @"";     // for Diagnostics
 static NSString *gOutcome = @""; // what the restore at this launch did, for Diagnostics
 static BOOL gReopened;       // the restore opened everything it set out to
 static BOOL gStoppedForUser; // stopped for another account, incognito or turned off: nothing's moved to You
+// Reddit opened a screen of its own at launch (a notification or a link): what was open before waits here,
+// and is reopened once you go back to Home (RFResumeParked). Main thread.
+static NSDictionary *gParked;
+static __weak UINavigationController *gParkedNav; // where Reddit's screen is, and how many screens deep:
+static NSUInteger gParkedDepth;                   // going further than that drops what's waiting
+static NSDate *gParkedAt;
+static NSDictionary *gParkAfter; // waiting from the last run, to wait again once this launch's restore is done
+static BOOL gResumed; // the restore under way is of those, back on Home
 static NSString *gLeft = @""; // what was open when the app was last left (this run), for Diagnostics
 
 // Saved on every trip to the background and back, whatever the settings (Diagnostics shows it).
@@ -292,7 +357,7 @@ NSString *RFLastCloseDescription(void) {
 BOOL RFScreenRestoreWantsComments(void) { return gRestoreScreens && RFFeedCacheEnabled(); }
 
 // Notes a post's comments (as handed to the app) for the account that asked for them.
-static void RFRecordComments(NSString *post, NSArray *rows, BOOL truncated, NSString *account) {
+static void RFRecordComments(NSString *post, NSArray *rows, BOOL truncated, NSString *account, NSString *focus) {
   os_unfair_lock_lock(&gRowsLock);
   // Another account's comments for this post (a late answer from before a switch): start it again.
   if (account && gCommentAccounts[post] && ![gCommentAccounts[post] isEqualToString:account]) {
@@ -309,6 +374,8 @@ static void RFRecordComments(NSString *post, NSArray *rows, BOOL truncated, NSSt
   if (truncated) [gTruncatedPosts addObject:post];
   else [gTruncatedPosts removeObject:post];
   gCommentRows[post] = rows;
+  if (focus) gCommentFocus[post] = focus;
+  else [gCommentFocus removeObjectForKey:post];
   gRowsAt[post] = NSDate.date;
   [gCommentPosts removeObject:post];
   [gCommentPosts addObject:post];
@@ -318,43 +385,183 @@ static void RFRecordComments(NSString *post, NSArray *rows, BOOL truncated, NSSt
     [gTruncatedPosts removeObject:oldest];
     [gRowsAt removeObjectForKey:oldest];
     [gCommentAccounts removeObjectForKey:oldest];
+    [gCommentFocus removeObjectForKey:oldest];
     [gCommentPosts removeObjectAtIndex:0];
   }
   os_unfair_lock_unlock(&gRowsLock);
 }
 
-// The variables of a comments request, if it's for a post's comments from the start (not a later page).
-static NSDictionary *RFCommentVariables(NSURLRequest *request) {
+// The variables of a comments request for a post, and the cursor of the "more" row it opens ("N more
+// replies", or the next page at the end), if it's not the post's comments from the start.
+static NSDictionary *RFCommentVariables(NSURLRequest *request, NSString **opens) {
   NSDictionary *body = request.HTTPBody.length ? [NSJSONSerialization JSONObjectWithData:request.HTTPBody options:0 error:NULL] : nil;
   NSDictionary *variables = [body isKindOfClass:NSDictionary.class] ? body[@"variables"] : nil;
-  if (![variables isKindOfClass:NSDictionary.class] || variables[@"after"] || variables[@"cursor"]) return nil;
+  if (![variables isKindOfClass:NSDictionary.class]) return nil;
+  id after = variables[@"after"], cursor = variables[@"cursor"];
+  *opens = [after isKindOfClass:NSString.class] && [after length] ? after
+         : [cursor isKindOfClass:NSString.class] && [cursor length] ? cursor : nil;
   NSString *post = variables[@"id"];
   return [post isKindOfClass:NSString.class] && [post hasPrefix:@"t3_"] ? variables : nil;
 }
 
+// Comments Reddit opened in a post already noted: they go in place of the row they open, so a place in
+// them can be saved too.
+static void RFRecordOpenedComments(NSString *post, NSString *cursor, NSArray *opened, NSString *account) {
+  os_unfair_lock_lock(&gRowsLock);
+  NSArray *rows = gCommentRows[post];
+  BOOL sameAccount = !account || !gCommentAccounts[post] || [gCommentAccounts[post] isEqualToString:account];
+  NSArray *merged = rows && sameAccount ? RFMergeCommentRows(rows, cursor, opened) : nil;
+  if (merged) {
+    gCommentRows[post] = merged;
+    // In use: the last to go when other posts' comments come in.
+    [gCommentPosts removeObject:post];
+    [gCommentPosts addObject:post];
+  }
+  os_unfair_lock_unlock(&gRowsLock);
+}
+
+static UITabBarController *RFTabBar(void);
+static UIViewController *RFPostScreen(UIViewController *vc);
+
+// The comment a post screen was opened at (NSNull for none): an associated object, from its first answer.
+static const void *kRFPostFocusKey = &kRFPostFocusKey;
+
+// A first page of a post's comments goes to the post screen that asked: the one showing that post on top of
+// its tab (the selected tab first) not yet told. Main thread.
+static BOOL RFNotePostFocus(NSString *post, id focus) {
+  UITabBarController *tabs = RFTabBar();
+  NSMutableArray *order = [NSMutableArray array];
+  if (tabs.selectedViewController) [order addObject:tabs.selectedViewController];
+  for (UIViewController *tab in tabs.viewControllers)
+    if (tab != tabs.selectedViewController) [order addObject:tab];
+  for (UIViewController *tab in order) {
+    if (![tab isKindOfClass:UINavigationController.class]) continue;
+    UIViewController *screen = RFPostScreen(((UINavigationController *)tab).topViewController);
+    if (!screen || objc_getAssociatedObject(screen, kRFPostFocusKey)) continue;
+    id shown = RFCall(screen, @"initialPostPk");
+    if (![shown isKindOfClass:NSString.class] || ![shown isEqualToString:post]) continue;
+    objc_setAssociatedObject(screen, kRFPostFocusKey, focus, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    return YES;
+  }
+  return NO;
+}
+
 NSData *RFScreenRestoreCommentsPage(NSURLRequest *request, NSData *page) {
-  NSDictionary *variables = RFCommentVariables(request);
+  NSString *opens = nil;
+  NSDictionary *variables = RFCommentVariables(request, &opens);
   if (!variables || RFFeedCacheRequestIsIncognito(request)) return nil;
   NSArray *rows = RFCommentRows(page);
+  if (opens) {
+    if (rows) RFRecordOpenedComments(variables[@"id"], opens, rows, RFFeedAccount(request));
+    return nil;
+  }
   // Reddit first asks for the first few comments (isTruncatedFetch), and for all of them once you get
   // near the comments. The first few are the start of the same list, so they do until then.
-  if (rows)
-    RFRecordComments(variables[@"id"], rows, [variables[@"isTruncatedFetch"] boolValue], RFFeedAccount(request));
+  // The comment it was opened at, if any ("t1_/" is Reddit's "none").
+  id focusContext = variables[@"focusedCommentContext"];
+  NSString *focus = [focusContext isKindOfClass:NSDictionary.class] ? focusContext[@"commentId"] : nil;
+  BOOL focused = [focus isKindOfClass:NSString.class] && [focus hasPrefix:@"t1_"] && RFIsLinkName([focus substringFromIndex:3], 1, 20, NO);
+  if (!rows) return nil;
+  RFRecordComments(variables[@"id"], rows,
+                   [variables[@"isTruncatedFetch"] isKindOfClass:NSNumber.class] && [variables[@"isTruncatedFetch"] boolValue],
+                   RFFeedAccount(request), focused ? focus : nil);
+  // The same post can be open more than once (from the Inbox at a reply, and from Home): the post screen
+  // that asked keeps its own.
+  NSString *post = variables[@"id"];
+  id kept = focused ? focus : (id)NSNull.null;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    if (RFNotePostFocus(post, kept)) return;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+      RFNotePostFocus(post, kept);
+    });
+  });
   return nil;
 }
 
-NSData *RFScreenRestoreSearchPage(NSURLRequest *request, NSData *page) {
-  if (RFFeedCacheRequestIsIncognito(request)) return nil;
+static NSString *RFSearchQuery(UIViewController *results);
+static UITabBarController *RFTabBar(void);
+
+// A search's answer names where it looked: that goes on the results screen showing that query (the one on
+// top of its tab, which is the one that asked, the selected tab first; or else the topmost one not yet
+// told). If none shows it yet (its search bar not filled in), once more a moment later.
+// Puts a search's scope on a results screen unless a newer search's answer already did. Main thread.
+static void RFSetSearchScope(UIViewController *vc, NSDictionary *scope, unsigned long long order) {
+  NSNumber *told = objc_getAssociatedObject(vc, kRFSearchScopeOrderKey);
+  if (told && told.unsignedLongLongValue > order) return;
+  objc_setAssociatedObject(vc, kRFSearchScopeKey, scope[@"community"], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  objc_setAssociatedObject(vc, kRFSearchScopeOrderKey, @(order), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+static BOOL RFNoteSearchScope(NSDictionary *scope, unsigned long long searchOrder) {
+  NSString *query = [scope[@"query"] lowercaseString];
+  UITabBarController *tabs = RFTabBar();
+  NSMutableArray *order = [NSMutableArray array];
+  if (tabs.selectedViewController) [order addObject:tabs.selectedViewController];
+  for (UIViewController *tab in tabs.viewControllers)
+    if (tab != tabs.selectedViewController) [order addObject:tab];
+  UIViewController *untold = nil;
+  for (UIViewController *tab in order) {
+    if (![tab isKindOfClass:UINavigationController.class]) continue;
+    NSArray<UIViewController *> *stack = ((UINavigationController *)tab).viewControllers;
+    for (NSInteger i = (NSInteger)stack.count - 1; i >= 0; i--) {
+      UIViewController *vc = stack[i];
+      if (!RFIsClass(vc, kRFSearchClass) || ![RFSearchQuery(vc).lowercaseString isEqualToString:query]) continue;
+      if (i == (NSInteger)stack.count - 1) {
+        RFSetSearchScope(vc, scope, searchOrder);
+        return YES;
+      }
+      if (!untold && !objc_getAssociatedObject(vc, kRFSearchScopeKey)) untold = vc;
+    }
+  }
+  if (untold) RFSetSearchScope(untold, scope, searchOrder);
+  return untold != nil;
+}
+
+static BOOL RFSearchGenerationIs(unsigned generation) { return RFScreenRestoreSearchGeneration() == generation; }
+
+// Called off the main thread, after the app has the results.
+NSData *RFScreenRestoreSearchPage(NSURLRequest *request, NSData *page, unsigned generation, unsigned long long order) {
+  if (RFFeedCacheRequestIsIncognito(request) || !RFSearchGenerationIs(generation)) return nil;
+  NSDictionary *scope = RFSearchRequestScope(request.HTTPBody);
+  if (scope)
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if (!RFSearchGenerationIs(generation) || RFNoteSearchScope(scope, order)) return;
+      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (RFSearchGenerationIs(generation)) RFNoteSearchScope(scope, order);
+      });
+    });
   NSArray *posts = RFSearchResultPosts(page);
   if (!posts.count) return nil;
+  NSMutableSet *ids = [NSMutableSet set];
+  for (NSDictionary *post in posts)
+    if (post[@"id"]) [ids addObject:post[@"id"]];
   os_unfair_lock_lock(&gRowsLock);
-  // Newest first, and only so many (a few searches' worth).
+  if (gSearchGeneration != generation) {
+    os_unfair_lock_unlock(&gRowsLock);
+    return nil;
+  }
+  // Newest first, each post once, and only so many (a few searches' worth).
   NSMutableArray *kept = [posts mutableCopy];
-  [kept addObjectsFromArray:gSearchPosts ?: @[]];
+  for (NSDictionary *post in gSearchPosts ?: @[])
+    if (![ids containsObject:post[@"id"]]) [kept addObject:post];
   if (kept.count > 400) [kept removeObjectsInRange:NSMakeRange(400, kept.count - 400)];
   gSearchPosts = kept;
   os_unfair_lock_unlock(&gRowsLock);
   return nil;
+}
+
+// The community a search results screen looked in (nil for all of Reddit, or not known).
+static NSString *RFSearchCommunity(UIViewController *results) {
+  NSString *community = objc_getAssociatedObject(results, kRFSearchScopeKey);
+  return community.length ? community : nil;
+}
+
+// Forgets the searches' posts (another account, or incognito), and answers still on their way.
+static void RFForgetSearches(void) {
+  os_unfair_lock_lock(&gRowsLock);
+  gSearchPosts = nil;
+  gSearchGeneration++;
+  os_unfair_lock_unlock(&gRowsLock);
 }
 
 static NSArray<NSDictionary *> *RFKnownSearchPosts(void) {
@@ -364,11 +571,11 @@ static NSArray<NSDictionary *> *RFKnownSearchPosts(void) {
   return posts;
 }
 
-// Forgets every post's comments (another account, incognito, or the comment filters changed).
+// Forgets every post's comments (another account, incognito, or the comment filters changed). Searches stay.
 void RFScreenRestoreForgetComments(void) {
   os_unfair_lock_lock(&gRowsLock);
-  gSearchPosts = nil;
   [gCommentRows removeAllObjects];
+  [gCommentFocus removeAllObjects];
   [gCommentPosts removeAllObjects];
   [gTruncatedPosts removeAllObjects];
   [gRowsAt removeAllObjects];
@@ -393,6 +600,13 @@ static BOOL RFRowsSettled(NSString *post) {
   return settled;
 }
 
+static NSString *RFFocusForPost(NSString *post) {
+  os_unfair_lock_lock(&gRowsLock);
+  NSString *focus = gCommentFocus[post];
+  os_unfair_lock_unlock(&gRowsLock);
+  return focus;
+}
+
 static NSArray *RFRowsForPost(NSString *post) {
   os_unfair_lock_lock(&gRowsLock);
   NSArray *rows = gCommentRows[post];
@@ -407,6 +621,7 @@ static void RFForgetRows(NSString *post) {
   [gTruncatedPosts removeObject:post];
   [gRowsAt removeObjectForKey:post];
   [gCommentAccounts removeObjectForKey:post];
+  [gCommentFocus removeObjectForKey:post];
   os_unfair_lock_unlock(&gRowsLock);
 }
 
@@ -469,13 +684,20 @@ static UITabBarController *RFTabBar(void) {
   return nil;
 }
 
-// The You tab's stack (your own profile at its root).
-static UINavigationController *RFYouNavigation(UITabBarController *tabs) {
+// A tab's stack by its button: the You tab (your own profile at its root) or the Inbox.
+static UINavigationController *RFTabNamed(UITabBarController *tabs, NSString *identifier) {
   for (UIViewController *tab in tabs.viewControllers)
-    if ([tab isKindOfClass:UINavigationController.class] && [tab.tabBarItem.accessibilityIdentifier isEqualToString:kRFYouTabID])
+    if ([tab isKindOfClass:UINavigationController.class] && [tab.tabBarItem.accessibilityIdentifier isEqualToString:identifier])
       return (UINavigationController *)tab;
   return nil;
 }
+
+// What a kept plan's other tab is ("you" or "inbox"): its stack, and what's at its root once it's loaded.
+static UINavigationController *RFPlanTabNavigation(NSString *tab) {
+  return RFTabNamed(RFTabBar(), [tab isEqualToString:@"inbox"] ? kRFInboxTabID : kRFYouTabID);
+}
+static NSString *RFPlanTabRoot(NSString *tab) { return [tab isEqualToString:@"inbox"] ? kRFInboxClass : kRFProfileClass; }
+static NSString *RFPlanTabName(NSString *tab) { return [tab isEqualToString:@"inbox"] ? @"Inbox" : @"You"; }
 
 // The post screen in a pushed screen: itself, or the page on screen of a post pager.
 static UIViewController *RFPostScreen(UIViewController *vc) {
@@ -532,16 +754,6 @@ static NSInteger RFFlatIndex(UICollectionView *list, NSIndexPath *path) {
   return flat;
 }
 
-static NSIndexPath *RFPathForFlatIndex(UICollectionView *list, NSInteger flat) {
-  if (flat < 0) return nil;
-  for (NSInteger section = 0; section < list.numberOfSections; section++) {
-    NSInteger count = RFRowItems(list, section);
-    if (flat < count) return [NSIndexPath indexPathForItem:flat inSection:section];
-    flat -= count;
-  }
-  return nil;
-}
-
 // Where in a post's comments you were: the comment at the top of the screen (or the post itself) and
 // how far into it.
 static NSDictionary *RFCommentPosition(UIViewController *post, NSString *postId) {
@@ -560,8 +772,18 @@ static NSDictionary *RFCommentPosition(UIViewController *post, NSString *postId)
     if (flat == 0) return @{@"offset" : @(offset)};
     NSUInteger row = RFRowOfCommentCell(rows, cell, flat - 1);
     NSString *comment = row == NSNotFound ? nil : rows[row][@"id"];
-    if (comment) return @{@"comment" : comment, @"offset" : @(offset)};
+    if (comment)
+      return [rows[row][@"inReplies"] boolValue] ? @{@"comment" : comment, @"offset" : @(offset), @"inReplies" : @YES}
+                                                 : @{@"comment" : comment, @"offset" : @(offset)};
   }
+  // Past the end of the comments (only the posts Reddit lists after them on screen): the last comment.
+  BOOL pastComments = NO;
+  for (UICollectionViewCell *cell in list.visibleCells)
+    if ([NSStringFromClass(cell.class) containsString:@"FeedStackSliceViewModel"]) pastComments = YES; // hidden or not
+  for (NSDictionary *row in pastComments ? rows.reverseObjectEnumerator : @[].objectEnumerator)
+    if (row[@"id"])
+      return [row[@"inReplies"] boolValue] ? @{@"comment" : row[@"id"], @"offset" : @0, @"inReplies" : @YES}
+                                           : @{@"comment" : row[@"id"], @"offset" : @0};
   return nil;
 }
 
@@ -573,8 +795,6 @@ static NSString *RFScreenNames(NSArray<UIViewController *> *screens) {
   return [names componentsJoinedByString:@" > "];
 }
 
-// One pushed screen as it's kept: @{community: name}, @{profile: name}, @{search: query} or @{post: {id,
-// community, and for the top one where you were}}. nil if it isn't one of those, with why in `left`.
 // What a search results screen searched for: the text in its search bar (its navigation item's title view,
 // which it keeps while another screen is on top).
 static NSString *RFSearchQuery(UIViewController *results) {
@@ -646,8 +866,13 @@ static NSString *RFFullScreenViewerPost(UIViewController *viewer) {
   return RFSearchPostForTexts(RFKnownSearchPosts(), texts);
 }
 
-static NSDictionary *RFKeptScreen(UIViewController *vc, BOOL top, NSString **part, NSString **left) {
+// One pushed screen as it's kept: @{community: name}, @{feed: {user, name}}, @{profile: name},
+// @{search: query} (and "in": community for a search in one) or @{post: {id, community, and for the top
+// one where you were}}. nil if it isn't one of those, with why in `left`. `afterSearch`: a search's results
+// are below it (only then can the full-screen viewer's post be named).
+static NSDictionary *RFKeptScreen(UIViewController *vc, BOOL top, BOOL afterSearch, NSString **part, NSString **left) {
   if (RFIsFullScreenViewer(vc)) {
+    if (!afterSearch) return *left = @"full-screen viewer not opened from a search", nil;
     // Reopened as an ordinary post page (the viewer can't be opened from a link).
     NSString *postId = RFFullScreenViewerPost(vc);
     if (!postId) return *left = @"couldn't read a post in the full-screen viewer", nil;
@@ -657,12 +882,24 @@ static NSDictionary *RFKeptScreen(UIViewController *vc, BOOL top, NSString **par
   if (RFIsClass(vc, kRFSearchClass)) {
     NSString *query = RFSearchQuery(vc);
     if (!query) return *left = @"couldn't read a search", nil;
+    // A search in a community (kept under "in", as "community" is a community screen).
+    NSString *community = RFSearchCommunity(vc);
+    if (community && RFIsCommunityName(community)) {
+      *part = [NSString stringWithFormat:@"search \u201c%@\u201d in r/%@", query, community];
+      return @{@"search" : query, @"in" : community};
+    }
     *part = [NSString stringWithFormat:@"search \u201c%@\u201d", query];
     return @{@"search" : query};
   }
+  if (RFIsClass(vc, kRFCustomFeedClass)) {
+    NSDictionary *feed = RFCustomFeed(vc);
+    if (!feed) return *left = @"couldn't read a custom feed", nil;
+    *part = [NSString stringWithFormat:@"custom feed u/%@/m/%@", feed[@"user"], feed[@"name"]];
+    return @{@"feed" : feed};
+  }
   if (RFIsClass(vc, kRFCommunityClass)) {
     NSString *name = RFCommunityName(vc);
-    if (!name) return *left = @"couldn't read a community", nil;
+    if (!RFIsCommunityName(name)) return *left = @"couldn't read a community", nil;
     *part = [@"r/" stringByAppendingString:name];
     return @{@"community" : name};
   }
@@ -679,48 +916,77 @@ static NSDictionary *RFKeptScreen(UIViewController *vc, BOOL top, NSString **par
     return *left = @"couldn't read a post", nil;
   // The community makes the usual link; without it (not always known) the post's own link does.
   NSMutableDictionary *entry = [NSMutableDictionary dictionaryWithObject:postId forKey:@"id"];
-  entry[@"community"] = RFCommunityName(post);
+  NSString *postCommunity = RFCommunityName(post);
+  if (RFIsCommunityName(postCommunity)) entry[@"community"] = postCommunity;
+  // Opened at a comment: reopened the same way (that comment's thread first, highlighted).
+  // The screen's own when it was told (the same post may be open elsewhere at another comment), else the
+  // post's latest.
+  id ownFocus = objc_getAssociatedObject(post, kRFPostFocusKey);
+  NSString *focus = [ownFocus isKindOfClass:NSString.class] ? ownFocus : ownFocus ? nil : RFFocusForPost(postId);
+  if (focus) entry[@"focus"] = focus;
   // Where you were only matters for the post on top (it's the one with the jump button).
   NSDictionary *position = top ? RFCommentPosition(post, postId) : nil;
   [entry addEntriesFromDictionary:position ?: @{}];
   NSString *where = !top ? @"" : position[@"comment"] ? @" (at a comment)" : position ? @" (in the post)" : @" (position not found)";
+  if (focus) where = [where stringByAppendingString:@", opened at a comment"];
   *part = [NSString stringWithFormat:@"post %@%@", postId, where];
   return @{@"post" : entry};
 }
 
 // What's open: the tab ("home", or "you" for your own profile) and the screens above its root (on Home at
-// least one; nothing above your profile still reopens the You tab). nil for anything else, with why in
-// `left` (and what's kept, when there's something).
-static NSDictionary *RFOpenScreens(NSString **left) {
+// least one; nothing above your profile still reopens the You tab). A screen that can't be kept (or one
+// past the first six) ends it: the screens below it are kept, and `cut` is set (as it is when the top
+// screen, a search being typed, isn't kept: what's kept isn't what's on screen). nil when nothing can be
+// kept, with why in `left` (and what's kept, when there's something).
+static NSDictionary *RFOpenScreens(NSString **left, BOOL *cut) {
+  *cut = NO;
   UITabBarController *tabs = RFTabBar();
   UINavigationController *nav = RFHomeNavigation();
   NSString *tab = @"home";
-  if (!nav) {
-    UINavigationController *you = RFYouNavigation(tabs);
-    if (!you || tabs.selectedViewController != you || !RFIsClass(you.viewControllers.firstObject, kRFProfileClass) ||
-        !you.viewIfLoaded.window)
-      return *left = @"Home or You not showing", nil;
-    nav = you;
-    tab = @"you";
+  // Or the You tab, or the Inbox (what's opened from them is on their own stack).
+  for (NSString *other in nav ? @[] : @[ @"you", @"inbox" ]) {
+    UINavigationController *shown = RFPlanTabNavigation(other);
+    if (shown && tabs.selectedViewController == shown && RFIsClass(shown.viewControllers.firstObject, RFPlanTabRoot(other)) &&
+        shown.viewIfLoaded.window) {
+      nav = shown;
+      tab = other;
+    }
   }
+  if (!nav) return *left = @"Home, You or Inbox not showing", nil;
   NSArray<UIViewController *> *stack = nav.viewControllers;
   BOOL you = [tab isEqualToString:@"you"];
   // The screen where a search is typed isn't kept (what was opened from it is).
   NSMutableArray<UIViewController *> *kept = [NSMutableArray array];
   for (NSUInteger i = 1; i < stack.count; i++)
     if (!RFIsClass(stack[i], kRFTypeaheadClass)) [kept addObject:stack[i]];
-  if (!kept.count && !you) return *left = @"Home", nil;
-  if (kept.count > kRFMaxScreens) return *left = [NSString stringWithFormat:@"more than %lu screens", (unsigned long)kRFMaxScreens], nil;
+  if (!kept.count && !you) return *left = [tab isEqualToString:@"inbox"] ? @"Inbox" : @"Home", nil;
+  if (stack.count > 1 && RFIsClass(stack.lastObject, kRFTypeaheadClass)) *cut = YES;
   NSMutableArray *screens = [NSMutableArray array];
-  NSMutableArray *parts = [NSMutableArray arrayWithObject:you ? @"You" : @"Home"];
+  BOOL afterSearch = NO;
+  NSMutableArray *parts = [NSMutableArray arrayWithObject:[tab isEqualToString:@"home"] ? @"Home" : RFPlanTabName(tab)];
+  NSString *stop = nil;
   for (NSUInteger i = 0; i < kept.count; i++) {
+    if (i == kRFMaxScreens) {
+      stop = [NSString stringWithFormat:@"more than %lu screens", (unsigned long)kRFMaxScreens];
+      break;
+    }
     NSString *part = nil;
-    NSDictionary *screen = RFKeptScreen(kept[i], i == kept.count - 1, &part, left);
-    if (!screen) return nil;
+    // Where you were in a post is only read for the screen on top (the others aren't in the window).
+    NSDictionary *screen = RFKeptScreen(kept[i], i == kept.count - 1, afterSearch, &part, &stop);
+    if (!screen) break;
+    if (screen[@"search"]) afterSearch = YES;
     [screens addObject:screen];
     [parts addObject:part];
   }
-  *left = [parts componentsJoinedByString:@" > "];
+  NSString *keptText = [parts componentsJoinedByString:@" > "];
+  if (stop) {
+    *cut = YES;
+    // Nothing kept on Home: there's nothing to reopen.
+    if (!screens.count && !you) return *left = [NSString stringWithFormat:@"%@ (then %@)", parts.firstObject, stop], nil;
+    *left = [NSString stringWithFormat:@"%@ (then stopped: %@)", keptText, stop];
+  } else {
+    *left = keptText;
+  }
   return @{@"tab" : tab, @"screens" : screens};
 }
 
@@ -750,6 +1016,14 @@ static UIWindow *RFMainWindow(void) {
 
 static BOOL gSavedSinceActive; // main thread; saved once per trip away (inactive, then background)
 
+// What's waiting for a return to Home, as it's kept for the next launch (nil if nothing, or incognito).
+static NSData *RFParkedData(void) {
+  if (!gParked || RFFeedCacheIncognito()) return nil;
+  NSMutableDictionary *parked = [gParked mutableCopy];
+  [parked removeObjectForKey:@"pictureSize"];
+  return [NSJSONSerialization dataWithJSONObject:parked options:0 error:NULL];
+}
+
 static void RFNoteLeavingScreens(void) {
   if (gSavedSinceActive) return;
   gSavedSinceActive = YES;
@@ -764,11 +1038,17 @@ static void RFNoteLeavingScreens(void) {
     return;
   }
   NSString *left = nil;
-  NSDictionary *screens = RFOpenScreens(&left);
+  BOOL cut = NO;
+  NSDictionary *screens = RFOpenScreens(&left, &cut);
   gLeft = left ?: @"";
   NSString *account = RFFeedCacheCurrentAccount();
+  // What's waiting for a return to Home is kept with it (or goes, if nothing is), in the same block.
+  NSData *parked = RFParkedData();
   if (!screens || !account) {
-    RFForgetScreens();
+    dispatch_async(RFRestoreQueue(), ^{
+      for (NSString *file in @[ @"Screens.json", @"LastScreen.jpg", @"Comments.json" ]) RFWriteNow(file, nil);
+      RFWriteNow(@"Parked.json", parked);
+    });
     return;
   }
   NSMutableDictionary *saved = [screens mutableCopy];
@@ -776,8 +1056,9 @@ static void RFNoteLeavingScreens(void) {
   saved[@"account"] = account;
   UIWindow *window = RFMainWindow();
   // The picture covers the launch only for a community on top of Home, which comes back exactly as it
-  // was. A post or profile loads afresh (and opens at the top), so it shows a plain cover instead.
-  BOOL community = [screens[@"tab"] isEqualToString:@"home"] && [screens[@"screens"] lastObject][@"community"];
+  // was. A post or profile loads afresh (and opens at the top), so it shows a plain cover instead, as
+  // does a cut stack (the picture is of a screen that won't come back).
+  BOOL community = !cut && [screens[@"tab"] isEqualToString:@"home"] && [screens[@"screens"] lastObject][@"community"];
   UIImage *picture = window && community ? RFSnapshot(window) : nil;
   if (picture) saved[@"pictureSize"] = @[ @(window.bounds.size.width), @(window.bounds.size.height) ];
   UIApplication *app = UIApplication.sharedApplication;
@@ -795,6 +1076,7 @@ static void RFNoteLeavingScreens(void) {
     RFWriteNow(@"LastScreen.jpg", picture ? UIImageJPEGRepresentation(picture, 0.85) : nil);
     RFWriteNow(@"Comments.json", nil); // kept by earlier versions
     RFWriteNow(@"Screens.json", [NSJSONSerialization dataWithJSONObject:saved options:0 error:NULL]);
+    RFWriteNow(@"Parked.json", parked);
     finish();
   });
 }
@@ -857,6 +1139,11 @@ static __weak UICollectionView *gProbeList; // the post's list, if it was scroll
 static __weak UIViewController *gJumpScreen;
 static NSDictionary *gJumpPlan;
 static BOOL gJumping, gJumpFound;
+// The list not moving while looking: how many steps in a row, at what offset (the page can end before
+// its content does: RedditFilter's own end where "From your feed" was).
+static CGFloat gStuckOffset;
+static NSInteger gStuckTicks;
+static NSInteger gFeedOnlyTicks; // looking, and only the posts after the comments on screen
 static CGFloat gProbeStart, gProbeHeight;
 
 static void RFOpenLink(NSString *link) {
@@ -874,6 +1161,7 @@ static NSDictionary *RFStepScreen(void) {
 
 static NSString *RFScreenKind(NSDictionary *screen) {
   return screen[@"community"] ? @"the community"
+         : screen[@"feed"]    ? @"the custom feed"
          : screen[@"profile"] ? @"the profile"
          : screen[@"search"]  ? @"the search"
          : screen[@"post"]    ? @"the post"
@@ -888,51 +1176,65 @@ static UINavigationController *RFTabWithRoot(UITabBarController *tabs, NSString 
   return nil;
 }
 
-// Selects the You tab (as a tap on it would).
-static void RFSelectYouTab(void) {
+// Selects the plan's other tab (the You tab or the Inbox), as a tap on it would.
+static void RFSelectPlanTab(NSString *tab) {
   UITabBarController *tabs = RFTabBar();
-  UINavigationController *you = RFYouNavigation(tabs);
-  if (!you || tabs.selectedViewController == you) return;
+  UINavigationController *other = RFPlanTabNavigation(tab);
+  if (!other || tabs.selectedViewController == other) return;
   id<UITabBarControllerDelegate> delegate = tabs.delegate;
   if ([delegate respondsToSelector:@selector(tabBarController:shouldSelectViewController:)] &&
-      ![delegate tabBarController:tabs shouldSelectViewController:you])
+      ![delegate tabBarController:tabs shouldSelectViewController:other])
     return;
-  tabs.selectedViewController = you;
+  tabs.selectedViewController = other;
   if ([delegate respondsToSelector:@selector(tabBarController:didSelectViewController:)])
-    [delegate tabBarController:tabs didSelectViewController:you];
+    [delegate tabBarController:tabs didSelectViewController:other];
 }
 
-// Whether the You tab has your profile at its root yet: until it's first shown it holds a placeholder,
-// which is replaced (with anything pushed on it) once it is.
-static BOOL RFYouTabReady(void) {
-  return RFIsClass(RFYouNavigation(RFTabBar()).viewControllers.firstObject, kRFProfileClass);
+// Whether that tab has its own screen at its root yet (your profile, or the Inbox): until it's first shown
+// it holds a placeholder, which is replaced (with anything pushed on it) once it is.
+static BOOL RFPlanTabReady(NSString *tab) {
+  return RFIsClass(RFPlanTabNavigation(tab).viewControllers.firstObject, RFPlanTabRoot(tab));
 }
 
-// The screens opened on Home go over to the You tab, on top of your profile, and the tab's selected. Going
-// back then works as it does there; Home is left at its feed (scrolled back when you go to it). Tried
-// again for a moment if your profile isn't in place yet.
-static void RFMoveToYouTab(NSInteger tries) {
-  RFSelectYouTab();
+// Goes up whenever a move to the plan's tab still waiting must not happen any more (a new restore, a stop,
+// another account). Main thread.
+static unsigned gTabMoveGeneration;
+
+// The screens opened on Home (`stack`, Home's whole stack as the restore left it) go over to that tab, on
+// top of its own screen, and the tab's selected. Going back then works as it does there; Home is left at
+// its feed (scrolled back when you go to it). Tried again for a moment if the tab's screen isn't in place
+// yet, as long as nothing has changed meanwhile: the same restore, Home's stack as it was, the tab still
+// selected.
+static void RFMoveScreensToPlanTab(NSString *tab, NSArray<UIViewController *> *stack, unsigned generation, NSInteger tries) {
+  if (generation != gTabMoveGeneration) return;
   UITabBarController *tabs = RFTabBar();
-  UINavigationController *you = RFYouNavigation(tabs), *home = RFTabWithRoot(tabs, kRFHomeClass);
-  if (!you || !home || you == home) return;
-  if (!RFYouTabReady()) {
-    if (tries > 0)
-      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        RFMoveToYouTab(tries - 1);
-      });
+  UINavigationController *other = RFPlanTabNavigation(tab), *home = RFTabWithRoot(tabs, kRFHomeClass);
+  if (!other || !home || other == home || ![home.viewControllers isEqualToArray:stack]) return;
+  if (!RFPlanTabReady(tab)) {
+    // You went to another tab meanwhile: stays as you left it.
+    if (tabs.selectedViewController != other || tries <= 0) return;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+      RFMoveScreensToPlanTab(tab, stack, generation, tries - 1);
+    });
     return;
   }
-  NSArray<UIViewController *> *stack = home.viewControllers;
-  if (stack.count < 2) return;
+  if (tabs.selectedViewController != other) return;
   NSArray<UIViewController *> *moved = [stack subarrayWithRange:NSMakeRange(1, stack.count - 1)];
   [home setViewControllers:@[ stack.firstObject ] animated:NO];
-  [you setViewControllers:[@[ you.viewControllers.firstObject ] arrayByAddingObjectsFromArray:moved] animated:NO];
+  [other setViewControllers:[@[ other.viewControllers.firstObject ] arrayByAddingObjectsFromArray:moved] animated:NO];
+}
+
+static void RFMoveToPlanTab(NSString *tab, NSInteger tries) {
+  UINavigationController *home = RFTabWithRoot(RFTabBar(), kRFHomeClass);
+  NSArray<UIViewController *> *stack = home.viewControllers;
+  if (stack.count < 2) return;
+  RFSelectPlanTab(tab);
+  RFMoveScreensToPlanTab(tab, stack, ++gTabMoveGeneration, tries);
 }
 
 static NSString *RFStepName(void) {
   if (gStep == kRFStepHome) return @"Home";
-  if (gWaitingForYou) return @"the You tab";
+  if (gWaitingForYou) return [NSString stringWithFormat:@"the %@ tab", RFPlanTabName(gPlan[@"tab"])];
   NSDictionary *screen = RFStepScreen();
   if (!screen) return @"";
   NSUInteger count = RFPlanScreens().count;
@@ -985,6 +1287,101 @@ static void RFSetJumpLook(NSString *title, BOOL busy) {
     gJumpButton.center = CGPointMake(container.bounds.size.width / 2, gJumpButton.center.y);
 }
 
+// Whether the comment you were at isn't among those the reopened post has (all of them in): it was in
+// replies or a page Reddit only loads when asked.
+static BOOL RFCommentNotLoaded(NSDictionary *plan) {
+  NSString *postId = plan[@"id"], *comment = plan[@"comment"];
+  if (!comment || !RFRowsSettled(postId) || RFRowsTruncated(postId)) return NO;
+  NSArray *rows = RFRowsForPost(postId);
+  return rows && [rows indexOfObjectPassingTest:^BOOL(NSDictionary *row, NSUInteger i, BOOL *stop) {
+           return [row[@"id"] isEqual:comment];
+         }] == NSNotFound;
+}
+
+// Reddit's own link to a comment opens the post at that comment (wherever it is, highlighted): that page
+// takes the reopened one's place.
+static __weak UIViewController *gLinkedFrom; // the reopened post, until its replacement is in
+static NSDate *gLinkedAt;
+static NSString *gLinkedPost;
+static NSHashTable<UIViewController *> *gLinkedBefore; // Home's screens before the link opened
+
+// Selects a tab as a tap on it would (asking Reddit first).
+static void RFSelectTab(UIViewController *tab) {
+  UITabBarController *tabs = RFTabBar();
+  if (!tab || tabs.selectedViewController == tab) return;
+  id<UITabBarControllerDelegate> delegate = tabs.delegate;
+  if ([delegate respondsToSelector:@selector(tabBarController:shouldSelectViewController:)] &&
+      ![delegate tabBarController:tabs shouldSelectViewController:tab])
+    return;
+  tabs.selectedViewController = tab;
+  if ([delegate respondsToSelector:@selector(tabBarController:didSelectViewController:)])
+    [delegate tabBarController:tabs didSelectViewController:tab];
+}
+
+static void RFReplaceWithLinked(void) {
+  UIViewController *old = gLinkedFrom;
+  if (!old || -gLinkedAt.timeIntervalSinceNow > 6) {
+    gLinkedFrom = nil;
+    gLinkedBefore = nil;
+    return;
+  }
+  UINavigationController *home = RFTabWithRoot(RFTabBar(), kRFHomeClass);
+  UIViewController *opened = home.viewControllers.lastObject;
+  // A page that's new since the link opened, for that post, done arriving.
+  BOOL arrived = opened && opened != old && ![gLinkedBefore containsObject:opened] &&
+                 [RFCall(RFPostScreen(opened), @"initialPostPk") isEqual:gLinkedPost] && !opened.transitionCoordinator;
+  if (!arrived) {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+      RFReplaceWithLinked();
+    });
+    return;
+  }
+  gLinkedFrom = nil;
+  gLinkedBefore = nil;
+  UINavigationController *nav = old.navigationController;
+  // The reopened post as its stack holds it (itself, or the pager it's in).
+  UIViewController *held = old;
+  while (held && ![nav.viewControllers containsObject:held]) held = held.parentViewController;
+  NSUInteger at = held ? [nav.viewControllers indexOfObject:held] : NSNotFound;
+  if (!nav || at == NSNotFound) return; // gone meanwhile: the linked page just stays where it opened
+  if (nav == home) {
+    NSMutableArray *stack = [nav.viewControllers mutableCopy];
+    [stack removeObject:opened];
+    stack[at] = opened;
+    [nav setViewControllers:stack animated:NO];
+    return;
+  }
+  // Links always open on Home: on another tab (the You tab), the page moves over to it.
+  NSMutableArray *homeStack = [home.viewControllers mutableCopy];
+  [homeStack removeObject:opened];
+  [home setViewControllers:homeStack animated:NO];
+  NSMutableArray *stack = [nav.viewControllers mutableCopy];
+  stack[at] = opened;
+  [nav setViewControllers:stack animated:NO];
+  RFSelectTab(nav);
+}
+
+static void RFJumpByLink(NSDictionary *plan) {
+  NSString *postId = plan[@"id"], *community = plan[@"community"];
+  NSString *link = community ? [NSString stringWithFormat:@"https://www.reddit.com/r/%@/comments/%@/_/%@/", community,
+                                                          [postId substringFromIndex:3], [plan[@"comment"] substringFromIndex:3]]
+                             : [NSString stringWithFormat:@"https://www.reddit.com/comments/%@/_/%@/", [postId substringFromIndex:3],
+                                                          [plan[@"comment"] substringFromIndex:3]];
+  gLinkedFrom = gJumpScreen;
+  gLinkedAt = NSDate.date;
+  gLinkedPost = postId;
+  gLinkedBefore = [NSHashTable weakObjectsHashTable];
+  for (UIViewController *vc in RFTabWithRoot(RFTabBar(), kRFHomeClass).viewControllers) [gLinkedBefore addObject:vc];
+  RFHideJump(0);
+  RFOpenLink(link);
+  RFReplaceWithLinked();
+}
+
+// Whether the jump can fall back on Reddit's link to the comment.
+static BOOL RFCanJumpByLink(NSDictionary *plan) {
+  return [plan[@"comment"] hasPrefix:@"t1_"] && [plan[@"comment"] length] > 3 && [plan[@"id"] length] > 3;
+}
+
 static void RFJumpTick(void) {
   UIViewController *post = gJumpScreen;
   if (!post || !post.view.window) return RFHideJump(0);
@@ -995,7 +1392,18 @@ static void RFJumpTick(void) {
     if (scrolledYourself || -[gJumpOffered timeIntervalSinceNow] > 30) RFHideJump(0);
     return;
   }
-  if (!RFScrollComments(post, gJumpPlan) && -[gJumpStart timeIntervalSinceNow] < 15) return;
+  // You've taken over (a drag, or its glide): it stops where you are, nothing more opened.
+  if (scrolledYourself || list.isDecelerating) {
+    gProbeList = nil;
+    return RFHideJump(0);
+  }
+  // Not among the post's comments: in replies you'd opened, Reddit's link to it (the post can't open them
+  // again); in a later page, the post is taken down until Reddit loads it (RFScrollComments).
+  if (RFCanJumpByLink(gJumpPlan) && RFCommentNotLoaded(gJumpPlan) &&
+      ([gJumpPlan[@"inReplies"] boolValue] || !RFCommentRowsHaveNextPage(RFRowsForPost(gJumpPlan[@"id"]))))
+    return RFJumpByLink(gJumpPlan);
+  // Longer when it may take a few pages to get there.
+  if (!RFScrollComments(post, gJumpPlan) && -[gJumpStart timeIntervalSinceNow] < ([gJumpPlan[@"inReplies"] boolValue] ? 15 : 30)) return;
   scrolledYourself = scrolledYourself || list.isDecelerating;
   // Not found: back to where it started (unless you've taken over).
   if (!gJumpFound && gProbeList && !scrolledYourself)
@@ -1003,6 +1411,8 @@ static void RFJumpTick(void) {
   gProbeList = nil;
   gJumping = NO;
   if (gJumpFound || scrolledYourself) return RFHideJump(0);
+  // Not found on the page as it is (its comments not all loaded, or not laid out): Reddit's link finds it.
+  if (RFCanJumpByLink(gJumpPlan)) return RFJumpByLink(gJumpPlan);
   RFSetJumpLook(@"Couldn't find your place", NO);
   RFHideJump(1.5);
 }
@@ -1016,6 +1426,9 @@ static void RFJumpTick(void) {
   gProbeList = nil;
   gProbeHeight = 0;
   gJumpStart = NSDate.date;
+  gStuckTicks = 0;
+  gFeedOnlyTicks = 0;
+  gStuckOffset = -CGFLOAT_MAX;
   RFSetJumpLook(@"Finding your place…", YES);
 }
 @end
@@ -1098,13 +1511,32 @@ static void RFOfferJump(NSInteger tries) {
 
 static UIImageView *gCoverPicture; // shown once the account's confirmed
 
+// What was open waits for a return to Home, above `nav` as it is now.
+static void RFPark(NSDictionary *plan, UINavigationController *nav) {
+  gParked = plan;
+  gParkedNav = nav;
+  gParkedDepth = nav.viewControllers.count;
+  gParkedAt = NSDate.date;
+}
+
+// What was waiting for a return to Home won't be reopened: why, for Diagnostics.
+static void RFDropParked(NSString *why) {
+  if (!gParked && !gParkAfter) return;
+  gParked = nil;
+  gParkAfter = nil;
+  gParkedNav = nil;
+  if (why) gOutcome = why;
+  RFWriteFile(@"Parked.json", nil, nil);
+}
+
 static void RFFinishRestore(void) {
   if (gPlan && !RFRestoreDone() && !gOutcome.length) gOutcome = [NSString stringWithFormat:@"stopped (left while opening %@)", RFStepName()];
   BOOL reopened = gReopened;
+  NSString *planTab = gPlan[@"tab"];
+  BOOL toYou = planTab && ![planTab isEqualToString:@"home"]; // the You tab or the Inbox
   // For the You tab, what's been opened (on Home) goes over to it, once it's the right account.
   // Not when it was stopped for another account or incognito: those screens aren't the new account's.
-  if (gPlan && gStep != kRFStepHome && [gPlan[@"tab"] isEqualToString:@"you"] && !gStoppedForUser)
-    RFMoveToYouTab(60);
+  if (gPlan && gStep != kRFStepHome && toYou && !gStoppedForUser) RFMoveToPlanTab(planTab, 60);
   gWaitingForYou = NO;
   // The post was scrolled down looking for the comment and it wasn't found: back where it started.
   UICollectionView *probed = gProbeList;
@@ -1120,6 +1552,22 @@ static void RFFinishRestore(void) {
   RFWatchCoveredFeeds();
   if (reopened) RFOfferJump(10);
   else gJumpScreen = nil;
+  gResumed = NO;
+  // What was waiting when Reddit was last left waits again, above what's open now (unless this launch's own
+  // screens are waiting instead).
+  // Only once this launch's restore has finished: after Skip or a time-out, it's not brought up later.
+  NSDictionary *parkAfter = gParkAfter;
+  gParkAfter = nil;
+  UINavigationController *home = RFTabWithRoot(RFTabBar(), kRFHomeClass);
+  if (parkAfter && !gParked) {
+    if (reopened && home) {
+      RFPark(parkAfter, home);
+      // Screens reopened for the You tab move off Home (later): Home is then just Home.
+      if (toYou) gParkedDepth = 1;
+    } else {
+      RFWriteFile(@"Parked.json", nil, nil);
+    }
+  }
   UIView *cover = gCover;
   gCover = nil;
   // A moment for the last of the page to settle (images, the comment box) before it shows.
@@ -1215,11 +1663,12 @@ static void RFShowCover(UIWindow *window) {
   [window addSubview:gCover];
 }
 
-// Whether a post page shows the post yet: some text in its first section (the loading placeholder has none).
-static BOOL RFPostShown(UICollectionView *list) {
+// Whether a post page shows the post yet: some text in its first section (the loading placeholder has none),
+// or anywhere for a post opened at a comment (Reddit scrolls past the post to it).
+static BOOL RFPostShown(UICollectionView *list, BOOL atComment) {
   if (!list.numberOfSections) return NO;
   for (UICollectionViewCell *cell in list.visibleCells) {
-    if ([list indexPathForCell:cell].section != 0 || !cell.contentView) continue;
+    if ((!atComment && [list indexPathForCell:cell].section != 0) || !cell.contentView) continue;
     NSMutableArray<UIView *> *queue = [NSMutableArray arrayWithObject:cell.contentView];
     for (NSUInteger seen = 0; queue.count && seen < 80; seen++) {
       UIView *view = queue.firstObject;
@@ -1247,13 +1696,17 @@ static void RFStartStep(NSInteger step) {
     NSString *name = screen[@"community"];
     RFFeedCacheArmCommunity(name);
     RFOpenLink([NSString stringWithFormat:@"https://www.reddit.com/r/%@/", name]);
+  } else if (screen[@"feed"]) {
+    RFOpenLink([NSString stringWithFormat:@"https://www.reddit.com/user/%@/m/%@/", screen[@"feed"][@"user"], screen[@"feed"][@"name"]]);
   } else if (screen[@"profile"]) {
     RFOpenLink([NSString stringWithFormat:@"https://www.reddit.com/user/%@/", screen[@"profile"]]);
   } else if (screen[@"search"]) {
     NSMutableCharacterSet *allowed = [NSCharacterSet.URLQueryAllowedCharacterSet mutableCopy];
     [allowed removeCharactersInString:@"&+=?#"];
     NSString *query = [screen[@"search"] stringByAddingPercentEncodingWithAllowedCharacters:allowed];
-    if (query) RFOpenLink([@"https://www.reddit.com/search/?q=" stringByAppendingString:query]);
+    NSString *base = screen[@"in"] ? [NSString stringWithFormat:@"https://www.reddit.com/r/%@/search/?q=", screen[@"in"]]
+                                   : @"https://www.reddit.com/search/?q=";
+    if (query) RFOpenLink([base stringByAppendingString:query]);
   } else if (screen[@"post"]) {
     NSDictionary *post = screen[@"post"];
     NSString *postId = post[@"id"];
@@ -1261,45 +1714,61 @@ static void RFStartStep(NSInteger step) {
     gProbeHeight = 0;
     RFForgetRows(postId); // only the comments it gets now count
     NSString *community = post[@"community"];
-    RFOpenLink(community ? [NSString stringWithFormat:@"https://www.reddit.com/r/%@/comments/%@/", community, [postId substringFromIndex:3]]
-                         : [NSString stringWithFormat:@"https://www.reddit.com/comments/%@/", [postId substringFromIndex:3]]);
+    NSString *link = community ? [NSString stringWithFormat:@"https://www.reddit.com/r/%@/comments/%@/", community, [postId substringFromIndex:3]]
+                               : [NSString stringWithFormat:@"https://www.reddit.com/comments/%@/", [postId substringFromIndex:3]];
+    // Opened at a comment (from the Inbox, say): at that comment again.
+    if (post[@"focus"]) link = [link stringByAppendingFormat:@"_/%@/", [post[@"focus"] substringFromIndex:3]];
+    RFOpenLink(link);
   }
 }
 
 static void RFNextStep(void) {
   if (gStep + 1 < (NSInteger)RFPlanScreens().count) return RFStartStep(gStep + 1);
-  // For the You tab: it's selected, and once your profile's in place what was opened goes over to it.
-  if ([gPlan[@"tab"] isEqualToString:@"you"] && !gWaitingForYou && !RFYouTabReady()) {
+  // For the You tab or the Inbox: it's selected, and once its own screen's in place what was opened goes
+  // over to it.
+  NSString *tab = gPlan[@"tab"];
+  if (![tab isEqualToString:@"home"] && !gWaitingForYou && !RFPlanTabReady(tab)) {
     gWaitingForYou = YES;
     gStep = RFPlanScreens().count;
     gStepStart = NSDate.date;
     gSteady = 0;
-    RFSelectYouTab();
+    RFSelectPlanTab(tab);
     return;
   }
   gStep = RFPlanScreens().count;
   if (!gOutcome.length) {
     NSMutableArray *kinds = [NSMutableArray array];
     for (NSDictionary *screen in RFPlanScreens()) [kinds addObject:[RFScreenKind(screen) substringFromIndex:4]];
-    if ([gPlan[@"tab"] isEqualToString:@"you"]) [kinds insertObject:@"You tab" atIndex:0];
-    gOutcome = [@"reopened " stringByAppendingString:[kinds componentsJoinedByString:@" > "]];
+    if (![tab isEqualToString:@"home"]) [kinds insertObject:[RFPlanTabName(tab) stringByAppendingString:@" tab"] atIndex:0];
+    gOutcome = [NSString stringWithFormat:@"%@reopened %@", gResumed ? @"back on Home: " : @"", [kinds componentsJoinedByString:@" > "]];
     gReopened = YES;
   }
   RFFinishRestore();
 }
 
-// Scrolls the post down to the end of what's laid out, to have Reddit ask for (or lay out) more: only under
-// the cover, untouched, and once each time there's more laid out. Where it started is kept, to go back to
-// if the comment isn't found.
-static void RFScrollToEnd(UICollectionView *list) {
-  if ((!gCover && !gJumping) || list.isTracking || list.isDragging || list.contentSize.height <= gProbeHeight + 1) return;
+// Scrolls the post down, to have Reddit ask for (or lay out) more: only under the cover or while jumping,
+// untouched. Where it started is kept, to go back to if the comment isn't found.
+static void RFScrollToEnd(UICollectionView *list, NSInteger direction) {
+  if ((!gCover && !gJumping) || list.isTracking || list.isDragging || list.isDecelerating) return;
   if (gProbeList != list) {
     gProbeList = list;
     gProbeStart = list.contentOffset.y;
+    gProbeHeight = 0;
   }
-  gProbeHeight = list.contentSize.height;
-  CGFloat bottom = list.contentSize.height + list.adjustedContentInset.bottom - list.bounds.size.height;
-  if (bottom > list.contentOffset.y + 1) list.contentOffset = CGPointMake(list.contentOffset.x, bottom);
+  // A screen at a time, not straight to the end: each section is laid out (and checked) on the way, and
+  // the posts Reddit lists after the comments (which load more as they're reached) aren't run into.
+  CGFloat top = -list.adjustedContentInset.top;
+  CGFloat bottom = MAX(top, list.contentSize.height + list.adjustedContentInset.bottom - list.bounds.size.height);
+  CGFloat next = MIN(bottom, MAX(top, list.contentOffset.y + direction * list.bounds.size.height * 0.8));
+  if (fabs(next - list.contentOffset.y) > 1) list.contentOffset = CGPointMake(list.contentOffset.x, next);
+}
+
+static BOOL RFListStuck(UICollectionView *list, NSInteger ticks) {
+  if (fabs(list.contentOffset.y - gStuckOffset) > 0.5) {
+    gStuckOffset = list.contentOffset.y;
+    gStuckTicks = 0;
+  }
+  return ++gStuckTicks >= ticks;
 }
 
 // One step of scrolling the post's comments back. YES when there's nothing more to do.
@@ -1329,8 +1798,9 @@ static BOOL RFScrollComments(UIViewController *post, NSDictionary *plan) {
   // Not there: if only the first few are in, Reddit asks for the rest once the comments are scrolled to,
   // so the list is taken down to the end of them (under the cover); otherwise it's gone (or too far down).
   if (target == NSNotFound) {
-    if (RFRowsTruncated(postId)) {
-      RFScrollToEnd(list);
+    // Or the first pages only: Reddit loads the next as the end is reached.
+    if (RFRowsTruncated(postId) || (gJumping && ![plan[@"inReplies"] boolValue] && RFCommentRowsHaveNextPage(rows))) {
+      RFScrollToEnd(list, 1);
       return NO;
     }
     if (gProbeList) gProbeList.contentOffset = CGPointMake(gProbeList.contentOffset.x, gProbeStart);
@@ -1338,15 +1808,25 @@ static BOOL RFScrollComments(UIViewController *post, NSDictionary *plan) {
     return YES;
   }
   // Items are the post, then one per row; measured from a comment on screen in case there's more first.
+  // Measured from a comment whose author and level are the only ones in the thread (the same row nearest
+  // either end), so it can't be taken for another; failing that, the first one recognised.
   NSInteger base = 1;
+  BOOL measured = NO;
   for (UICollectionViewCell *cell in RFCellsTopFirst(list)) {
     NSIndexPath *path = [list indexPathForCell:cell];
     NSInteger flat = path ? RFFlatIndex(list, path) : 0;
     if (flat == 0) continue;
-    NSUInteger row = RFRowOfCommentCell(rows, cell, flat - 1);
+    NSUInteger row = RFRowOfCommentCell(rows, cell, 0);
     if (row == NSNotFound) continue;
+    BOOL only = rows.count && RFRowOfCommentCell(rows, cell, rows.count - 1) == row;
+    if (!only && measured) continue;
+    if (!only) {
+      row = RFRowOfCommentCell(rows, cell, flat - 1);
+      if (row == NSNotFound) continue;
+    }
     base = flat - (NSInteger)row;
-    break;
+    measured = YES;
+    if (only) break;
   }
   // Which row a cell shows: the author and level on it, at about where it sits in the list (so another
   // comment by the same author at the same level isn't taken for it).
@@ -1360,16 +1840,35 @@ static BOOL RFScrollComments(UIViewController *post, NSDictionary *plan) {
   NSIndexPath *shown = nil;
   for (UICollectionViewCell *cell in list.visibleCells)
     if (rowOfCell(cell) == target) shown = [list indexPathForCell:cell];
-  NSIndexPath *path = shown ?: RFPathForFlatIndex(list, base + (NSInteger)target);
-  // The page lays its comments out a section at a time as it's scrolled: down to the end of them for more.
-  if (!path) {
-    RFScrollToEnd(list);
+  // Not on screen: a screen further, looking again each time (up if the comments on screen come after
+  // it). Counting items to it doesn't work: Reddit collapses some replies, so there are fewer items than
+  // rows, and past the comments come the posts Reddit lists after them.
+  if (!shown) {
+    NSUInteger onScreen = NSNotFound;
+    BOOL feedShown = NO;
+    for (UICollectionViewCell *cell in RFCellsTopFirst(list)) {
+      if ([NSStringFromClass(cell.class) containsString:@"FeedStackSliceViewModel"]) {
+        feedShown = YES;
+        continue;
+      }
+      if (onScreen == NSNotFound) onScreen = rowOfCell(cell);
+    }
+    // Down to those posts with no comment of the post's on screen for a while (not just while a section
+    // is laid out): it isn't there.
+    gFeedOnlyTicks = feedShown && onScreen == NSNotFound ? gFeedOnlyTicks + 1 : 0;
+    if (gFeedOnlyTicks >= 10) return YES;
+    // At the end of the page with nothing more to come: it isn't there.
+    if (RFListStuck(list, 30) && !RFRowsTruncated(postId) && !RFCommentRowsHaveNextPage(rows)) return YES;
+    RFScrollToEnd(list, onScreen != NSNotFound && onScreen > target ? -1 : 1);
     return NO;
   }
+  NSIndexPath *path = shown;
   RFScrollResult result = RFScrollListToItem(list, path, offset, NO,
                                              ^BOOL(UICollectionViewCell *cell) {
                                                return rowOfCell(cell) == target;
                                              });
+  // On screen, but the page goes no further: it's as far up as it can be.
+  if (result == RFScrollPending && RFListStuck(list, 4) && allLoaded) result = RFScrollPlaced;
   if (result == RFScrollPlaced && ++gSteady >= 2 && allLoaded) {
     gProbeList = nil; // found: stays where it is
     gJumpFound = YES;
@@ -1401,7 +1900,15 @@ static void RFRestoreTick(void) {
     BOOL otherTab = selected && [selected isKindOfClass:UINavigationController.class] &&
                     !RFIsClass(((UINavigationController *)selected).viewControllers.firstObject, kRFHomeClass);
     if (nav.viewControllers.count > 1 || otherTab) {
-      gOutcome = @"skipped (Reddit opened a screen)";
+      // What was open on Home comes back when you go back to Home from that screen (not for the You tab,
+      // which going back to Home has nothing to do with).
+      if ([gPlan[@"tab"] isEqualToString:@"home"]) {
+        UINavigationController *shown = otherTab ? (UINavigationController *)selected : nav;
+        RFPark(gPlan, shown);
+        gOutcome = @"waiting (Reddit opened a screen): reopens when you go back to Home";
+      } else {
+        gOutcome = @"skipped (Reddit opened a screen)";
+      }
       // Home's feed is under that screen: it's scrolled back when you go back to it.
       RFFeedDefer(kRFHomeFeeds);
       return RFFinishRestore();
@@ -1438,7 +1945,7 @@ static void RFRestoreTick(void) {
     return;
   }
   if (gWaitingForYou) {
-    gSteady = RFYouTabReady() ? gSteady + 1 : 0;
+    gSteady = RFPlanTabReady(gPlan[@"tab"]) ? gSteady + 1 : 0;
     if (gSteady >= 2 || late) RFNextStep();
     return;
   }
@@ -1466,10 +1973,21 @@ static void RFRestoreTick(void) {
     BOOL ready = list && RFListShowsPosts(list) && !RFFeedRestoring();
     gSteady = ready ? gSteady + 1 : 0;
     if (gSteady >= 2 || late) RFNextStep();
+  } else if (screen[@"feed"]) {
+    // Opens at its top (it isn't kept like a community): done once its posts show.
+    NSDictionary *feed = RFIsClass(top, kRFCustomFeedClass) && top.viewIfLoaded.window ? RFCustomFeed(top) : nil;
+    BOOL right = [[feed[@"name"] lowercaseString] isEqualToString:[screen[@"feed"][@"name"] lowercaseString]] &&
+                 [[feed[@"user"] lowercaseString] isEqualToString:[screen[@"feed"][@"user"] lowercaseString]];
+    UICollectionView *list = right ? RFListIn(top) : nil;
+    BOOL ready = list && RFListShowsPosts(list);
+    gSteady = ready ? gSteady + 1 : 0;
+    if (gSteady >= 2 || late) RFNextStep();
   } else if (screen[@"search"]) {
     // The results open at their top: done once the search is showing with its query.
+    // In a community: once its answer has said so too (so the next screen doesn't take its answer).
     BOOL ready = RFIsClass(top, kRFSearchClass) && top.viewIfLoaded.window &&
-                 [RFSearchQuery(top).lowercaseString isEqualToString:[screen[@"search"] lowercaseString]];
+                 [RFSearchQuery(top).lowercaseString isEqualToString:[screen[@"search"] lowercaseString]] &&
+                 (!screen[@"in"] || [RFSearchCommunity(top).lowercaseString isEqualToString:[screen[@"in"] lowercaseString]]);
     gSteady = ready ? gSteady + 1 : 0;
     if (gSteady >= 2 || late) RFNextStep();
   } else if (screen[@"profile"]) {
@@ -1485,7 +2003,7 @@ static void RFRestoreTick(void) {
     UIViewController *post = RFPostScreen(top);
     BOOL right = post && [RFCall(post, @"initialPostPk") isEqual:screen[@"post"][@"id"]];
     UICollectionView *list = right ? RFListIn(post) : nil;
-    BOOL shown = list && RFPostShown(list);
+    BOOL shown = list && RFPostShown(list, screen[@"post"][@"focus"] != nil);
     gSteady = shown ? gSteady + 1 : 0;
     if (gSteady >= 2) {
       if (last) {
@@ -1504,15 +2022,25 @@ static BOOL RFIsText(id value) { return [value isKindOfClass:NSString.class] && 
 
 // Screens.json if everything in it is what it should be (an older or damaged one isn't used).
 static BOOL RFValidScreen(id screen) {
-  if (![screen isKindOfClass:NSDictionary.class] || [screen count] != 1) return NO;
+  if (![screen isKindOfClass:NSDictionary.class]) return NO;
   id community = screen[@"community"], profile = screen[@"profile"], post = screen[@"post"], search = screen[@"search"];
-  if (community) return RFIsText(community);
+  // A search can say which community it was in; everything else is one thing.
+  if (search && screen[@"in"]) return [screen count] == 2 && RFIsText(search) && [search length] <= 512 && RFIsCommunityName(screen[@"in"]);
+  if ([screen count] != 1) return NO;
+  if (community) return RFIsCommunityName(community);
+  if (screen[@"feed"]) {
+    NSDictionary *feed = screen[@"feed"];
+    return [feed isKindOfClass:NSDictionary.class] && feed.count == 2 && RFIsUsername(feed[@"user"]) && RFIsCustomFeedName(feed[@"name"]);
+  }
   if (search) return RFIsText(search) && [search length] <= 512;
   if (profile) return RFIsUsername(profile);
   if (![post isKindOfClass:NSDictionary.class]) return NO;
   NSString *postId = post[@"id"];
   if (!RFIsText(postId) || ![postId hasPrefix:@"t3_"] || postId.length < 4) return NO;
-  if (post[@"community"] && !RFIsText(post[@"community"])) return NO;
+  if (post[@"community"] && !RFIsCommunityName(post[@"community"])) return NO;
+  if (post[@"focus"] && !([post[@"focus"] isKindOfClass:NSString.class] && [post[@"focus"] hasPrefix:@"t1_"] &&
+                           RFIsLinkName([post[@"focus"] substringFromIndex:3], 1, 20, NO)))
+    return NO;
   return !(post[@"comment"] && !RFIsText(post[@"comment"])) && !(post[@"offset"] && !RFIsNumber(post[@"offset"]));
 }
 
@@ -1522,9 +2050,9 @@ static NSDictionary *RFValidPlan(NSDictionary *plan) {
   NSString *tab = plan[@"tab"];
   NSArray *screens = plan[@"screens"];
   id size = plan[@"pictureSize"];
-  if (![tab isEqual:@"home"] && ![tab isEqual:@"you"]) return nil;
+  if (![tab isEqual:@"home"] && ![tab isEqual:@"you"] && ![tab isEqual:@"inbox"]) return nil;
   if (![screens isKindOfClass:NSArray.class] || screens.count > kRFMaxScreens) return nil;
-  if (!screens.count && [tab isEqual:@"home"]) return nil;
+  if (!screens.count && ![tab isEqual:@"you"]) return nil;
   for (id screen in screens)
     if (!RFValidScreen(screen)) return nil;
   if (size && !([size isKindOfClass:NSArray.class] && [size count] == 2 && RFIsNumber(size[0]) && RFIsNumber(size[1]))) return nil;
@@ -1538,20 +2066,17 @@ static void RFPlanRestoreNow(void);
 static void RFPlanRestore(void) {
   RFPlanRestoreNow();
   if (!gPlan) RFWriteFile(@"LastScreen.jpg", nil, nil);
+  // Whatever happened, what was waiting last time has had its chance (a restore under way holds it).
+  RFWriteFile(@"Parked.json", nil, nil);
 }
 
-static void RFPlanRestoreNow(void) {
-  if (!RFFeedCacheEnabled()) return (void)(gOutcome = @"nothing (Keep feed position off)");
-  if (!RFMayRestore()) return (void)(gOutcome = @"skipped (swiped away)");
-  if (!gRestoreScreens) return (void)(gOutcome = @"feeds only (Reopen community and post off)");
-  NSDictionary *plan = RFValidPlan(RFReadJSON(@"Screens.json"));
-  if (!plan) return (void)(gOutcome = @"nothing to reopen");
-  NSNumber *leftAt = plan[@"leftAt"];
-  NSTimeInterval away = [leftAt isKindOfClass:NSNumber.class] ? NSDate.date.timeIntervalSince1970 - leftAt.doubleValue : -1;
-  if (away < 0 || (gMaxAge > 0 && away > gMaxAge)) return (void)(gOutcome = @"skipped (too long ago)");
-  // Once only: a crash during the restore shouldn't bring it back again.
-  RFWriteJSON(@"Screens.json", nil, nil);
+// Starts reopening `plan` from the Home step, under a cover.
+static void RFBeginRestore(NSDictionary *plan, UIWindow *window) {
+  gTabMoveGeneration++;
   gPlan = plan;
+  gOutcome = @"";
+  gReopened = NO;
+  gStoppedForUser = NO;
   gRestoreStart = gStepStart = gPlanStart = NSDate.date;
   gStep = kRFStepHome;
   gSteady = 0;
@@ -1561,9 +2086,74 @@ static void RFPlanRestoreNow(void) {
                                                       RFRestoreTick();
                                                     }];
   [NSRunLoop.mainRunLoop addTimer:gRestoreTimer forMode:NSRunLoopCommonModes];
-  UIWindow *window = RFMainWindow();
   if (window) RFShowCover(window);
 }
+
+// A kept plan that's still to be used: valid, and not left too long ago.
+static NSDictionary *RFUsablePlan(NSDictionary *plan, BOOL *tooOld) {
+  plan = RFValidPlan(plan);
+  NSTimeInterval away = plan ? NSDate.date.timeIntervalSince1970 - [plan[@"leftAt"] doubleValue] : -1;
+  if (plan && (away < 0 || (gMaxAge > 0 && away > gMaxAge))) {
+    if (tooOld) *tooOld = YES;
+    return nil;
+  }
+  return plan;
+}
+
+static void RFPlanRestoreNow(void) {
+  if (!RFFeedCacheEnabled()) return (void)(gOutcome = @"nothing (Keep feed position off)");
+  if (!RFMayRestore()) return (void)(gOutcome = @"skipped (swiped away)");
+  if (!gRestoreScreens) return (void)(gOutcome = @"feeds only (Reopen community and post off)");
+  BOOL tooOld = NO;
+  NSDictionary *plan = RFUsablePlan(RFReadJSON(@"Screens.json"), &tooOld);
+  // What was waiting for a return to Home when Reddit was left (only for a Home plan).
+  NSDictionary *parked = RFUsablePlan(RFReadJSON(@"Parked.json"), NULL);
+  if (![parked[@"tab"] isEqualToString:@"home"]) parked = nil;
+  // Once only: a crash during the restore shouldn't bring it back again.
+  RFWriteJSON(@"Screens.json", nil, nil);
+  RFWriteJSON(@"Parked.json", nil, nil);
+  // Left on Home with something waiting: that's what was open before.
+  if (!plan && parked) {
+    plan = parked;
+    parked = nil;
+  }
+  if (!plan) return (void)(gOutcome = tooOld ? @"skipped (too long ago)" : @"nothing to reopen");
+  RFBeginRestore(plan, RFMainWindow());
+  gParkAfter = parked;
+}
+
+// Back on Home with nothing on top, after Reddit opened a screen at launch: what was open before is reopened
+// now, as at launch (a plain cover; the picture was of a screen that's been replaced since).
+static void RFResumeParked(UIViewController *home) {
+  NSDictionary *plan = gParked;
+  if (!plan || gPlan) return;
+  UINavigationController *nav = home.navigationController;
+  if (nav != RFHomeNavigation() || nav.viewControllers.count != 1 || !home.viewIfLoaded.window) return;
+  if (UIApplication.sharedApplication.applicationState != UIApplicationStateActive) return;
+  if (!gRestoreScreens || !RFFeedCacheEnabled()) return RFDropParked(@"dropped (turned off)");
+  if (RFFeedCacheIncognito()) return RFDropParked(@"dropped (incognito)");
+  if (!RFUsablePlan(plan, NULL)) return RFDropParked(@"dropped (too long ago)");
+  RFDropParked(nil);
+  NSMutableDictionary *resumed = [plan mutableCopy];
+  [resumed removeObjectForKey:@"pictureSize"];
+  RFBeginRestore(resumed, home.view.window);
+  gResumed = YES;
+}
+
+// Going further than the screen Reddit opened (another screen on top of it): what was waiting won't be
+// reopened (Back then goes to that screen, not to Home).
+%group RFParkedNavigationHooks
+%hook UINavigationController
+- (void)pushViewController:(UIViewController *)viewController animated:(BOOL)animated {
+  %orig;
+  // (Not the page "Back to where you were" opens by link: it takes the reopened post's place.)
+  BOOL linking = gLinkedFrom && -gLinkedAt.timeIntervalSinceNow < 6;
+  if (gParked && self == gParkedNav && self.viewControllers.count > gParkedDepth && -gParkedAt.timeIntervalSinceNow > 1.5 &&
+      !linking)
+    RFDropParked(@"dropped (you went further than the screen Reddit opened)");
+}
+%end
+%end
 
 @interface RFHomeScreen : UIViewController
 @end
@@ -1588,6 +2178,11 @@ static void RFWatchCancelledReturn(UIViewController *screen) {
   %orig;
   RFScreenAppearing((UIViewController *)self);
   RFWatchCancelledReturn((UIViewController *)self);
+}
+// Once a swipe back has finished, not as it starts (it can be cancelled).
+- (void)viewDidAppear:(BOOL)animated {
+  %orig;
+  if (gParked) RFResumeParked((UIViewController *)self);
 }
 %end
 %end
@@ -1620,6 +2215,65 @@ static void RFWatchCancelledReturn(UIViewController *screen) {
 %end
 %end
 
+// A custom feed screen notes which feed it is from the custom feed requests made as it opens (its link and
+// Swift code don't go through anything readable): its own, made within a few seconds of it loading while
+// it's on top, or failing that one made just before it loaded. See RFScreenRestoreCustomFeedRequest.
+static __weak UIViewController *gOpeningCustomFeed; // main thread, like the rest
+static NSDate *gOpeningCustomFeedAt;
+static NSString *gCustomFeedPath; // a request with no screen to name yet, and when
+static NSDate *gCustomFeedPathAt;
+static NSString *gNamedPath;      // the last path that named a screen, and when (its own later requests
+static NSDate *gNamedPathAt;      // aren't another screen's)
+
+static const void *kRFCustomFeedOwnKey = &kRFCustomFeedOwnKey; // the path its own request had
+
+static void RFNamedCustomFeed(UIViewController *feed, NSString *path) {
+  RFNoteCustomFeed(feed, path);
+  gNamedPath = path;
+  gNamedPathAt = NSDate.date;
+  gCustomFeedPath = nil;
+}
+
+%group RFCustomFeedHooks
+%hook RFCustomFeedScreen
+- (void)viewDidLoad {
+  %orig;
+  UIViewController *feed = (UIViewController *)self;
+  // A request made just before (it can come first): a first guess, which its own request can still change.
+  if (gCustomFeedPath && -gCustomFeedPathAt.timeIntervalSinceNow < 2) RFNamedCustomFeed(feed, gCustomFeedPath);
+  gOpeningCustomFeed = feed;
+  gOpeningCustomFeedAt = NSDate.date;
+}
+%end
+%end
+
+void RFScreenRestoreCustomFeedRequest(NSURLRequest *request) {
+  if (RFFeedCacheRequestIsIncognito(request)) return;
+  NSDictionary *body = request.HTTPBody.length ? [NSJSONSerialization JSONObjectWithData:request.HTTPBody options:0 error:NULL] : nil;
+  NSDictionary *variables = [body isKindOfClass:NSDictionary.class] ? body[@"variables"] : nil;
+  NSString *path = [variables isKindOfClass:NSDictionary.class] ? variables[@"path"] : nil;
+  id after = [variables isKindOfClass:NSDictionary.class] ? variables[@"after"] : nil;
+  if (![path isKindOfClass:NSString.class] || ([after isKindOfClass:NSString.class] && [after length])) return;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    UIViewController *feed = gOpeningCustomFeed;
+    if (feed && -gOpeningCustomFeedAt.timeIntervalSinceNow < 5 && feed.navigationController.topViewController == feed) {
+      // Once its own request has named it, only that feed (a late one from the screen before isn't it).
+      NSString *own = objc_getAssociatedObject(feed, kRFCustomFeedOwnKey);
+      if (own && ![own isEqualToString:path]) return;
+      objc_setAssociatedObject(feed, kRFCustomFeedOwnKey, path, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+      // A path that can't be read: not the first guess either.
+      objc_setAssociatedObject(feed, kRFCustomFeedKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+      RFNamedCustomFeed(feed, path);
+      return;
+    }
+    gOpeningCustomFeed = nil;
+    // The feed just named asking again (its posts, a refresh, another sort) isn't for the next screen.
+    if ([path isEqualToString:gNamedPath] && -gNamedPathAt.timeIntervalSinceNow < 30) return;
+    gCustomFeedPath = path;
+    gCustomFeedPathAt = NSDate.date;
+  });
+}
+
 void RFSetRestoreOptions(BOOL afterSwipe, NSInteger hours) {
   NSTimeInterval maxAge = hours > 0 ? hours * 60 * 60 : 0;
   RFFeedCacheSetMaxAge(maxAge);
@@ -1634,6 +2288,8 @@ void RFSetRestoreOptions(BOOL afterSwipe, NSInteger hours) {
 
 // Stops a restore under way and stops waiting for covered screens.
 static void RFStopRestoring(NSString *why) {
+  gTabMoveGeneration++; // a move to the You tab or the Inbox still waiting doesn't happen
+  RFDropParked([why stringByReplacingOccurrencesOfString:@"stopped" withString:@"dropped"]);
   if (gPlan) {
     gOutcome = why;
     gStoppedForUser = YES;
@@ -1666,6 +2322,7 @@ void RFSetRestoreScreens(BOOL restore) {
   gTruncatedPosts = [NSMutableSet set];
   gRowsAt = [NSMutableDictionary dictionary];
   gCommentAccounts = [NSMutableDictionary dictionary];
+  gCommentFocus = [NSMutableDictionary dictionary];
   gLastSession = RFReadJSON(@"Session.json");
   // Home and communities, to scroll back a feed that was covered by the screens reopened on top.
   Class home = NSClassFromString(kRFHomeClass), community = NSClassFromString(kRFCommunityClass);
@@ -1673,6 +2330,9 @@ void RFSetRestoreScreens(BOOL restore) {
   if ([community isSubclassOfClass:UIViewController.class]) %init(RFCommunityScreenHooks, RFCommunityScreen = community);
   Class profile = NSClassFromString(kRFProfileClass);
   if ([profile isSubclassOfClass:UIViewController.class]) %init(RFProfileScreenHooks, RFProfileScreen = profile);
+  %init(RFParkedNavigationHooks);
+  Class customFeed = NSClassFromString(kRFCustomFeedClass);
+  if ([customFeed isSubclassOfClass:UIViewController.class]) %init(RFCustomFeedHooks, RFCustomFeedScreen = customFeed);
   gSnapshotAtLaunch = RFNewestSwitcherSnapshot();
   NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
   NSOperationQueue *main = NSOperationQueue.mainQueue;
@@ -1722,5 +2382,6 @@ void RFSetRestoreScreens(BOOL restore) {
                     RFStopRestoring(note.object ? @"stopped (account changed)" : @"stopped (incognito)");
                     RFForgetScreens();
                     RFScreenRestoreForgetComments();
+                    RFForgetSearches();
                   }];
 }

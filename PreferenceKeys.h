@@ -18,6 +18,7 @@
 #define kRedditFilterSwipeRightToCollapse @"kRedditFilterSwipeRightToCollapse" // with swipe on, right swipes collapse
 #define kRedditFilterVideosForYou @"kRedditFilterVideosForYou"
 #define kRedditFilterExtraCards @"kRedditFilterExtraCards" // hide suggestion, promo and survey cards in feeds
+#define kRedditFilterRefreshPill @"kRedditFilterRefreshPill" // hide the floating "new posts" button on Home
 #define kRedditFilterKeywords @"kRedditFilterKeywords" // array of strings
 #define kRedditFilterKeywordComments @"kRedditFilterKeywordComments"
 #define kRedditFilterKeywordCommentReplies @"kRedditFilterKeywordCommentReplies"

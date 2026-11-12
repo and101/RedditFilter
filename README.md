@@ -45,7 +45,7 @@ To open RedditFilter, long press the sidebar button at the top left of Reddit, o
 
 ### Filters
 
-- **Posts and ads**: hide promoted posts and comment ads, recommendations (including the endless **From your feed** list below a post's comments), NSFW posts, the Videos for you carousel, and extra cards such as suggested communities, promos and surveys. These switches show that content when on, so turn one off to hide it. A For You page left short by hidden posts is topped up from the next page.
+- **Posts and ads**: hide promoted posts and comment ads, recommendations (including the endless **From your feed** list below a post's comments), NSFW posts, the Videos for you carousel, extra cards such as suggested communities, promos and surveys, and the floating new posts button at the top of Home. These switches show that content when on, so turn one off to hide it. A For You page left short by hidden posts is topped up from the next page.
 - **Keywords**: hide posts that mention a word or phrase. Matching is whole-word and ignores capitals, and it checks a post's full text, not just the title and preview. With **Filter comments too**, comments that mention a keyword are hidden with their replies, or replaced by a placeholder if you want to keep the replies.
 
 ### Display
@@ -60,7 +60,7 @@ To open RedditFilter, long press the sidebar button at the top left of Reddit, o
 These are new, so they're off by default. They work in any app language.
 
 - **Keep feed position**: stay where you were in For You, Following and Popular, even after Reddit closes. Reddit normally jumps back to the top after 10 minutes away. Pull down to refresh.
-- **Reopen community and post**: brings back the communities, profiles, searches and posts you had open, up to six screens deep, on Home or in the You tab. Posts open at the top, with a **Back to where you were** button that scrolls to the comment you were reading. Communities use their default sort. If you open Reddit from a notification or a link, that screen is shown instead.
+- **Reopen community and post**: brings back the communities, custom feeds, profiles, searches and posts you had open, on Home, in the You tab or in the Inbox. A post opened at a comment (from the Inbox, say) reopens at that comment. Up to six screens are kept, from the bottom; a screen that can't be reopened ends what's kept, and the screens below it still come back. Posts open at the top, with a **Back to where you were** button that scrolls to the comment you were reading, including replies you had expanded and later pages of comments. Communities use their default sort. If you open Reddit from a notification or a link, that screen is shown first, and going back to Home reopens where you were, unless you went further than that screen.
 - **Restore after swiping away** and **Restore for**: by default, your place only comes back if iOS closed Reddit, for 12 hours. You can also have it back after swiping Reddit away, and keep it for 24 hours or with no limit.
 
 ### More

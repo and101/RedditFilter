@@ -267,13 +267,43 @@ NSArray<NSDictionary *> *RFCommentRows(NSData *response) {
     NSDictionary *node = RFDict(row[@"node"]);
     NSString *identifier = RFString(node[@"id"]);
     if (RFDict(row[@"more"]) || ![identifier hasPrefix:@"t1_"]) {
-      [rows addObject:@{@"more" : @YES, @"depth" : depth}];
+      // Its cursor is what Reddit asks with to open it ("N more replies", or the next page at the end).
+      NSString *cursor = RFString(RFDict(row[@"more"])[@"cursor"]);
+      [rows addObject:cursor.length ? @{@"more" : @YES, @"depth" : depth, @"cursor" : cursor} : @{@"more" : @YES, @"depth" : depth}];
       continue;
     }
     NSString *author = RFString(RFDict(node[@"authorInfo"])[@"displayName"]) ?: @"";
     [rows addObject:@{@"id" : identifier, @"author" : author, @"depth" : depth}];
   }
   return rows;
+}
+
+BOOL RFCommentRowsHaveNextPage(NSArray<NSDictionary *> *rows) {
+  NSDictionary *last = rows.lastObject;
+  return [last[@"more"] boolValue] && [last[@"depth"] integerValue] == 0 && [last[@"cursor"] length] && ![last[@"inReplies"] boolValue];
+}
+
+NSArray<NSDictionary *> *RFMergeCommentRows(NSArray<NSDictionary *> *rows, NSString *cursor, NSArray<NSDictionary *> *opened) {
+  if (!cursor.length || !opened) return nil;
+  NSUInteger at = [rows indexOfObjectPassingTest:^BOOL(NSDictionary *row, NSUInteger i, BOOL *stop) {
+    return [row[@"cursor"] isEqualToString:cursor];
+  }];
+  if (at == NSNotFound) return nil;
+  // Replies opened under a comment ("N more replies", not the next page at the end) are marked: the
+  // reopened post can't open them again itself.
+  NSArray *added = opened;
+  if ([rows[at][@"depth"] integerValue] > 0 || [rows[at][@"inReplies"] boolValue]) {
+    NSMutableArray *marked = [NSMutableArray arrayWithCapacity:opened.count];
+    for (NSDictionary *row in opened) {
+      NSMutableDictionary *copy = [row mutableCopy];
+      copy[@"inReplies"] = @YES;
+      [marked addObject:copy];
+    }
+    added = marked;
+  }
+  NSMutableArray *merged = [rows mutableCopy];
+  [merged replaceObjectsInRange:NSMakeRange(at, 1) withObjectsFromArray:added];
+  return merged;
 }
 
 static void RFCollectSearchPosts(id object, NSMutableDictionary<NSString *, NSMutableDictionary *> *posts,
@@ -312,12 +342,46 @@ NSArray<NSDictionary *> *RFSearchResultPosts(NSData *response) {
   return result;
 }
 
+NSDictionary<NSString *, NSString *> *RFSearchRequestScope(NSData *body) {
+  NSDictionary *variables = RFDict(RFDict(RFJSON(body, 0))[@"variables"]);
+  NSString *query = [RFString(variables[@"query"]) stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+  if (!query.length || RFString(variables[@"after"]).length || RFString(variables[@"cursor"]).length) return nil;
+  NSString *community = @"";
+  for (id filter in [variables[@"filters"] isKindOfClass:NSArray.class] ? variables[@"filters"] : @[]) {
+    NSString *value = RFString(RFDict(filter)[@"value"]);
+    // One community only (several, comma-separated, can't be made into a link).
+    if ([RFString(RFDict(filter)[@"key"]) isEqualToString:@"subreddit_names"] && value.length &&
+        [value rangeOfString:@","].location == NSNotFound)
+      community = value;
+  }
+  return @{@"query" : query, @"community" : community};
+}
+
 NSString *RFSearchPostForTexts(NSArray<NSDictionary *> *posts, NSArray<NSString *> *texts) {
   NSSet *shown = [NSSet setWithArray:texts ?: @[]];
   NSMutableArray<NSDictionary *> *matches = [NSMutableArray array];
+  NSMutableSet<NSString *> *ids = [NSMutableSet set];
   for (NSDictionary *post in posts)
-    if ([shown containsObject:post[@"title"]]) [matches addObject:post];
-  if (matches.count == 1) return matches[0][@"id"];
+    if ([shown containsObject:post[@"title"]]) {
+      [matches addObject:post];
+      if (post[@"id"]) [ids addObject:post[@"id"]];
+    }
+  // Copies of one post (from searches repeated) are still one post: unless the screen names a community and
+  // it's another one (a crosspost with the same title).
+  if (ids.count == 1) {
+    NSString *community = nil;
+    for (NSDictionary *post in matches)
+      if ([post[@"community"] length]) community = post[@"community"];
+    if (!community.length || [community hasPrefix:@"u_"]) return ids.anyObject;
+    BOOL namesOne = NO, namesThis = NO;
+    for (NSString *text in texts) {
+      if ([text rangeOfString:@"r/"].location == NSNotFound) continue;
+      namesOne = YES;
+      if ([text rangeOfString:[@"r/" stringByAppendingString:community] options:NSCaseInsensitiveSearch].location != NSNotFound)
+        namesThis = YES;
+    }
+    return !namesOne || namesThis ? ids.anyObject : nil;
+  }
   // Two with the same title: the one whose community is shown ("r/name" on the screen).
   NSString *found = nil;
   for (NSDictionary *post in matches) {

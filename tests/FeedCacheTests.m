@@ -436,6 +436,29 @@ int main(void) {
     Check(RFCommentRowForCell(rows, @[], @[ @"von", @"bob", @"vor" ], nil, NSNotFound) == 1,
           @"Words of the description when there's no username label");
     Check(RFCommentRows([@"{}" dataUsingEncoding:NSUTF8StringEncoding]) == nil, @"No rows from something else");
+    // "N more replies" opened: its row becomes what Reddit sent, in the same place.
+    NSDictionary *moreJSON = @{@"data": @{@"postInfoById": @{@"commentForest": @{@"trees": @[
+      tree(@"t1_a", @"ann", 0), @{@"depth": @1, @"more": @{@"count": @2, @"cursor": @"commenttree:x"}, @"node": NSNull.null},
+      tree(@"t1_c", @"cat", 0), @{@"depth": @0, @"more": @{@"count": @9, @"cursor": @"commenttree:end"}, @"node": NSNull.null},
+    ]}}}};
+    NSArray *withMore = RFCommentRows([NSJSONSerialization dataWithJSONObject:moreJSON options:0 error:NULL]);
+    Check([withMore[1][@"cursor"] isEqual:@"commenttree:x"], @"A more-replies row keeps its cursor");
+    NSArray *opened = @[ @{@"id": @"t1_x", @"author": @"xan", @"depth": @1}, @{@"id": @"t1_y", @"author": @"yul", @"depth": @2} ];
+    NSArray *merged = RFMergeCommentRows(withMore, @"commenttree:x", opened);
+    Check(merged.count == 5 && [merged[1][@"id"] isEqual:@"t1_x"] && [merged[2][@"id"] isEqual:@"t1_y"] &&
+              [merged[3][@"id"] isEqual:@"t1_c"], @"Opened replies go where their row was");
+    NSArray *paged = RFMergeCommentRows(merged, @"commenttree:end", @[ @{@"id": @"t1_z", @"author": @"zed", @"depth": @0} ]);
+    Check(paged.count == 5 && [paged.lastObject[@"id"] isEqual:@"t1_z"], @"The next page goes at the end");
+    Check([merged[1][@"inReplies"] boolValue] && ![paged.lastObject[@"inReplies"] boolValue],
+          @"Replies opened under a comment are marked, the next page isn't");
+    Check(RFCommentRowsHaveNextPage(withMore) && !RFCommentRowsHaveNextPage(paged), @"Tell whether there's a next page");
+    // Replies opened inside opened replies stay marked, even from a top-level cursor's level.
+    NSArray *nestedMore = RFMergeCommentRows(withMore, @"commenttree:x",
+        @[ @{@"id": @"t1_x", @"author": @"xan", @"depth": @1}, @{@"more": @YES, @"depth": @2, @"cursor": @"commenttree:deep"} ]);
+    NSArray *nested = RFMergeCommentRows(nestedMore, @"commenttree:deep", @[ @{@"id": @"t1_w", @"author": @"wil", @"depth": @2} ]);
+    Check([nested[2][@"inReplies"] boolValue] && [nested[2][@"id"] isEqual:@"t1_w"], @"Replies opened inside opened replies are marked");
+    Check(RFMergeCommentRows(merged, @"commenttree:gone", opened) == nil && RFMergeCommentRows(merged, nil, opened) == nil,
+          @"No merge for a cursor that isn't there");
 
     // Search results: each post once, with its community when one copy gives it.
     NSDictionary *searchJSON = @{@"data": @{@"search": @{@"dynamic": @{@"components": @{@"main": @{@"edges": @[
@@ -458,6 +481,30 @@ int main(void) {
     Check(RFSearchPostForTexts(searchPosts, @[ @"Something else" ]) == nil &&
               RFSearchResultPosts([@"[]" dataUsingEncoding:NSUTF8StringEncoding]) == nil,
           @"No post from other texts or another response");
+    // The same post recorded twice (a search repeated) is still one post.
+    NSArray *searchTwice = [searchPosts arrayByAddingObject:@{@"id": @"t3_a", @"title": @"The best apple pie ever"}];
+    Check([RFSearchPostForTexts(searchTwice, @[ @"The best apple pie ever" ]) isEqual:@"t3_a"],
+          @"Copies of one post still name it");
+    Check(RFSearchPostForTexts(searchPosts, @[ @"The best apple pie ever", @"r/Cooking" ]) == nil &&
+              [RFSearchPostForTexts(searchPosts, @[ @"The best apple pie ever", @"r/Baking" ]) isEqual:@"t3_a"],
+          @"A title match in another community shown isn't it");
+    // Where a search looked: a community (subreddit_names filter) or all of Reddit.
+    NSData *(^searchBody)(NSDictionary *) = ^NSData *(NSDictionary *variables) {
+      return [NSJSONSerialization dataWithJSONObject:@{@"operationName": @"SearchDynamic", @"variables": variables} options:0 error:NULL];
+    };
+    NSDictionary *scope = RFSearchRequestScope(searchBody(@{@"query": @" cats ", @"filters": @[
+      @{@"key": @"safe_search", @"value": @"unset"}, @{@"key": @"subreddit_names", @"value": @"askreddit"}]}));
+    Check([scope[@"query"] isEqual:@"cats"] && [scope[@"community"] isEqual:@"askreddit"], @"Read a search in a community");
+    scope = RFSearchRequestScope(searchBody(@{@"query": @"cats", @"filters": @[@{@"key": @"safe_search", @"value": @"unset"}]}));
+    Check([scope[@"community"] isEqual:@""], @"Read a search of all of Reddit");
+    Check([RFSearchRequestScope(searchBody(@{@"query": @"cats", @"after": NSNull.null}))[@"query"] isEqual:@"cats"] &&
+              [RFSearchRequestScope(searchBody(@{@"query": @"cats", @"after": @""}))[@"query"] isEqual:@"cats"],
+          @"An empty or null after is still the first page");
+    Check(RFSearchRequestScope(searchBody(@{@"query": @"cats", @"after": @"x"})) == nil &&
+              RFSearchRequestScope(searchBody(@{@"query": @""})) == nil && RFSearchRequestScope(nil) == nil &&
+              [RFSearchRequestScope(searchBody(@{@"query": @"cats", @"filters": @[
+                @{@"key": @"subreddit_names", @"value": @"a,b"}]}))[@"community"] isEqual:@""],
+          @"No scope from a later page, an empty query or no body; several communities count as all");
     [NSFileManager.defaultManager removeItemAtPath:directory error:NULL];
 
     puts("All feed cache tests passed.");

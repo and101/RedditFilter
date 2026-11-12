@@ -1,7 +1,7 @@
 // ScreenRestore.h
 //
 // Restore open community and post: after iOS closes Reddit in the background, reopens the communities,
-// profiles and posts that were open on Home or in the You tab, with a jump back to your comment.
+// profiles and posts that were open on Home, in the You tab or in the Inbox, with a jump back to your comment.
 
 #import <Foundation/Foundation.h>
 
@@ -21,7 +21,15 @@ BOOL RFScreenRestoreWantsComments(void);
 NSData *RFScreenRestoreCommentsPage(NSURLRequest *request, NSData *page);
 // Takes a search's results (SearchDynamic) as they're handed to the app, so a post opened from them in the
 // full-screen viewer can be named. Always returns nil.
-NSData *RFScreenRestoreSearchPage(NSURLRequest *request, NSData *page);
+// `generation` is RFScreenRestoreSearchGeneration() as the request was made: an answer from before the
+// searches were forgotten (another account) is dropped. `order` is RFScreenRestoreNextSearchOrder() as the
+// request was made: an older answer arriving later doesn't change where a newer search looked.
+NSData *RFScreenRestoreSearchPage(NSURLRequest *request, NSData *page, unsigned generation, unsigned long long order);
+unsigned long long RFScreenRestoreNextSearchOrder(void);
+unsigned RFScreenRestoreSearchGeneration(void);
+// Takes a custom feed's request (FetchMulti, MultiredditPostsSdui) as it's made, to name the custom feed
+// screen being opened.
+void RFScreenRestoreCustomFeedRequest(NSURLRequest *request);
 // Forgets every post's comments (the comment filters changed, another account, incognito).
 void RFScreenRestoreForgetComments(void);
 

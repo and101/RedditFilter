@@ -31,6 +31,7 @@ static NSString *const kRFBackupSettingKeys[] = {
     kRedditFilterSwipeRightToCollapse,
     kRedditFilterVideosForYou,
     kRedditFilterExtraCards,
+    kRedditFilterRefreshPill,
     kRedditFilterKeywordComments,
     kRedditFilterKeywordCommentReplies,
     kRedditFilterRedgifsDirect,

@@ -53,12 +53,21 @@ _TtC8PDP_Impl17PDPViewController
 _TtC16Search_Core_Impl27SearchResultsViewController
 _TtC16Search_Core_Impl23TypeaheadViewController
 SearchDynamic
+subreddit_names
+_TtC9MultiFeed23MultiPageViewController
+FetchMulti
+MultiredditPostsSdui
 reddit_tab_bar__profile_button
+reddit_tab_bar__inbox_button
+_TtC16MainTabBar_Inbox19InboxViewController
+focusedCommentContext
 initialPostPk
 sceneWillResignActive:
 displayName
 isTruncatedFetch
 commentForest
+# Refresh button on Home hidden (RefreshPill.x)
+_TtC9Home_Impl22RefreshPillWrapperView
 # "From your feed" hidden below a post's comments (PostPageFeed.x)
 FeedStackSliceViewModel
 # Keep feed position: Following and Popular (FeedCache.m)

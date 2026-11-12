@@ -31,6 +31,7 @@ typedef NS_ENUM(NSInteger, RFToggleTag) {
   RFAwards, RFScores, RFColoured, RFApollo, RFKeywordComments, RFKeywordReplies,
   RFUpdates, RFDirect, RFSD, RFMobileSD, RFAutoMod, RFDiagnostics,
   RFSwipe, RFLeft, RFRight, RFHaptics, RFTap, RFKeepFeed, RFRestoreScreens, RFRestoreAfterSwipe,
+  RFRefreshPill,
 };
 static const RFToggleRow kToggleRows[] = {
     {kRedditFilterPromoted, @"Promoted", @"Show ads in feeds and comments", @"rpl3/tag,icon_tag", YES},
@@ -86,6 +87,8 @@ static const RFToggleRow kToggleRows[] = {
      @"rpl3/comment,icon_comment", NO, kRedditFilterKeepFeedPosition},
     {kRedditFilterRestoreAfterSwipe, @"Restore after swiping away", @"Not only when iOS closed Reddit",
      @"rpl3/swipeUp,rpl3/refresh,icon_refresh", NO, kRedditFilterKeepFeedPosition},
+    {kRedditFilterRefreshPill, @"Refresh button", @"Show the new posts button on Home",
+     @"rpl3/refresh,icon_refresh", YES},
 };
 static const NSInteger kToggleRowCount = sizeof(kToggleRows) / sizeof(kToggleRows[0]);
 static const NSInteger kAboutUpdateRow = 1;
@@ -486,7 +489,7 @@ static NSArray<NSNumber *> *RFSections(id settings) {
 // Toggle tags are indexes into the single table, independent of section positions.
 static NSArray<NSNumber *> *RFTags(RFSection section) {
   switch (section) {
-    case RFSectionFilters: return @[@(RFPromoted), @(RFRecommended), @(RFNSFW), @(RFVideos), @(RFExtraCards)];
+    case RFSectionFilters: return @[@(RFPromoted), @(RFRecommended), @(RFNSFW), @(RFVideos), @(RFExtraCards), @(RFRefreshPill)];
     case RFSectionAppearance: return @[@(RFAwards), @(RFScores), @(RFColoured), @(RFApollo)]; // then Article links
     case RFSectionSwipe: return @[@(RFSwipe), @(RFLeft), @(RFRight), @(RFHaptics), @(RFTap)];
     case RFSectionCollapse: return @[@(RFAutoMod)];
