@@ -176,6 +176,12 @@ int main(void) {
                                                               usingBlock:^(NSNotification *note) {
                                                                 announced = [note.object isEqual:@"HomeFeedSdui"];
                                                               }];
+    // Latest (Home's feed sorted by new, from the side menu) uses the same operation: not For You.
+    NSMutableURLRequest *latest = [Request(@"t2_me", nil) mutableCopy];
+    NSMutableDictionary *latestBody = [NSJSONSerialization JSONObjectWithData:latest.HTTPBody options:NSJSONReadingMutableContainers error:NULL];
+    latestBody[@"variables"][@"sort"] = @"NEW";
+    latest.HTTPBody = [NSJSONSerialization dataWithJSONObject:latestBody options:0 error:NULL];
+    Check(RFFeedCachePage(@"HomeFeedSdui", latest, fresh) == nil, @"Don't replay For You into Latest");
     NSData *restored = RFFeedCachePage(@"HomeFeedSdui", Request(@"t2_me", nil), fresh);
     Check([PostIds(restored) isEqual:(@[ @"t3_a", @"t3_b", @"t3_c", @"t3_d", @"t3_e" ])],
           @"Show the kept feed in the first page after a relaunch");

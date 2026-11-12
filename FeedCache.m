@@ -468,6 +468,7 @@ static const struct {
     {@"PopularFeedSdui", @"PopularFeed.json"}, // Popular
     {@"SubredditFeedSdui", @"CommunityFeed.json"}, // the last community opened (Restore open community and post)
 };
+static const NSInteger kRFHomeFeed = 0; // For You
 static const NSInteger kRFCommunityFeed = 3;
 enum { kRFFeedCount = sizeof(kRFFeeds) / sizeof(kRFFeeds[0]) };
 
@@ -716,6 +717,10 @@ NSData *RFFeedCachePageFrom(NSString *operation, NSURLRequest *request, NSData *
   if (!account) return nil;
   NSDictionary *variables = RFDict(RFDict(RFJSON(request.HTTPBody, 0))[@"variables"]);
   if (!variables) return nil;
+  // Home's feed sorted another way (Latest, from the side menu) asks with the same operation: only For You
+  // (sort BEST, or none) is kept and replayed.
+  NSString *sort = RFString(variables[@"sort"]);
+  if (feed == kRFHomeFeed && sort.length && ![sort isEqualToString:@"BEST"]) return nil;
   NSString *after = RFString(variables[@"after"]);
   // A community feed is kept for one community and sort at a time.
   NSString *key = nil;
