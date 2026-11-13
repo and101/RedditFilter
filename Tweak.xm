@@ -396,6 +396,8 @@ static BOOL RFIsAPIHost(NSString *host) {
   if (operation && RFFeedCacheEnabled()) RFFeedCacheNoteRequest(operation, request);
 
 
+  // Restore open community and post (and named feed screens) watches some answers, not just the feeds.
+  BOOL restoreWatches = RFScreenRestoreWantsComments();
   // Keep feed position: the pages of Home's feeds are kept, and each feed's first page after iOS closed
   // the app starts where you were (FeedCache.m). Wraps the app's handler, so it sees each page as it's
   // finally handed over (filtered, so kept posts aren't filtered or counted twice).
@@ -403,12 +405,15 @@ static BOOL RFIsAPIHost(NSString *host) {
     void (^appHandler)(NSData *, NSURLResponse *, NSError *) = completionHandler;
     unsigned generation = RFFeedCacheGeneration(); // as it's asked for, with these filters and this account
     completionHandler = ^(NSData *data, NSURLResponse *response, NSError *error) {
-      if (RFIsOK(response, error)) data = RFFeedCachePageFrom(operation, request, data, generation) ?: data;
+      if (RFIsOK(response, error)) {
+        // Which screen it's for: Popular, or Latest from the side menu (both are Reddit's own feed screens).
+        if (restoreWatches) RFScreenRestoreFeedPage(operation, request);
+        data = RFFeedCachePageFrom(operation, request, data, generation) ?: data;
+      }
       appHandler(data, response, error);
     };
   }
   // Restore open community and post: the comments of each post opened, to note where you were in them.
-  BOOL restoreWatches = RFScreenRestoreWantsComments();
   if (restoreWatches && [operation isEqualToString:@"PostInfoByIdComments"]) {
     void (^appHandler)(NSData *, NSURLResponse *, NSError *) = completionHandler;
     completionHandler = ^(NSData *data, NSURLResponse *response, NSError *error) {

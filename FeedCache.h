@@ -72,9 +72,14 @@ NSString *RFSearchPostForTexts(NSArray<NSDictionary *> *posts, NSArray<NSString 
 
 #pragma mark - The kept feeds (thread-safe)
 
-// Home's three feeds are kept separately: For You (HomeFeedSdui), Following (FollowingFeed) and
-// Popular (PopularFeedSdui). Each is restored the first time it loads after a relaunch.
+// Home's feeds are kept separately, each with its own name: For You ("HomeFeedSdui"), Latest
+// ("LatestFeed", Home's feed sorted by new, from the side menu), Following ("FollowingFeed") and
+// Popular ("PopularFeedSdui"). Each is restored the first time it loads after a relaunch, and the
+// last community opened is the fifth ("SubredditFeedSdui", see below). Latest and Popular from the side
+// menu are restored when the screen restore reopens them (see RFFeedCacheArmFeed).
 BOOL RFFeedCacheKeepsOperation(NSString *operation);
+// Which of those a request's page is for, as a feed's name, or nil if it isn't one of them.
+NSString *RFFeedNameForPage(NSString *operation, NSURLRequest *request);
 
 // The last community opened is kept too while this is on (Restore open community and post). It's only
 // replayed when RFFeedCacheArmCommunity asked for it, and only in the sort it was kept in. Off forgets it.
@@ -83,6 +88,17 @@ void RFFeedCacheSetKeepsCommunities(BOOL keeps);
 void RFFeedCacheArmCommunity(NSString *name);
 // The kept community (lowercased) and its sort, or nil.
 NSString *RFFeedCacheCommunity(NSString **sort);
+
+// Latest, and Popular when the side menu opens it as a screen pushed on Home, are only replayed when the
+// restore reopens that screen: opening them starts at the top, so a feed kept hours ago doesn't come back
+// with the newest posts below it (Latest is sorted by new). The restore arms it with RFFeedCacheArmFeed;
+// Popular as one of Home's own tabs replays on its first page as before.
+void RFFeedCacheArmFeed(NSString *feed);
+// Takes the arm back (the screen couldn't be opened), so a screen opened later doesn't use it.
+void RFFeedCacheDisarmFeed(NSString *feed);
+// A feed screen (Popular, Latest) has been pushed on a tab, as the side menu's rows do: the first page of a
+// feed that comes now is for it, not for one of Home's tabs.
+void RFFeedCacheNotePushedFeedScreen(void);
 
 // Takes the login token of each request (only the feeds' and comments' count): incognito (a logged-out
 // token after a logged-in one in the same run) keeps and notes nothing, and restores nothing.
@@ -120,7 +136,7 @@ void RFFeedCacheSetDirectory(NSString *directory);
 
 // Takes a feed page as it's handed to the app. Returns the page to hand over instead (the feed's
 // first page after a relaunch, with the kept feed), or nil to hand it over as it is. After a replay,
-// RFFeedCacheDidReplayNotification goes out on the main queue (object: the operation) so the list
+// RFFeedCacheDidReplayNotification goes out on the main queue (object: the feed's name) so the list
 // can be scrolled back.
 NSData *RFFeedCachePage(NSString *operation, NSURLRequest *request, NSData *page);
 extern NSNotificationName const RFFeedCacheDidReplayNotification;
@@ -128,12 +144,12 @@ extern NSNotificationName const RFFeedCacheDidReplayNotification;
 // The feeds waiting to be scrolled back.
 NSArray<NSString *> *RFFeedCacheRestoringFeeds(void);
 // While a feed's scroll back is due: where its noted post is among the replayed kept posts, and how
-// far into it to scroll. NO once it's done.
-BOOL RFFeedCacheRestoreTarget(NSString *operation, NSUInteger *index, double *offset);
+// far into it to scroll. NO once it's done. `feed` is one of the names above.
+BOOL RFFeedCacheRestoreTarget(NSString *feed, NSUInteger *index, double *offset);
 // Which of a feed's replayed kept posts a label on screen belongs to, or NSNotFound.
-NSUInteger RFFeedCacheReplayedIndex(NSString *operation, NSString *label);
+NSUInteger RFFeedCacheReplayedIndex(NSString *feed, NSString *label);
 // The feed's scroll back is done (or given up).
-void RFFeedCacheEndRestore(NSString *operation);
+void RFFeedCacheEndRestore(NSString *feed);
 
 // The app is going to the background: notes the post at the top of each kept feed, found from the
 // post labels of each list on screen (each feed takes the list with the most of its posts), and how

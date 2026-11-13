@@ -39,6 +39,18 @@ static NSURLRequest *FeedRequest(NSString *operation, NSString *account, NSStrin
 
 static NSURLRequest *Request(NSString *account, NSString *after) { return FeedRequest(@"HomeFeedSdui", account, after); }
 
+// Home's feed in one of its sorts (Latest is sort NEW; For You is BEST, or none at all).
+static NSURLRequest *SortedRequest(NSString *account, NSString *after, NSString *sort) {
+  NSMutableURLRequest *request = [FeedRequest(@"HomeFeedSdui", account, after) mutableCopy];
+  NSMutableDictionary *body = [[NSJSONSerialization JSONObjectWithData:request.HTTPBody options:0 error:NULL] mutableCopy];
+  NSMutableDictionary *variables = [body[@"variables"] mutableCopy];
+  if (sort) variables[@"sort"] = sort;
+  else [variables removeObjectForKey:@"sort"];
+  body[@"variables"] = variables;
+  request.HTTPBody = [NSJSONSerialization dataWithJSONObject:body options:0 error:NULL];
+  return request;
+}
+
 // A post card as Home sends it (classic layout cells).
 static NSDictionary *Card(NSString *postId, NSString *community, NSString *title) {
   return @{@"node": @{
@@ -176,12 +188,21 @@ int main(void) {
                                                               usingBlock:^(NSNotification *note) {
                                                                 announced = [note.object isEqual:@"HomeFeedSdui"];
                                                               }];
-    // Latest (Home's feed sorted by new, from the side menu) uses the same operation: not For You.
-    NSMutableURLRequest *latest = [Request(@"t2_me", nil) mutableCopy];
-    NSMutableDictionary *latestBody = [NSJSONSerialization JSONObjectWithData:latest.HTTPBody options:NSJSONReadingMutableContainers error:NULL];
-    latestBody[@"variables"][@"sort"] = @"NEW";
-    latest.HTTPBody = [NSJSONSerialization dataWithJSONObject:latestBody options:0 error:NULL];
-    Check(RFFeedCachePage(@"HomeFeedSdui", latest, fresh) == nil, @"Don't replay For You into Latest");
+    // Latest (Home's feed sorted by new, from the side menu) is its own feed: it doesn't get For You's
+    // kept posts (nor For You its own).
+    Check([RFFeedNameForPage(@"HomeFeedSdui", Request(@"t2_me", nil)) isEqual:@"HomeFeedSdui"] &&
+              [RFFeedNameForPage(@"HomeFeedSdui", SortedRequest(@"t2_me", nil, @"BEST")) isEqual:@"HomeFeedSdui"] &&
+              [RFFeedNameForPage(@"HomeFeedSdui", SortedRequest(@"t2_me", nil, @"NEW")) isEqual:@"LatestFeed"],
+          @"Tell Latest (sorted by new) from For You");
+    Check(RFFeedNameForPage(@"HomeFeedSdui", SortedRequest(@"t2_me", nil, @"TOP")) == nil &&
+              [RFFeedNameForPage(@"FollowingFeed", FeedRequest(@"FollowingFeed", @"t2_me", nil)) isEqual:@"FollowingFeed"] &&
+              [RFFeedNameForPage(@"PopularFeedSdui", FeedRequest(@"PopularFeedSdui", @"t2_me", nil)) isEqual:@"PopularFeedSdui"] &&
+              RFFeedNameForPage(@"SubredditFeed", nil) == nil && RFFeedNameForPage(nil, nil) == nil,
+          @"Only the kept feeds' pages are named");
+    Check([RFFeedNameForPage(@"SubredditFeedSdui", FeedRequest(@"SubredditFeedSdui", @"t2_me", nil)) isEqual:@"SubredditFeedSdui"],
+          @"Name a community's feed too");
+    Check(RFFeedCachePage(@"HomeFeedSdui", SortedRequest(@"t2_me", nil, @"NEW"), fresh) == nil,
+          @"Don't replay For You into Latest");
     NSData *restored = RFFeedCachePage(@"HomeFeedSdui", Request(@"t2_me", nil), fresh);
     Check([PostIds(restored) isEqual:(@[ @"t3_a", @"t3_b", @"t3_c", @"t3_d", @"t3_e" ])],
           @"Show the kept feed in the first page after a relaunch");
@@ -232,26 +253,29 @@ int main(void) {
     Check(![NSFileManager.defaultManager fileExistsAtPath:path], @"Forget the kept feed when turned off");
     Check(RFFeedCachePage(@"HomeFeedSdui", Request(@"t2_me", nil), first) == nil, @"Keep nothing while off");
 
-    // Following and Popular are kept apart from For You, and each takes its own list when leaving.
+    // Latest, Following and Popular are kept apart from For You, and each takes its own list when leaving.
     RFFeedCacheSetDirectory(directory);
     RFFeedCacheSetEnabled(YES);
     Check(RFFeedCacheKeepsOperation(@"FollowingFeed") && RFFeedCacheKeepsOperation(@"PopularFeedSdui") &&
               !RFFeedCacheKeepsOperation(@"SubredditFeed") && !RFFeedCacheKeepsOperation(nil),
-          @"Keep Home's three feeds only");
+          @"Keep Home's feeds and Popular only");
     NSData *forYou = Page(@[ Card(@"t3_a", @"r/one", @"Alpha"), Card(@"t3_b", @"r/two", @"Beta"), Card(@"t3_s", @"r/s", @"Shared") ], nil);
     NSData *following = Page(@[ Card(@"t3_s", @"r/s", @"Shared"), Preview(@"t3_g", @"r/g", @"Gee") ], nil);
     NSDictionary *previews = RFFeedCacheAddingPage(nil, @"t2_me", nil, following);
     Check([RFFeedCacheMatchingPosts(previews, @[ @"r/g, Gee, 3 upvotes", @"r/x, Gee" ]) isEqual:(@[ @"t3_g", NSNull.null ])],
           @"Find posts in Following's newer cards");
     NSData *popular = PageIn(@"popularV3", @[ Card(@"t3_p", @"r/p", @"Pop"), Card(@"t3_q", @"r/q", @"Queue") ], nil);
+    NSData *latest = Page(@[ Card(@"t3_l", @"r/l", @"Ell"), Card(@"t3_p", @"r/p", @"Pop") ], nil);
     RFFeedCachePage(@"HomeFeedSdui", Request(@"t2_me", nil), forYou);
+    RFFeedCachePage(@"HomeFeedSdui", SortedRequest(@"t2_me", nil, @"NEW"), latest);
     RFFeedCachePage(@"FollowingFeed", FeedRequest(@"FollowingFeed", @"t2_me", nil), following);
     RFFeedCachePage(@"PopularFeedSdui", FeedRequest(@"PopularFeedSdui", @"t2_me", nil), popular);
     saved = dispatch_semaphore_create(0);
     // Following's list (Shared, Gee) also has a For You post, and For You's list (Beta, Shared) a
-    // Following one: each still takes its own.
-    RFFeedCacheNoteLeaving(@[ @[ @"r/s, Shared", @"r/g, Gee" ], @[ @"r/two, Beta", @"r/s, Shared" ], @[ @"r/q, Queue" ] ],
-                           @[ @[ @1, @2 ], @[ @3, @4 ], @[ @5 ] ], ^{
+    // Following one: each still takes its own. Latest's list (Ell, Pop) shares a post with Popular.
+    RFFeedCacheNoteLeaving(@[ @[ @"r/s, Shared", @"r/g, Gee" ], @[ @"r/two, Beta", @"r/s, Shared" ], @[ @"r/q, Queue" ],
+                              @[ @"r/l, Ell", @"r/p, Pop" ] ],
+                           @[ @[ @1, @2 ], @[ @3, @4 ], @[ @5 ], @[ @6, @7 ] ], ^{
       dispatch_semaphore_signal(saved);
     });
     Check(dispatch_semaphore_wait(saved, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0, @"Save all feeds when leaving");
@@ -264,6 +288,10 @@ int main(void) {
     Check([saved_(@"FollowingFeed.json")[@"position"] isEqual:@"t3_s"] && [saved_(@"FollowingFeed.json")[@"offset"] isEqual:@1],
           @"Note Following's place from its own list");
     Check([saved_(@"PopularFeed.json")[@"position"] isEqual:@"t3_q"], @"Note Popular's place");
+    Check([saved_(@"LatestFeed.json")[@"position"] isEqual:@"t3_l"] && [saved_(@"LatestFeed.json")[@"offset"] isEqual:@6],
+          @"Keep Latest in its own file, with its place");
+    Check([[[saved_(@"HomeFeed.json")[@"edges"] valueForKeyPath:@"node.groupId"] description] rangeOfString:@"t3_l"].location == NSNotFound,
+          @"Latest's posts aren't kept as For You's");
 
     RFFeedCacheSetDirectory(directory); // relaunch: Reddit opens on Following
     NSData *freshFollowing = Page(@[ Card(@"t3_h", @"r/h", @"Aitch") ], nil);
@@ -272,11 +300,26 @@ int main(void) {
     Check([RFFeedCacheRestoringFeeds() isEqual:@[ @"FollowingFeed" ]] &&
               RFFeedCacheReplayedIndex(@"HomeFeedSdui", @"r/s, Shared") == NSNotFound,
           @"Only Following is waiting to scroll back");
-    NSData *pop = RFFeedCachePage(@"PopularFeedSdui", FeedRequest(@"PopularFeedSdui", @"t2_me", nil),
-                                  PageIn(@"popularV3", @[ Card(@"t3_z", @"r/z", @"Zed") ], nil));
-    Check([PostIds(pop) isEqual:(@[ @"t3_p", @"t3_q", @"t3_z" ])], @"Restore Popular when it's first opened");
+    // Popular as one of Home's own feed tabs (accounts where Reddit still shows the feed strip) replays on
+    // its first page as before. Opened from the side menu it's a screen pushed on Home, and only the restore
+    // reopening it replays it (see below).
+    NSData *freshPopular = PageIn(@"popularV3", @[ Card(@"t3_z", @"r/z", @"Zed") ], nil);
+    NSData *pop = RFFeedCachePage(@"PopularFeedSdui", FeedRequest(@"PopularFeedSdui", @"t2_me", nil), freshPopular);
+    Check([PostIds(pop) isEqual:(@[ @"t3_p", @"t3_q", @"t3_z" ])], @"Restore Popular as one of Home's feed tabs");
+    RFFeedCacheEndRestore(@"PopularFeedSdui");
     NSData *home = RFFeedCachePage(@"HomeFeedSdui", Request(@"t2_me", nil), Page(@[ Card(@"t3_y", @"r/y", @"Why") ], nil));
     Check([PostIds(home) isEqual:(@[ @"t3_a", @"t3_b", @"t3_s", @"t3_y" ])], @"Restore For You when it's first opened");
+    // Latest from the side menu: its own kept posts, on its own first page, when the restore reopens it.
+    RFFeedCacheArmFeed(@"LatestFeed");
+    NSData *latestBack = RFFeedCachePage(@"HomeFeedSdui", SortedRequest(@"t2_me", nil, @"NEW"),
+                                         Page(@[ Card(@"t3_l2", @"r/l", @"Newer") ], nil));
+    Check([PostIds(latestBack) isEqual:(@[ @"t3_l", @"t3_p", @"t3_l2" ])], @"Restore Latest when the restore reopens it");
+    Check([RFFeedCacheRestoringFeeds() containsObject:@"LatestFeed"], @"Latest is waiting to scroll back too");
+    Check(RFFeedCacheRestoreTarget(@"LatestFeed", &index, &offset) && index == 0 && offset == 6,
+          @"Ask Latest for a scroll back to its noted post");
+    Check(RFFeedCacheReplayedIndex(@"LatestFeed", @"r/p, Pop") == 1 &&
+              RFFeedCacheReplayedIndex(@"HomeFeedSdui", @"r/p, Pop") == NSNotFound,
+          @"Place Latest's labels, apart from For You's");
     for (NSString *feed in RFFeedCacheRestoringFeeds()) RFFeedCacheEndRestore(feed);
 
     saved = dispatch_semaphore_create(0);
@@ -336,7 +379,8 @@ int main(void) {
     RFFeedCacheSetEnabled(NO);
     for (int i = 0; i < 50 && [NSFileManager.defaultManager fileExistsAtPath:[directory stringByAppendingPathComponent:@"FollowingFeed.json"]]; i++)
       usleep(20000);
-    Check(!saved_(@"HomeFeed.json") && !saved_(@"FollowingFeed.json") && !saved_(@"PopularFeed.json"),
+    Check(!saved_(@"HomeFeed.json") && !saved_(@"LatestFeed.json") && !saved_(@"FollowingFeed.json") &&
+              !saved_(@"PopularFeed.json"),
           @"Forget every kept feed when turned off");
 
     // Incognito: a logged-out token after a logged-in one in the same run keeps, notes and restores nothing.
@@ -512,6 +556,80 @@ int main(void) {
                 @{@"key": @"subreddit_names", @"value": @"a,b"}]}))[@"community"] isEqual:@""],
           @"No scope from a later page, an empty query or no body; several communities count as all");
     [NSFileManager.defaultManager removeItemAtPath:directory error:NULL];
+
+    // Popular and Latest from the side menu: screens pushed on Home, which the side menu opens fresh, so a
+    // kept feed doesn't come back with the newest posts below it (Latest is sorted by new). Only the screen
+    // the restore reopens replays the kept feed (RFFeedCacheArmFeed); Popular as one of Home's own tabs,
+    // where the account still has the feed strip, replays on its first page as before.
+    gTokenKind = @"user";
+    NSString *sideMenu = [NSTemporaryDirectory() stringByAppendingPathComponent:
+                                              [NSString stringWithFormat:@"feedcache-%@", NSUUID.UUID.UUIDString]];
+    NSURLRequest *popularRequest = FeedRequest(@"PopularFeedSdui", @"t2_me", nil), *latestRequest = SortedRequest(@"t2_me", nil, @"NEW");
+    NSData *sidePopular = PageIn(@"popularV3", @[ Card(@"t3_p", @"r/p", @"Pop"), Card(@"t3_q", @"r/q", @"Queue") ], nil);
+    NSData *sideLatest = Page(@[ Card(@"t3_l", @"r/l", @"Ell"), Card(@"t3_p", @"r/p", @"Pop") ], nil);
+    NSData *newerPopular = PageIn(@"popularV3", @[ Card(@"t3_p2", @"r/p", @"Pop two") ], nil);
+    NSData *newerLatest = Page(@[ Card(@"t3_l2", @"r/l", @"Ell two") ], nil);
+    RFFeedCacheSetDirectory(sideMenu);
+    RFFeedCacheSetEnabled(YES);
+    RFFeedCacheSetColdReplayAllowed(YES);
+    RFFeedCachePage(@"PopularFeedSdui", popularRequest, sidePopular);
+    RFFeedCachePage(@"HomeFeedSdui", latestRequest, sideLatest);
+    saved = dispatch_semaphore_create(0);
+    RFFeedCacheNoteLeaving(@[ @[ @"r/q, Queue, 3 upvotes" ], @[ @"r/l, Ell, 2 upvotes" ] ], @[ @[ @10 ], @[ @20 ] ], ^{
+      dispatch_semaphore_signal(saved);
+    });
+    Check(dispatch_semaphore_wait(saved, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0, @"Save the side menu's feeds");
+
+    RFFeedCacheSetDirectory(sideMenu); // relaunch
+    RFFeedCacheNotePushedFeedScreen(); // the side menu's row pushes it on Home
+    Check(RFFeedCachePage(@"PopularFeedSdui", popularRequest, newerPopular) == nil &&
+              ![RFFeedCacheRestoringFeeds() containsObject:@"PopularFeedSdui"],
+          @"Don't replay Popular opened fresh from the side menu");
+    RFFeedCacheNotePushedFeedScreen();
+    Check(RFFeedCachePage(@"HomeFeedSdui", latestRequest, newerLatest) == nil &&
+              ![RFFeedCacheRestoringFeeds() containsObject:@"LatestFeed"],
+          @"Don't replay Latest opened fresh from the side menu");
+
+    // Another feed's first page can come between the push and the pushed screen's own (Home reloading): it
+    // doesn't take the note.
+    RFFeedCacheSetDirectory(sideMenu); // relaunch
+    RFFeedCacheNotePushedFeedScreen();
+    RFFeedCachePage(@"HomeFeedSdui", Request(@"t2_me", nil), Page(@[ Card(@"t3_h", @"r/h", @"Aitch") ], nil));
+    Check(RFFeedCachePage(@"PopularFeedSdui", popularRequest, newerPopular) == nil,
+          @"Don't replay Popular after another feed's page came first");
+
+    RFFeedCacheSetDirectory(sideMenu); // relaunch: Popular is one of Home's own tabs this time
+    NSData *tabPopular = RFFeedCachePage(@"PopularFeedSdui", popularRequest, newerPopular);
+    Check([PostIds(tabPopular) isEqual:(@[ @"t3_p", @"t3_q", @"t3_p2" ])], @"Replay Popular as one of Home's feed tabs");
+    RFFeedCacheEndRestore(@"PopularFeedSdui");
+
+    RFFeedCacheSetDirectory(sideMenu); // relaunch, and the restore reopens Popular
+    RFFeedCacheNotePushedFeedScreen(); // (it pushes the screen on Home, as the side menu does)
+    RFFeedCacheArmFeed(@"PopularFeedSdui");
+    NSData *reopened = RFFeedCachePage(@"PopularFeedSdui", popularRequest, newerPopular);
+    Check([PostIds(reopened) isEqual:(@[ @"t3_p", @"t3_q", @"t3_p2" ])] &&
+              RFFeedCacheRestoreTarget(@"PopularFeedSdui", &index, &offset) && index == 1 && offset == 10,
+          @"Replay Popular when the restore reopens it");
+    RFFeedCacheEndRestore(@"PopularFeedSdui");
+    RFFeedCacheNotePushedFeedScreen();
+    Check(RFFeedCachePage(@"PopularFeedSdui", popularRequest, newerPopular) == nil, @"Replay the kept feed once");
+
+    RFFeedCacheSetDirectory(sideMenu); // relaunch, and the restore reopens Latest
+    RFFeedCacheNotePushedFeedScreen();
+    RFFeedCacheArmFeed(@"LatestFeed");
+    NSData *latestAgain = RFFeedCachePage(@"HomeFeedSdui", latestRequest, newerLatest);
+    Check([PostIds(latestAgain) isEqual:(@[ @"t3_l", @"t3_p", @"t3_l2" ])] &&
+              RFFeedCacheRestoreTarget(@"LatestFeed", &index, &offset) && index == 0 && offset == 20,
+          @"Replay Latest when the restore reopens it");
+    RFFeedCacheEndRestore(@"LatestFeed");
+
+    RFFeedCacheSetDirectory(sideMenu); // relaunch, the restore armed Latest but couldn't open it
+    RFFeedCacheArmFeed(@"LatestFeed");
+    RFFeedCacheDisarmFeed(@"LatestFeed");
+    RFFeedCacheNotePushedFeedScreen(); // Latest opened from the side menu later
+    Check(RFFeedCachePage(@"HomeFeedSdui", latestRequest, newerLatest) == nil, @"Don't replay Latest once its arm is taken back");
+    RFFeedCacheSetEnabled(NO);
+    [NSFileManager.defaultManager removeItemAtPath:sideMenu error:NULL];
 
     puts("All feed cache tests passed.");
   }

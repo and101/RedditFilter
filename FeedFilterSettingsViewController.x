@@ -550,7 +550,9 @@ static NSString *RFFooterText(id settings, NSInteger section) {
     case RFSectionCollapse: return nil;
     case RFSectionFeed:
       return @"Reddit jumps back to the top of Home after 10 minutes away. This keeps your place in For You, "
-             @"Following and Popular, even after Reddit closes. Pull down to refresh.\n\n"
+             @"and in Following and Popular while Reddit shows them as feed tabs, even after Reddit closes. "
+             @"Popular and Latest, which Reddit opens from the side menu, keep their place when Reopen "
+             @"community and post reopens them. Pull down to refresh.\n\n"
              @"Reopened posts start at the top, with a button back to where you were in the comments.";
     case RFSectionRestoreOptions:
       return @"Restore for is how long your place is kept after you leave Reddit.";

@@ -23,6 +23,7 @@
 
 #import <UIKit/UIKit.h>
 #import <objc/message.h>
+#import <objc/runtime.h>
 #import <os/lock.h>
 #import "FeedCache.h"
 #import "FeedPosition.h"
@@ -42,6 +43,10 @@ static const NSTimeInterval kRFStepMaxTime = 6;
 static const NSTimeInterval kRFAccountWait = 8; // for the first request to say which account it is
 
 static NSString *const kRFHomeClass = @"Home_Impl.PerFeedScreenviewHomeScreenViewController";
+// The base of Home's screens (PerFeedScreenviewHomeScreenViewController, the one in use, and
+// SingleScreenviewHomeScreenViewController are kinds of it). Only matched here, never hooked as well as
+// kRFHomeClass: a hook on both would run twice for each appearance of the one in use.
+static NSString *const kRFHomeTabClass = @"Home_Impl.HomeScreenViewController";
 static NSString *const kRFCommunityClass = @"Subreddit_Internal.SubredditScreenViewController";
 static NSString *const kRFProfileClass = @"Profiles.ProfileCoreStackViewController";
 static NSString *const kRFPreviewClass = @"PreviewModeViewController.PreviewModeViewControllerImpl";
@@ -49,6 +54,9 @@ static NSString *const kRFPostClass = @"PDP_Impl.PDPViewController";
 static NSString *const kRFSearchClass = @"Search_Core_Impl.SearchResultsViewController"; // a search's results
 static NSString *const kRFTypeaheadClass = @"Search_Core_Impl.TypeaheadViewController";   // typing a search
 static NSString *const kRFCustomFeedClass = @"MultiFeed.MultiPageViewController";         // a custom feed
+// Reddit's own feed screens: Popular and Latest (from the side menu), News and Games. All one class, titled
+// in the app's language, so which feed one shows is noted from its first page's request.
+static NSString *const kRFLegacyFeedClass = @"FeedKit_LegacyBridge.BridgedFeedViewController";
 static NSString *const kRFYouTabID = @"reddit_tab_bar__profile_button";
 static NSString *const kRFInboxTabID = @"reddit_tab_bar__inbox_button";
 static NSString *const kRFInboxClass = @"MainTabBar_Inbox.InboxViewController";
@@ -254,11 +262,88 @@ static BOOL RFIsClass(id object, NSString *name) {
   return class != NSNull.null && [object isKindOfClass:class];
 }
 
+// Whether a screen is Home (whichever kind of Home the account has).
+static BOOL RFIsHomeScreen(id screen) { return RFIsClass(screen, kRFHomeClass) || RFIsClass(screen, kRFHomeTabClass); }
+
 static NSArray<UIWindow *> *RFWindows(void) {
   NSMutableArray *windows = [NSMutableArray array];
   for (UIScene *scene in UIApplication.sharedApplication.connectedScenes)
     if ([scene isKindOfClass:UIWindowScene.class]) [windows addObjectsFromArray:((UIWindowScene *)scene).windows];
   return windows;
+}
+
+static UITabBarController *RFTabBar(void);
+static UINavigationController *RFHomeNavigation(void);
+
+// A Home feed screen pushed on Home (Popular, or Latest from the side menu), and which feed it shows:
+// @"popular" or @"latest", from its first page's request (RFNoteHomeFeedScreen), else nil.
+static const void *kRFHomeFeedScreenKey = &kRFHomeFeedScreenKey;
+static NSString *const kRFPopularScreen = @"popular";
+static NSString *const kRFLatestScreen = @"latest";
+static NSString *const kRFPopularFeed = @"PopularFeedSdui"; // as FeedCache names the feeds
+static NSString *const kRFLatestFeed = @"LatestFeed";
+
+static NSString *RFHomeFeedScreen(UIViewController *screen) {
+  if (!RFIsClass(screen, kRFLegacyFeedClass)) return nil;
+  NSString *feed = objc_getAssociatedObject(screen, kRFHomeFeedScreenKey);
+  return [feed isKindOfClass:NSString.class] ? feed : nil;
+}
+
+// The feed a kept screen shows, as FeedCache names it, or nil if it isn't one.
+static NSString *RFScreenFeedName(UIViewController *screen) {
+  NSString *feed = RFHomeFeedScreen(screen);
+  return [feed isEqualToString:kRFPopularScreen] ? kRFPopularFeed
+         : [feed isEqualToString:kRFLatestScreen] ? kRFLatestFeed
+                                                  : nil;
+}
+
+// The pushed feed screen its first page is for, if it hasn't been named yet: the top screen of the tab on
+// screen (Reddit asks for the page as the screen opens, so it's the one on top), or of Home's stack. A tab's
+// own root is never one (where the account still has the feed strip, Popular is a tab). Main thread.
+static BOOL RFNoteHomeFeedScreen(NSString *feed) {
+  NSMutableArray<UINavigationController *> *stacks = [NSMutableArray array];
+  UITabBarController *tabs = RFTabBar();
+  if ([tabs.selectedViewController isKindOfClass:UINavigationController.class])
+    [stacks addObject:(UINavigationController *)tabs.selectedViewController];
+  UINavigationController *home = RFHomeNavigation();
+  if (home && ![stacks containsObject:home]) [stacks addObject:home];
+  for (UINavigationController *nav in stacks) {
+    NSArray<UIViewController *> *stack = nav.viewControllers;
+    UIViewController *screen = stack.lastObject;
+    // Only what's pushed on a tab's root, and only while it's on screen.
+    if (stack.count < 2 || !screen.viewIfLoaded.window || !RFIsClass(screen, kRFLegacyFeedClass)) continue;
+    if (objc_getAssociatedObject(screen, kRFHomeFeedScreenKey)) continue;
+    objc_setAssociatedObject(screen, kRFHomeFeedScreenKey, feed, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    return YES;
+  }
+  return NO;
+}
+
+// A feed's first page names the screen it's for (see RFScreenRestoreFeedPage). Main thread.
+static void RFNoteHomeFeedPage(NSString *feed) {
+  if (RFNoteHomeFeedScreen(feed)) return;
+  // The screen may still be on its way (a link's push): once more, a moment later.
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    RFNoteHomeFeedScreen(feed);
+  });
+}
+
+void RFScreenRestoreFeedPage(NSString *operation, NSURLRequest *request) {
+  if (!gRestoreScreens || !RFFeedCacheEnabled() || RFFeedCacheRequestIsIncognito(request)) return;
+  NSString *name = RFFeedNameForPage(operation, request);
+  NSString *feed = [name isEqualToString:kRFPopularFeed] ? kRFPopularScreen
+                   : [name isEqualToString:kRFLatestFeed] ? kRFLatestScreen
+                                                          : nil;
+  if (!feed) return;
+  // Only the first page: a later one is the screen's own paging, and the screen's named by then.
+  NSData *body = request.HTTPBody;
+  NSDictionary *json = body.length ? [NSJSONSerialization JSONObjectWithData:body options:0 error:NULL] : nil;
+  id variables = [json isKindOfClass:NSDictionary.class] ? json[@"variables"] : nil;
+  id after = [variables isKindOfClass:NSDictionary.class] ? variables[@"after"] : nil;
+  if ([after isKindOfClass:NSString.class] && [after length]) return;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    RFNoteHomeFeedPage(feed);
+  });
 }
 
 static NSString *RFCurrentSessionID(void) {
@@ -662,7 +747,7 @@ static UINavigationController *RFHomeNavigation(void) {
       UIViewController *vc = queue.firstObject;
       [queue removeObjectAtIndex:0];
       if ([vc isKindOfClass:UINavigationController.class] && vc.viewIfLoaded.window &&
-          RFIsClass(((UINavigationController *)vc).viewControllers.firstObject, kRFHomeClass))
+          RFIsHomeScreen(((UINavigationController *)vc).viewControllers.firstObject))
         return (UINavigationController *)vc;
       [queue addObjectsFromArray:vc.childViewControllers];
     }
@@ -897,6 +982,14 @@ static NSDictionary *RFKeptScreen(UIViewController *vc, BOOL top, BOOL afterSear
     *part = [NSString stringWithFormat:@"custom feed u/%@/m/%@", feed[@"user"], feed[@"name"]];
     return @{@"feed" : feed};
   }
+  if (RFIsClass(vc, kRFLegacyFeedClass)) {
+    // Popular, or Latest from the side menu: reopened as it was, its place kept.
+    NSString *feed = RFHomeFeedScreen(vc);
+    BOOL popular = [feed isEqualToString:kRFPopularScreen];
+    if (!popular && ![feed isEqualToString:kRFLatestScreen]) return *left = @"couldn't tell which feed screen it was", nil;
+    *part = popular ? @"Popular" : @"Latest";
+    return @{@"homeFeed" : feed};
+  }
   if (RFIsClass(vc, kRFCommunityClass)) {
     NSString *name = RFCommunityName(vc);
     if (!RFIsCommunityName(name)) return *left = @"couldn't read a community", nil;
@@ -1088,8 +1181,15 @@ static const NSInteger kRFStepHome = -1;
 
 #define kRFHomeFeeds (@[ @"HomeFeedSdui", @"FollowingFeed", @"PopularFeedSdui" ])
 #define kRFCommunityFeed @"SubredditFeedSdui"
+// The feeds whose screens are pushed on Home and can have others opened on top of them.
+#define kRFFeedScreens (@[ kRFPopularFeed, kRFLatestFeed ])
 static NSUInteger gUndeferGeneration;
 static NSString *gDeferredCommunity; // the community whose feed is waiting under a post
+
+// The feeds whose screen is covered, all told: Home's tabs, a community and the feed screens pushed on Home.
+static NSArray<NSString *> *RFCoveredFeeds(void) {
+  return [kRFHomeFeeds arrayByAddingObjectsFromArray:[@[ kRFCommunityFeed ] arrayByAddingObjectsFromArray:kRFFeedScreens]];
+}
 
 // Covered feeds are scrolled back when their screen appears again (RFScreenAppearing); not back within 10
 // minutes, they're left as they are.
@@ -1098,33 +1198,38 @@ static void RFWatchCoveredFeeds(void) {
   NSUInteger generation = ++gUndeferGeneration;
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(600 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
     if (generation != gUndeferGeneration) return;
-    RFFeedUndefer(kRFHomeFeeds, nil);
-    RFFeedUndefer(@[ kRFCommunityFeed ], nil);
+    for (NSString *feed in RFCoveredFeeds()) RFFeedUndefer(@[ feed ], nil);
   });
 }
 
 static void RFReleaseCoveredFeeds(void) {
   gUndeferGeneration++;
-  RFFeedUndefer(kRFHomeFeeds, nil);
-  RFFeedUndefer(@[ kRFCommunityFeed ], nil);
+  for (NSString *feed in RFCoveredFeeds()) RFFeedUndefer(@[ feed ], nil);
 }
 
 // The swipe back was cancelled: the screen's still covered, so a scroll back still due waits again.
 static void RFScreenReturnCancelled(UIViewController *screen) {
-  NSArray *feeds = RFIsClass(screen, kRFHomeClass) ? kRFHomeFeeds : @[ kRFCommunityFeed ];
+  NSString *feedName = RFScreenFeedName(screen);
+  NSArray *feeds = RFIsHomeScreen(screen) ? kRFHomeFeeds : feedName ? @[ feedName ] : @[ kRFCommunityFeed ];
   NSMutableArray *due = [NSMutableArray array];
   for (NSString *feed in feeds)
     if (RFFeedCacheRestoreTarget(feed, NULL, NULL)) [due addObject:feed];
   if (due.count) RFFeedDefer(due);
 }
 
-// Home or a community is appearing (also as you start swiping back to it): its covered feed, if any.
+// Home, a community or one of Reddit's own feed screens is appearing (also as you start swiping back to
+// it): its covered feed, if any.
 static void RFScreenAppearing(UIViewController *screen) {
   if (!RFFeedHasDeferred()) return;
-  if (RFIsClass(screen, kRFHomeClass)) RFFeedUndefer(kRFHomeFeeds, screen);
-  else if (RFIsClass(screen, kRFCommunityClass) &&
-           [RFCommunityName(screen).lowercaseString isEqualToString:gDeferredCommunity.lowercaseString])
+  if (RFIsHomeScreen(screen)) {
+    RFFeedUndefer(kRFHomeFeeds, screen);
+  } else if (RFIsClass(screen, kRFCommunityClass) &&
+             [RFCommunityName(screen).lowercaseString isEqualToString:gDeferredCommunity.lowercaseString]) {
     RFFeedUndefer(@[ kRFCommunityFeed ], screen);
+  } else {
+    NSString *feed = RFScreenFeedName(screen);
+    if (feed) RFFeedUndefer(@[ feed ], screen);
+  }
 }
 
 static NSDictionary *gPlan; // Screens.json, while restoring; main thread like the rest
@@ -1153,6 +1258,38 @@ static void RFOpenLink(NSString *link) {
     [delegate application:UIApplication.sharedApplication openURL:url options:@{}];
 }
 
+// The account the app's using, for the Latest factory. Reddit keeps it on the tab bar as a Swift property
+// (there's no getter to call), and passes it to the factory as the app's account context. Only the tab
+// bar's own value is taken: other view controllers can have a similar property (Games, say), and an object
+// of another kind would be no use to the factory. nil if it isn't there or doesn't look like one.
+static id RFAccountContext(void) {
+  UITabBarController *tabs = RFTabBar();
+  Ivar ivar = tabs ? class_getInstanceVariable(tabs.class, "accountContext") : NULL;
+  if (!ivar) return nil;
+  id value = (__bridge id)(*(void **)((uint8_t *)(__bridge void *)tabs + ivar_getOffset(ivar)));
+  Class valueClass = object_getClass(value);
+  // One object of a class (not a class itself nor a plain number), and the app's account context (Reddit's
+  // own AccountContext class). Checked here so a renamed or moved property can't pass something else on.
+  if (!value || !valueClass || class_isMetaClass(valueClass) || ![value isKindOfClass:NSObject.class]) return nil;
+  if ([NSStringFromClass(valueClass) rangeOfString:@"AccountContext"].location == NSNotFound) return nil;
+  return value;
+}
+
+// Latest (from the side menu). Reddit's feed screens are all one class, made by its own factory, and no link
+// opens Latest (the drawer's row calls the factory directly), so it's opened the same way: Home's screen is
+// pushed, as the row's does. Opening the drawer and tapping the row instead would go by its translated title.
+static BOOL RFOpenLatestFeed(void) {
+  Class factory = NSClassFromString(@"Feed_Legacy.FeedViewControllerFactory");
+  SEL make = NSSelectorFromString(@"latestFeedViewControllerWithAccountContext:");
+  id accountContext = RFAccountContext();
+  UINavigationController *nav = RFHomeNavigation();
+  if (!factory || !accountContext || ![factory respondsToSelector:make] || !nav) return NO;
+  UIViewController *feed = ((id (*)(id, SEL, id))objc_msgSend)(factory, make, accountContext);
+  if (![feed isKindOfClass:UIViewController.class]) return NO;
+  [nav pushViewController:feed animated:NO];
+  return YES;
+}
+
 static NSArray<NSDictionary *> *RFPlanScreens(void) { return gPlan[@"screens"]; }
 static BOOL RFRestoreDone(void) { return !gWaitingForYou && gStep >= (NSInteger)RFPlanScreens().count; }
 static NSDictionary *RFStepScreen(void) {
@@ -1162,16 +1299,18 @@ static NSDictionary *RFStepScreen(void) {
 static NSString *RFScreenKind(NSDictionary *screen) {
   return screen[@"community"] ? @"the community"
          : screen[@"feed"]    ? @"the custom feed"
+         : screen[@"homeFeed"] ? ([screen[@"homeFeed"] isEqual:kRFPopularScreen] ? @"the Popular feed" : @"the Latest feed")
          : screen[@"profile"] ? @"the profile"
          : screen[@"search"]  ? @"the search"
          : screen[@"post"]    ? @"the post"
                               : @"";
 }
 
-static UINavigationController *RFTabWithRoot(UITabBarController *tabs, NSString *rootClass) {
+// Home's tab's stack, whichever kind of Home the account has.
+static UINavigationController *RFHomeNavigationIn(UITabBarController *tabs) {
   for (UIViewController *tab in tabs.viewControllers)
     if ([tab isKindOfClass:UINavigationController.class] &&
-        RFIsClass(((UINavigationController *)tab).viewControllers.firstObject, rootClass))
+        RFIsHomeScreen(((UINavigationController *)tab).viewControllers.firstObject))
       return (UINavigationController *)tab;
   return nil;
 }
@@ -1208,7 +1347,7 @@ static unsigned gTabMoveGeneration;
 static void RFMoveScreensToPlanTab(NSString *tab, NSArray<UIViewController *> *stack, unsigned generation, NSInteger tries) {
   if (generation != gTabMoveGeneration) return;
   UITabBarController *tabs = RFTabBar();
-  UINavigationController *other = RFPlanTabNavigation(tab), *home = RFTabWithRoot(tabs, kRFHomeClass);
+  UINavigationController *other = RFPlanTabNavigation(tab), *home = RFHomeNavigationIn(tabs);
   if (!other || !home || other == home || ![home.viewControllers isEqualToArray:stack]) return;
   if (!RFPlanTabReady(tab)) {
     // You went to another tab meanwhile: stays as you left it.
@@ -1225,7 +1364,7 @@ static void RFMoveScreensToPlanTab(NSString *tab, NSArray<UIViewController *> *s
 }
 
 static void RFMoveToPlanTab(NSString *tab, NSInteger tries) {
-  UINavigationController *home = RFTabWithRoot(RFTabBar(), kRFHomeClass);
+  UINavigationController *home = RFHomeNavigationIn(RFTabBar());
   NSArray<UIViewController *> *stack = home.viewControllers;
   if (stack.count < 2) return;
   RFSelectPlanTab(tab);
@@ -1325,7 +1464,7 @@ static void RFReplaceWithLinked(void) {
     gLinkedBefore = nil;
     return;
   }
-  UINavigationController *home = RFTabWithRoot(RFTabBar(), kRFHomeClass);
+  UINavigationController *home = RFHomeNavigationIn(RFTabBar());
   UIViewController *opened = home.viewControllers.lastObject;
   // A page that's new since the link opened, for that post, done arriving.
   BOOL arrived = opened && opened != old && ![gLinkedBefore containsObject:opened] &&
@@ -1371,7 +1510,7 @@ static void RFJumpByLink(NSDictionary *plan) {
   gLinkedAt = NSDate.date;
   gLinkedPost = postId;
   gLinkedBefore = [NSHashTable weakObjectsHashTable];
-  for (UIViewController *vc in RFTabWithRoot(RFTabBar(), kRFHomeClass).viewControllers) [gLinkedBefore addObject:vc];
+  for (UIViewController *vc in RFHomeNavigationIn(RFTabBar()).viewControllers) [gLinkedBefore addObject:vc];
   RFHideJump(0);
   RFOpenLink(link);
   RFReplaceWithLinked();
@@ -1558,7 +1697,7 @@ static void RFFinishRestore(void) {
   // Only once this launch's restore has finished: after Skip or a time-out, it's not brought up later.
   NSDictionary *parkAfter = gParkAfter;
   gParkAfter = nil;
-  UINavigationController *home = RFTabWithRoot(RFTabBar(), kRFHomeClass);
+  UINavigationController *home = RFHomeNavigationIn(RFTabBar());
   if (parkAfter && !gParked) {
     if (reopened && home) {
       RFPark(parkAfter, home);
@@ -1700,6 +1839,18 @@ static void RFStartStep(NSInteger step) {
     RFOpenLink([NSString stringWithFormat:@"https://www.reddit.com/user/%@/m/%@/", screen[@"feed"][@"user"], screen[@"feed"][@"name"]]);
   } else if (screen[@"profile"]) {
     RFOpenLink([NSString stringWithFormat:@"https://www.reddit.com/user/%@/", screen[@"profile"]]);
+  } else if (screen[@"homeFeed"]) {
+    // Its kept feed only comes back when the restore opens it (FeedCache.m): the side menu opens these
+    // fresh, so a kept one would show hours-old posts with today's below them.
+    BOOL popular = [screen[@"homeFeed"] isEqual:kRFPopularScreen];
+    RFFeedCacheArmFeed(popular ? kRFPopularFeed : kRFLatestFeed);
+    if (popular) {
+      RFOpenLink(@"https://www.reddit.com/r/popular/");
+    } else if (!RFOpenLatestFeed()) {
+      // Nothing opened (no account context, or Reddit dropped the factory): the step times out as any does,
+      // and Latest opened from the side menu meanwhile isn't a reopened one.
+      RFFeedCacheDisarmFeed(kRFLatestFeed);
+    }
   } else if (screen[@"search"]) {
     NSMutableCharacterSet *allowed = [NSCharacterSet.URLQueryAllowedCharacterSet mutableCopy];
     [allowed removeCharactersInString:@"&+=?#"];
@@ -1898,7 +2049,7 @@ static void RFRestoreTick(void) {
     // so nothing's reopened on top of it.
     UIViewController *selected = RFTabBar().selectedViewController;
     BOOL otherTab = selected && [selected isKindOfClass:UINavigationController.class] &&
-                    !RFIsClass(((UINavigationController *)selected).viewControllers.firstObject, kRFHomeClass);
+                    !RFIsHomeScreen(((UINavigationController *)selected).viewControllers.firstObject);
     if (nav.viewControllers.count > 1 || otherTab) {
       // What was open on Home comes back when you go back to Home from that screen (not for the You tab,
       // which going back to Home has nothing to do with).
@@ -1982,6 +2133,23 @@ static void RFRestoreTick(void) {
     BOOL ready = list && RFListShowsPosts(list);
     gSteady = ready ? gSteady + 1 : 0;
     if (gSteady >= 2 || late) RFNextStep();
+  } else if (screen[@"homeFeed"]) {
+    // Popular, or Latest: opened as the app opens it, with its kept posts replayed and scrolled back.
+    NSString *feed = [screen[@"homeFeed"] isEqual:kRFPopularScreen] ? kRFPopularFeed : kRFLatestFeed;
+    BOOL shown = [RFHomeFeedScreen(top) isEqualToString:screen[@"homeFeed"]] && top.viewIfLoaded.window;
+    if (shown && !last) {
+      // More goes on top: its scroll back waits until you go back to it.
+      RFFeedDefer(@[ feed ]);
+      return RFNextStep();
+    }
+    UICollectionView *list = shown ? RFListIn(top) : nil;
+    BOOL ready = list && RFListShowsPosts(list);
+    gSteady = ready ? gSteady + 1 : 0;
+    if (gSteady >= 2 || late) {
+      // On top, so its scroll back can go ahead (Home's feeds waited to see if anything would cover them).
+      if (shown) RFFeedUndefer(@[ feed ], top);
+      RFNextStep();
+    }
   } else if (screen[@"search"]) {
     // The results open at their top: done once the search is showing with its query.
     // In a community: once its answer has said so too (so the next screen doesn't take its answer).
@@ -2033,6 +2201,8 @@ static BOOL RFValidScreen(id screen) {
     return [feed isKindOfClass:NSDictionary.class] && feed.count == 2 && RFIsUsername(feed[@"user"]) && RFIsCustomFeedName(feed[@"name"]);
   }
   if (search) return RFIsText(search) && [search length] <= 512;
+  if (screen[@"homeFeed"])
+    return [screen[@"homeFeed"] isEqual:kRFPopularScreen] || [screen[@"homeFeed"] isEqual:kRFLatestScreen];
   if (profile) return RFIsUsername(profile);
   if (![post isKindOfClass:NSDictionary.class]) return NO;
   NSString *postId = post[@"id"];
@@ -2159,6 +2329,8 @@ static void RFResumeParked(UIViewController *home) {
 @end
 @interface RFCommunityScreen : UIViewController
 @end
+@interface RFHomeFeedScreenClass : UIViewController
+@end
 @interface RFProfileScreen : UIViewController
 @end
 
@@ -2171,7 +2343,8 @@ static void RFWatchCancelledReturn(UIViewController *screen) {
   }];
 }
 
-// One group per class: a Logos group initialised for two classes would share one %orig.
+// Home, hooked on the class in use (kRFHomeClass) only: it's a subclass of kRFHomeTabClass, so hooking that
+// too would run these twice.
 %group RFHomeScreenHooks
 %hook RFHomeScreen
 - (void)viewWillAppear:(BOOL)animated {
@@ -2189,6 +2362,18 @@ static void RFWatchCancelledReturn(UIViewController *screen) {
 
 %group RFCommunityScreenHooks
 %hook RFCommunityScreen
+- (void)viewWillAppear:(BOOL)animated {
+  %orig;
+  RFScreenAppearing((UIViewController *)self);
+  RFWatchCancelledReturn((UIViewController *)self);
+}
+%end
+%end
+
+// One of Reddit's own feed screens (Popular, Latest) appearing again after a post was reopened on top of it:
+// its feed is scrolled back.
+%group RFHomeFeedScreenHooks
+%hook RFHomeFeedScreenClass
 - (void)viewWillAppear:(BOOL)animated {
   %orig;
   RFScreenAppearing((UIViewController *)self);
@@ -2330,6 +2515,8 @@ void RFSetRestoreScreens(BOOL restore) {
   if ([community isSubclassOfClass:UIViewController.class]) %init(RFCommunityScreenHooks, RFCommunityScreen = community);
   Class profile = NSClassFromString(kRFProfileClass);
   if ([profile isSubclassOfClass:UIViewController.class]) %init(RFProfileScreenHooks, RFProfileScreen = profile);
+  Class homeFeed = NSClassFromString(kRFLegacyFeedClass);
+  if ([homeFeed isSubclassOfClass:UIViewController.class]) %init(RFHomeFeedScreenHooks, RFHomeFeedScreenClass = homeFeed);
   %init(RFParkedNavigationHooks);
   Class customFeed = NSClassFromString(kRFCustomFeedClass);
   if ([customFeed isSubclassOfClass:UIViewController.class]) %init(RFCustomFeedHooks, RFCustomFeedScreen = customFeed);

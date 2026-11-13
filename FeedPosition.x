@@ -8,11 +8,12 @@
 // refresh.
 //
 // After iOS closes the app in the background: FeedCache.m keeps the pages of Home's feeds (For You,
-// Following, Popular), and this notes which post is at the top of each when the app goes to the
-// background, from the posts' accessibility labels ("r/sub, title, 12 upvotes, ..."), and how far into
-// it you'd scrolled. After the next launch each feed shows its kept posts from the top when it first
+// Following, Popular, and Latest from the side menu), and this notes which post is at the top of each
+// when the app goes to the background, from the posts' accessibility labels ("r/sub, title, 12 upvotes,
+// ..."), and how far into it you'd scrolled. After the next launch each feed shows its kept posts from the top when it first
 // loads, and this scrolls it back to that post before it's drawn (the list is hidden until then), so
-// scrolling up goes back through what you'd seen.
+// scrolling up goes back through what you'd seen. Popular and Latest from the side menu are the exception:
+// the side menu opens them fresh, so they only come back when Reopen community and post reopens them.
 #import <QuartzCore/QuartzCore.h>
 #import <UIKit/UIKit.h>
 #import "FeedCache.h"
@@ -22,6 +23,10 @@
 @end
 
 @interface RFListCollectionView : UICollectionView
+@end
+
+// Reddit's own feed screens (Popular, Latest from the side menu, News, Games): all one class.
+@interface RFBridgedFeedScreen : UIViewController
 @end
 
 static BOOL gKeepFeedPosition;
@@ -42,6 +47,20 @@ void RFSetKeepFeedPosition(BOOL keep) {
 %hook RFSceneDelegate
 - (void)sceneWillResignActive:(UIScene *)scene {
   if (!gKeepFeedPosition) %orig;
+}
+%end
+%end
+
+// One of Reddit's own feed screens: a child of Home where the account still has the For You, Following and
+// Popular tabs, or a screen pushed on a tab by the side menu's rows (Popular, Latest). A pushed one starts
+// at the top, so its kept feed only comes back when the restore reopens it (FeedCache.m).
+%group RFBridgedFeedScreenHooks
+%hook RFBridgedFeedScreen
+- (void)viewDidLoad {
+  %orig;
+  UIViewController *screen = (UIViewController *)self;
+  UINavigationController *nav = screen.navigationController;
+  if (nav && [nav.viewControllers indexOfObjectIdenticalTo:screen] != NSNotFound) RFFeedCacheNotePushedFeedScreen();
 }
 %end
 %end
@@ -510,4 +529,6 @@ static void RFFeedCancelAll(void) {
                                                   RFStartScrollBack(note.object);
                                                 }];
   }
+  Class feedScreen = NSClassFromString(@"FeedKit_LegacyBridge.BridgedFeedViewController");
+  if ([feedScreen isSubclassOfClass:UIViewController.class]) %init(RFBridgedFeedScreenHooks, RFBridgedFeedScreen = feedScreen);
 }

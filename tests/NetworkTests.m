@@ -26,6 +26,7 @@ NSData *RFScreenRestoreSearchPage(NSURLRequest *request, NSData *page, unsigned 
 unsigned long long RFScreenRestoreNextSearchOrder(void) { return 0; }
 unsigned RFScreenRestoreSearchGeneration(void) { return 0; }
 void RFScreenRestoreCustomFeedRequest(NSURLRequest *request) {}
+void RFScreenRestoreFeedPage(NSString *operation, NSURLRequest *request) {}
 void RFScreenRestoreForgetComments(void) {}
 
 // Browser login lives in LoginHelper.x, which isn't part of this test.

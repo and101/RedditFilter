@@ -30,6 +30,9 @@ unsigned RFScreenRestoreSearchGeneration(void);
 // Takes a custom feed's request (FetchMulti, MultiredditPostsSdui) as it's made, to name the custom feed
 // screen being opened.
 void RFScreenRestoreCustomFeedRequest(NSURLRequest *request);
+// Takes a feed's first page as it's handed to the app, to name the screen it's for: Popular, or Latest from
+// the side menu (Reddit's own feed screens are all one class, titled in the app's language).
+void RFScreenRestoreFeedPage(NSString *operation, NSURLRequest *request);
 // Forgets every post's comments (the comment filters changed, another account, incognito).
 void RFScreenRestoreForgetComments(void);
 

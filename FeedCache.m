@@ -1,11 +1,14 @@
 // FeedCache.m
 //
 // When iOS closes Reddit in the background, it starts again from the top of Home. So the pages of
-// Home's feeds (For You, Following, Popular) are kept, and when the app goes to the background the
-// post at the top of each feed (and how far into it you'd scrolled) is noted and everything is saved.
+// Home's feeds (For You, Latest from the side menu, Following and Popular) are kept, and when the app
+// goes to the background the post at the top of each feed (and how far into it you'd scrolled) is noted
+// and everything is saved.
 // Each feed's first page after the next launch is then the kept feed, followed by the fresh page's own
 // posts, and FeedPosition.x scrolls back to the noted post once it's on screen. Paging carries on from the fresh page, so nothing depends on
-// an old page cursor still working, and pull to refresh at the top refreshes as usual.
+// an old page cursor still working, and pull to refresh at the top refreshes as usual. Popular and Latest,
+// which Reddit opens from the side menu, are the exception: they only come back when the screen restore
+// reopens them (RFFeedCacheArmFeed), as a feed kept hours ago shouldn't come back with today's below it.
 //
 // Every lookup is type-checked, so a changed response can only mean nothing is restored.
 
@@ -458,18 +461,25 @@ typedef struct {
   NSUInteger restoreIndex;
   double restoreOffset;
   NSString *armedName; // community feed: replays only the community the restore opens (lowercased)
+  BOOL armed;          // Latest, Popular from the side menu: replays once, when the restore opens its screen
 } RFFeedState;
 
+// Each feed's name is how the rest of the tweak asks for it (a replay's notification object, the feeds
+// waiting to be scrolled back). Home's feeds asked for with an operation and a sort, as Reddit sends them:
+// Latest is Home's feed sorted by new, opened from the side menu.
 static const struct {
-  NSString *operation, *file;
+  NSString *name, *operation, *sort, *file;
 } kRFFeeds[] = {
-    {@"HomeFeedSdui", @"HomeFeed.json"},       // For You
-    {@"FollowingFeed", @"FollowingFeed.json"}, // Following
-    {@"PopularFeedSdui", @"PopularFeed.json"}, // Popular
-    {@"SubredditFeedSdui", @"CommunityFeed.json"}, // the last community opened (Restore open community and post)
+    {@"HomeFeedSdui", @"HomeFeedSdui", @"BEST", @"HomeFeed.json"},            // For You (sort BEST, or none)
+    {@"LatestFeed", @"HomeFeedSdui", @"NEW", @"LatestFeed.json"},              // Latest, from the side menu
+    {@"FollowingFeed", @"FollowingFeed", nil, @"FollowingFeed.json"},         // Following
+    {@"PopularFeedSdui", @"PopularFeedSdui", nil, @"PopularFeed.json"},       // Popular
+    {@"SubredditFeedSdui", @"SubredditFeedSdui", nil, @"CommunityFeed.json"}, // the last community opened
 };
-static const NSInteger kRFHomeFeed = 0; // For You
-static const NSInteger kRFCommunityFeed = 3;
+static const NSInteger kRFHomeFeed = 0; // For You; Latest is Home's feed in another sort
+static const NSInteger kRFLatestFeed = 1;
+static const NSInteger kRFPopularFeed = 3;
+static const NSInteger kRFCommunityFeed = 4;
 enum { kRFFeedCount = sizeof(kRFFeeds) / sizeof(kRFFeeds[0]) };
 
 static os_unfair_lock gLock = OS_UNFAIR_LOCK_INIT;
@@ -477,6 +487,11 @@ static RFFeedState gFeeds[kRFFeedCount];
 static NSString *gDirectory; // guarded by gLock
 static atomic_bool gEnabled, gKeepsCommunities, gColdReplayAllowed;
 static atomic_bool gIncognito, gSawUserToken;
+// A feed screen pushed on Home (from the side menu) is opening: the next first page of Popular or Latest is
+// for it. The uptime it was noted at, in nanoseconds (0: none). Not good for long: News or Games are the same
+// class and take no first page of these feeds, so a note they left mustn't mark a Popular tab opened later.
+static atomic_uint_fast64_t gPushedFeedScreenAt;
+static const uint64_t kRFPushedFeedScreenLife = 30 * NSEC_PER_SEC;
 // Goes up whenever what's kept is thrown away (turned off, forgotten, another account): a save or a page
 // from before that is dropped instead of bringing it back.
 static atomic_uint gGeneration;
@@ -488,15 +503,36 @@ static _Atomic double gMaxAge = 12 * 60 * 60; // after this long away the feeds 
 
 NSNotificationName const RFFeedCacheDidReplayNotification = @"RFFeedCacheDidReplayNotification";
 
-static NSInteger RFFeedIndex(NSString *operation) {
+// A feed by its name, as RFFeedNameForPage and the rest of the tweak give it.
+static NSInteger RFFeedIndex(NSString *name) {
   for (NSInteger i = 0; i < kRFFeedCount; i++)
-    if ([kRFFeeds[i].operation isEqualToString:operation]) return i;
+    if ([kRFFeeds[i].name isEqualToString:name]) return i;
   return -1;
 }
 
+// Which kept feed a request's page is for. Home's feed is For You unless it's sorted another way: Latest
+// (sort NEW, from the side menu) is kept apart from it. nil if it isn't a kept feed.
+NSString *RFFeedNameForPage(NSString *operation, NSURLRequest *request) {
+  if (![operation isKindOfClass:NSString.class] || !operation.length) return nil;
+  NSDictionary *variables = RFDict(RFDict(RFJSON(request.HTTPBody, 0))[@"variables"]);
+  NSString *sort = RFString(variables[@"sort"]);
+  for (NSInteger i = 0; i < kRFFeedCount; i++) {
+    if (![kRFFeeds[i].operation isEqualToString:operation]) continue;
+    NSString *wanted = kRFFeeds[i].sort;
+    if (!wanted) return kRFFeeds[i].name;
+    // For You asks with no sort at all (or BEST); any other sort of Home's feed is another feed.
+    if ([sort isEqualToString:wanted] || (i == kRFHomeFeed && !sort.length)) return kRFFeeds[i].name;
+  }
+  return nil;
+}
+
 BOOL RFFeedCacheKeepsOperation(NSString *operation) {
-  NSInteger feed = operation ? RFFeedIndex(operation) : -1;
-  return feed >= 0 && (feed != kRFCommunityFeed || atomic_load(&gKeepsCommunities));
+  if (![operation isKindOfClass:NSString.class]) return NO;
+  for (NSInteger i = 0; i < kRFFeedCount; i++) {
+    if (![kRFFeeds[i].operation isEqualToString:operation]) continue;
+    if (i != kRFCommunityFeed || atomic_load(&gKeepsCommunities)) return YES;
+  }
+  return NO;
 }
 
 static dispatch_queue_t RFFeedCacheQueue(void) {
@@ -599,7 +635,9 @@ unsigned RFFeedCacheGeneration(void) { return atomic_load(&gGeneration); }
 // Requests made as whoever's using the app: the feeds and a post's comments. (Others, like experiments,
 // carry a logged-out token even when logged in.)
 static BOOL RFIsAccountOperation(NSString *operation) {
-  return RFFeedIndex(operation) >= 0 || [operation isEqualToString:@"PostInfoByIdComments"];
+  for (NSInteger feed = 0; feed < kRFFeedCount; feed++)
+    if ([kRFFeeds[feed].operation isEqualToString:operation]) return YES;
+  return [operation isEqualToString:@"PostInfoByIdComments"];
 }
 
 void RFFeedCacheNoteRequest(NSString *operation, NSURLRequest *request) {
@@ -677,6 +715,38 @@ void RFFeedCacheArmCommunity(NSString *name) {
   os_unfair_lock_unlock(&gLock);
 }
 
+// Whether a feed only replays when the restore opens its screen (RFFeedCacheArmFeed): Latest, and Popular
+// when the side menu opens it as a screen pushed on Home. Popular as one of Home's own tabs doesn't.
+static BOOL RFFeedReplaysWhenArmed(NSInteger feed, BOOL pushed) {
+  return feed == kRFLatestFeed || (feed == kRFPopularFeed && pushed);
+}
+
+void RFFeedCacheArmFeed(NSString *feed) {
+  NSInteger index = RFFeedIndex(feed);
+  // A community is armed by name (RFFeedCacheArmCommunity): several of them are kept.
+  if (index < 0 || index == kRFCommunityFeed) return;
+  os_unfair_lock_lock(&gLock);
+  gFeeds[index].armed = YES;
+  gFeeds[index].replayTried = NO;
+  os_unfair_lock_unlock(&gLock);
+}
+
+void RFFeedCacheDisarmFeed(NSString *feed) {
+  NSInteger index = RFFeedIndex(feed);
+  if (index < 0 || index == kRFCommunityFeed) return;
+  os_unfair_lock_lock(&gLock);
+  gFeeds[index].armed = NO;
+  os_unfair_lock_unlock(&gLock);
+}
+
+void RFFeedCacheNotePushedFeedScreen(void) { atomic_store(&gPushedFeedScreenAt, clock_gettime_nsec_np(CLOCK_UPTIME_RAW)); }
+
+// Takes the note (once), and says whether it was recent enough.
+static BOOL RFTakePushedFeedScreen(void) {
+  uint64_t at = atomic_exchange(&gPushedFeedScreenAt, 0);
+  return at && clock_gettime_nsec_np(CLOCK_UPTIME_RAW) - at < kRFPushedFeedScreenLife;
+}
+
 NSString *RFFeedCacheCommunity(NSString **sort) {
   os_unfair_lock_lock(&gLock);
   NSString *key = RFString(RFFeedCacheLocked(kRFCommunityFeed)[kRFCacheKey]);
@@ -697,6 +767,7 @@ void RFFeedCacheSetDirectory(NSString *directory) {
   os_unfair_lock_unlock(&gLock);
   atomic_store(&gIncognito, NO);
   atomic_store(&gSawUserToken, NO);
+  atomic_store(&gPushedFeedScreenAt, 0);
 }
 
 NSData *RFFeedCachePageFrom(NSString *operation, NSURLRequest *request, NSData *page, unsigned generation);
@@ -706,8 +777,11 @@ NSData *RFFeedCachePage(NSString *operation, NSURLRequest *request, NSData *page
 }
 
 NSData *RFFeedCachePageFrom(NSString *operation, NSURLRequest *request, NSData *page, unsigned generation) {
-  NSInteger feed = RFFeedIndex(operation);
+  NSString *name = RFFeedNameForPage(operation, request);
+  NSInteger feed = name ? RFFeedIndex(name) : -1;
+  // (A community's feed is kept for one community and sort at a time: not kept at all when that's off.)
   if (feed < 0 || !RFFeedCacheEnabled() || !page.length) return nil;
+  if (feed == kRFCommunityFeed && !atomic_load(&gKeepsCommunities)) return nil;
   // Asked for before what was kept was thrown away (filters changed, another account): not used.
   if (generation != RFFeedCacheGeneration()) return nil;
   // Incognito keeps nothing (and leaves what was kept before it alone): judged by this page's own request,
@@ -717,17 +791,13 @@ NSData *RFFeedCachePageFrom(NSString *operation, NSURLRequest *request, NSData *
   if (!account) return nil;
   NSDictionary *variables = RFDict(RFDict(RFJSON(request.HTTPBody, 0))[@"variables"]);
   if (!variables) return nil;
-  // Home's feed sorted another way (Latest, from the side menu) asks with the same operation: only For You
-  // (sort BEST, or none) is kept and replayed.
-  NSString *sort = RFString(variables[@"sort"]);
-  if (feed == kRFHomeFeed && sort.length && ![sort isEqualToString:@"BEST"]) return nil;
   NSString *after = RFString(variables[@"after"]);
   // A community feed is kept for one community and sort at a time.
   NSString *key = nil;
   if (feed == kRFCommunityFeed) {
-    NSString *name = RFString(variables[@"subredditName"]).lowercaseString;
-    if (!name.length) return nil;
-    key = [NSString stringWithFormat:@"%@|%@", name, RFString(variables[@"sort"]) ?: @""];
+    NSString *community = RFString(variables[@"subredditName"]).lowercaseString;
+    if (!community.length) return nil;
+    key = [NSString stringWithFormat:@"%@|%@", community, RFString(variables[@"sort"]) ?: @""];
   }
 
   os_unfair_lock_lock(&gLock);
@@ -736,6 +806,15 @@ NSData *RFFeedCachePageFrom(NSString *operation, NSURLRequest *request, NSData *
   // should refresh.
   BOOL replay = !after && !gFeeds[feed].replayTried;
   if (!after) gFeeds[feed].replayTried = YES;
+  // The screen the page is for was pushed on Home (see RFFeedCacheNotePushedFeedScreen): the side menu's
+  // rows open Popular and Latest that way. Only the screen the restore reopens replays then, so a feed
+  // opened fresh starts at the top (a Latest kept hours ago would come back with today's posts below it).
+  // Only those feeds' pages take the note: another feed's first page can come between the push and this one.
+  BOOL pushed = !after && (feed == kRFLatestFeed || feed == kRFPopularFeed) && RFTakePushedFeedScreen();
+  if (RFFeedReplaysWhenArmed(feed, pushed)) {
+    replay = replay && gFeeds[feed].armed;
+    if (!after) gFeeds[feed].armed = NO;
+  }
   if (feed == kRFCommunityFeed) {
     // Only the community the restore opened, in the sort it was kept in.
     replay = replay && gFeeds[feed].armedName && [key hasPrefix:[gFeeds[feed].armedName stringByAppendingString:@"|"]] &&
@@ -767,9 +846,9 @@ NSData *RFFeedCachePageFrom(NSString *operation, NSURLRequest *request, NSData *
     gFeeds[feed].restoreIndex = index;
     gFeeds[feed].restoreOffset = [offset isKindOfClass:NSNumber.class] ? offset.doubleValue : 0;
     os_unfair_lock_unlock(&gLock);
-    NSString *name = kRFFeeds[feed].operation;
+    NSString *replayedName = kRFFeeds[feed].name;
     dispatch_async(dispatch_get_main_queue(), ^{
-      [NSNotificationCenter.defaultCenter postNotificationName:RFFeedCacheDidReplayNotification object:name];
+      [NSNotificationCenter.defaultCenter postNotificationName:RFFeedCacheDidReplayNotification object:replayedName];
     });
   }
   if (after && feed == kRFCommunityFeed && ![RFString(cache[kRFCacheKey]) isEqualToString:key]) return replayed;
@@ -798,13 +877,13 @@ NSArray<NSString *> *RFFeedCacheRestoringFeeds(void) {
   NSMutableArray *feeds = [NSMutableArray array];
   os_unfair_lock_lock(&gLock);
   for (NSInteger feed = 0; feed < kRFFeedCount; feed++)
-    if (gFeeds[feed].restoreEdges) [feeds addObject:kRFFeeds[feed].operation];
+    if (gFeeds[feed].restoreEdges) [feeds addObject:kRFFeeds[feed].name];
   os_unfair_lock_unlock(&gLock);
   return feeds;
 }
 
-BOOL RFFeedCacheRestoreTarget(NSString *operation, NSUInteger *index, double *offset) {
-  NSInteger feed = RFFeedIndex(operation);
+BOOL RFFeedCacheRestoreTarget(NSString *feedName, NSUInteger *index, double *offset) {
+  NSInteger feed = RFFeedIndex(feedName);
   if (feed < 0) return NO;
   os_unfair_lock_lock(&gLock);
   BOOL pending = gFeeds[feed].restoreEdges != nil;
@@ -814,8 +893,8 @@ BOOL RFFeedCacheRestoreTarget(NSString *operation, NSUInteger *index, double *of
   return pending;
 }
 
-NSUInteger RFFeedCacheReplayedIndex(NSString *operation, NSString *label) {
-  NSInteger feed = RFFeedIndex(operation);
+NSUInteger RFFeedCacheReplayedIndex(NSString *feedName, NSString *label) {
+  NSInteger feed = RFFeedIndex(feedName);
   if (feed < 0) return NSNotFound;
   if (!label.length) return NSNotFound;
   os_unfair_lock_lock(&gLock);
@@ -838,8 +917,8 @@ NSUInteger RFFeedCacheReplayedIndex(NSString *operation, NSString *label) {
   return index;
 }
 
-void RFFeedCacheEndRestore(NSString *operation) {
-  NSInteger feed = RFFeedIndex(operation);
+void RFFeedCacheEndRestore(NSString *feedName) {
+  NSInteger feed = RFFeedIndex(feedName);
   if (feed < 0) return;
   os_unfair_lock_lock(&gLock);
   gFeeds[feed].restoreEdges = nil;
