@@ -33,6 +33,8 @@ static NSString *const kRFUnfilteredRow = @"Unfiltered requests";
 // The row that lists feed cards that aren't posts or ads. Always last.
 static NSString *const kRFFeedCardsRow = @"Other feed cards";
 static NSString *const kRFArticleSafariRow = @"Article links";
+static NSString *const kRFSettingsScrollRow = @"Settings scrolling";
+static const NSUInteger kRFMaxScrollEvents = 30;
 static const NSUInteger kRFMaxCardTypes = 30;
 
 // "1 card", "3 cards".
@@ -56,6 +58,9 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
   NSMutableDictionary<NSString *, NSMutableDictionary *> *_feedCards;
   RFArticleSafariHooks _articleSafariHooks;
   RFArticleSafariResult _articleSafariResult;
+  NSMutableArray<NSString *> *_scrollEvents; // oldest first
+  NSString *_scrollState;                   // after the latest touch
+  NSString *_scrollStuck;                   // after the latest drag that didn't scroll
 }
 
 + (instancetype)shared {
@@ -75,6 +80,7 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
     _records = [NSMutableDictionary dictionary];
     _unfiltered = [NSMutableDictionary dictionary];
     _feedCards = [NSMutableDictionary dictionary];
+    _scrollEvents = [NSMutableArray array];
     [self seedOperation:kRFUnfilteredRow expected:@"no GraphQL requests to other Reddit addresses"];
 
     // Seed the known operations so the menu lists every path up front, even
@@ -87,6 +93,7 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
     [self seedOperation:@"PostInfoById" expected:@"data.postInfoById.commentForest.trees"];
     [self seedOperation:@"PdpCommentsAds" expected:@"data.*.pdpCommentsAds"];
     [self seedOperation:kRFArticleSafariRow expected:@"article hook compatibility"];
+    [self seedOperation:kRFSettingsScrollRow expected:@"settings page scrolling"];
     [self seedOperation:kRFFeedCardsRow expected:@"feed cards that aren't posts or ads"];
   }
   return self;
@@ -209,6 +216,33 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
   });
 }
 
+- (void)addSettingsScrollEvent:(NSString *)line {
+  if (!RFDiagnosticsEnabled() || !line.length) return;
+  dispatch_sync(_queue, ^{
+    if (!RFDiagnosticsEnabled()) return;
+    [_scrollEvents addObject:line];
+    if (_scrollEvents.count > kRFMaxScrollEvents) [_scrollEvents removeObjectAtIndex:0];
+  });
+}
+
+- (void)setSettingsScrollState:(NSString *)state stuck:(BOOL)stuck {
+  if (!RFDiagnosticsEnabled() || !state.length) return;
+  dispatch_sync(_queue, ^{
+    if (!RFDiagnosticsEnabled()) return;
+    _scrollState = [state copy];
+    if (stuck) _scrollStuck = [state copy];
+  });
+}
+
+// Caller is on _queue.
+- (NSString *)settingsScrollSummary {
+  if (!_scrollEvents.count && !_scrollState)
+    return @"Nothing yet. Try scrolling a RedditFilter settings page, then come back here.";
+  return [NSString stringWithFormat:@"Latest:\n%@\n\nLast drag that didn't scroll:\n%@\n\nRecent, oldest first:\n%@",
+                                    _scrollState ?: @"none", _scrollStuck ?: @"none",
+                                    [_scrollEvents componentsJoinedByString:@"\n"]];
+}
+
 // Caller is on _queue. This is a single fixed outcome, not a browsing history.
 - (NSString *)articleSafariSummary {
   NSArray<NSString *> *results = @[
@@ -262,6 +296,7 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
       // immutable snapshot for the UI to read on the main thread.
       NSMutableDictionary *record = [_records[op] mutableCopy];
       if ([op isEqualToString:kRFArticleSafariRow]) record[kRFDebugSummary] = [self articleSafariSummary];
+      if ([op isEqualToString:kRFSettingsScrollRow]) record[kRFDebugSummary] = [self settingsScrollSummary];
       if ([op isEqualToString:kRFUnfilteredRow]) {
         NSArray *keys = [_unfiltered keysSortedByValueUsingComparator:^NSComparisonResult(id a, id b) {
           return [b[@"count"] compare:a[@"count"]];
@@ -331,6 +366,9 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
     [_unfiltered removeAllObjects];
     [_feedCards removeAllObjects];
     _articleSafariResult = RFArticleSafariNotObserved;
+    [_scrollEvents removeAllObjects];
+    _scrollState = nil;
+    _scrollStuck = nil;
   });
 }
 

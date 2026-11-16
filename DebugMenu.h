@@ -122,6 +122,12 @@ typedef NS_ENUM(NSUInteger, RFArticleSafariResult) {
 - (void)setArticleSafariHooks:(RFArticleSafariHooks)hooks;
 - (void)recordArticleSafariResult:(RFArticleSafariResult)result;
 
+// Settings page scrolling, for a report that a settings page won't scroll. Lines hold sizes, positions,
+// page titles and class names only. Only recorded while Diagnostics is on; reset/off clears them.
+- (void)addSettingsScrollEvent:(NSString *)line;
+// `stuck`: also keep this as the state after the latest drag that didn't scroll.
+- (void)setSettingsScrollState:(NSString *)state stuck:(BOOL)stuck;
+
 // What -snapshot shows, as plain text for a bug report. It holds operation names, schema paths,
 // Reddit API addresses, card types and article compatibility only: captured JSON is never included.
 // The settings share sheet adds the RedditFilter, Reddit and iOS versions. Thread-safe.

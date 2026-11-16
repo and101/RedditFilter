@@ -7,6 +7,7 @@
 #import "DebugMenu.h"
 #import "RFBackup.h"
 #import "RFBackupPicker.h"
+#import "RFScrollDiagnostics.h"
 #import "RFStats.h"
 #import "RFStatsViewController.h"
 #import "UpdateChecker.h"
@@ -886,6 +887,14 @@ static NSString *RFBackupSummaryMessage(RFBackupSummary *summary) {
                                     date, settings, keywords, hidden];
 }
 
+// The table's top inset that matches the current Settings header: 20 pt below the navigation bar.
+// -1 when there's no bar to line up with.
+static CGFloat RFSettingsTopInset(UIViewController *settings) {
+  UINavigationBar *bar = settings.navigationController.navigationBar;
+  if (!settings.isViewLoaded || !bar || bar.hidden) return -1;
+  return CGRectGetMaxY([bar convertRect:bar.bounds toView:settings.view]) + 20.0;
+}
+
 %subclass FeedFilterSettingsViewController : BaseTableViewController
 
 - (void)viewDidLoad {
@@ -911,18 +920,48 @@ static NSString *RFBackupSummaryMessage(RFBackupSummary *summary) {
   self.tableView.tableHeaderView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 0, 0.01)];
 }
 
+// BaseTableViewController sets the table's insets from this on every layout, with legacy top spacing.
+// Ask for the current Settings header inset instead, so its layout and ours agree.
+- (UIEdgeInsets)preferredContentInset {
+  UIEdgeInsets inset = %orig;
+  CGFloat top = RFSettingsTopInset(self);
+  if (top >= 0) inset.top = top;
+  return inset;
+}
+
 - (void)viewDidLayoutSubviews {
   %orig;
-  // BaseTableViewController adds legacy top spacing. Match the current Settings header inset.
-  UINavigationBar *bar = self.navigationController.navigationBar;
-  if (!bar || bar.hidden) return;
-  CGFloat top = CGRectGetMaxY([bar convertRect:bar.bounds toView:self.view]) + 20.0;
-  UIEdgeInsets inset = self.tableView.contentInset;
+  // In case BaseTableViewController stops using preferredContentInset. On the iPhone Duo's closed
+  // screen it lays out on almost every frame while scrolling, so this must never move the list then.
+  UITableView *table = self.tableView;
+  // BaseTableViewController sizes the table to the whole window, not this sheet. A sheet that doesn't
+  // start at the window's left edge (in landscape, or centred on a large screen) then has the rows
+  // sticking out past its left side.
+  if (table.superview == self.view && !CGRectEqualToRect(table.frame, self.view.bounds)) table.frame = self.view.bounds;
+  CGFloat top = RFSettingsTopInset(self);
+  if (top < 0) return;
+  UIEdgeInsets inset = table.contentInset;
   if (fabs(inset.top - top) < 0.5) return;
-  BOOL atTop = self.tableView.contentOffset.y <= -self.tableView.adjustedContentInset.top + 0.5;
+  // At the top for either inset: right where the old one starts (the page has just loaded), or at or above
+  // where ours starts. Not anywhere between, which is where the list is while it's being scrolled.
+  CGFloat systemTop = table.adjustedContentInset.top - inset.top;
+  CGFloat offset = table.contentOffset.y, oldStart = -table.adjustedContentInset.top;
+  BOOL atTop = fabs(offset - oldStart) < 0.5 || offset <= -(top + systemTop) + 0.5;
+  CGFloat from = inset.top;
   inset.top = top;
-  self.tableView.contentInset = inset;
-  if (atTop) self.tableView.contentOffset = CGPointMake(0, -self.tableView.adjustedContentInset.top);
+  table.contentInset = inset;
+  if (atTop) table.contentOffset = CGPointMake(0, -table.adjustedContentInset.top);
+  RFScrollDiagnosticsInsetChanged(self, from, top, atTop);
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+  %orig;
+  RFScrollDiagnosticsAttach(self);
+}
+
+- (void)viewWillTransitionToSize:(CGSize)size withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
+  %orig;
+  RFScrollDiagnosticsNote(self, [NSString stringWithFormat:@"view resizing to %.0fx%.0f", size.width, size.height]);
 }
 
 - (void)viewWillAppear:(BOOL)animated {
