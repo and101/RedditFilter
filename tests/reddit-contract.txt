@@ -30,16 +30,15 @@ CarouselCommunityRecommendationsFeedUnit
 MerchandisingUnitCell
 FeedSurvey
 isScoreHidden
-isAwardHidden
 isInitiallyCollapsed
 recommendationContext
 # Saved full-post request (JSONFilter.m)
-40fc72b2d8478c7ad06669920f520ae11b9e91e9217a1c140b5c748e74fdf42a
+9a850d8edd30f4753731249f1feb895afdc9c45963f84e4a953a297778e2b63c
 # Comment thread lines (ColoredComments.x)
 _TtC21PDP_CommentSheet_Impl15VerticalDivider
 _TtC63Components_CommentTreeItem_CommentTreeItemPresentation_Internal30CommentTreeItemVerticalDivider
 # Panel on links opened from a post page (LinkPanel.x)
-FBPArticleLinkConsumptionView
+_TtC18Video_FBP_Internal29FBPArticleLinkConsumptionView
 FBPCommentSheetAdapterView
 # Keep feed position (FeedPosition.x)
 _TtC6Reddit13SceneDelegate
@@ -79,8 +78,8 @@ navigateArticleLinkExperienceForPost:feedContextInfo:videoPlayerView:navigationS
 linkURL
 # Post-page article route (Swift router; observed UIKit and WebKit boundaries)
 MainTabBarNavigationController
-FBPListViewModel
-FBPArticleLinkConsumptionViewModel
+_TtC18Video_FBP_Internal16FBPListViewModel
+_TtC18Video_FBP_Internal34FBPArticleLinkConsumptionViewModel
 # Swipe-to-collapse restoration (SwipeCollapse.x)
 SliceKit.FlexStackView
 _TtC21PDP_CommentSheet_Impl16CommentSliceView
@@ -113,6 +112,11 @@ contentStrong
 contentWeak
 
 [legacy]
+# Before Reddit 2026.46
+_TtC14Video_FBP_Impl29FBPArticleLinkConsumptionView
+_TtC14Video_FBP_Impl34FBPArticleLinkConsumptionViewModel
+isAwardHidden
+40fc72b2d8478c7ad06669920f520ae11b9e91e9217a1c140b5c748e74fdf42a
 popularV3
 commentsPageAds
 commentTreeAds

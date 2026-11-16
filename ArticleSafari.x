@@ -87,8 +87,17 @@ static BOOL RFOpenArticleInSafari(id navigator, id post) {
 @end
 
 static char kRFArticlePushMarker;
-static NSString *const kRFArticleControllerName =
-    @"_TtGC14RedditSliceKit24RedditBaseViewControllerC14Video_FBP_Impl16FBPListViewModel_";
+// Reddit 2026.46 renamed the module from Video_FBP_Impl to Video_FBP_Internal.
+static BOOL RFIsArticleController(UIViewController *controller) {
+  NSString *name = NSStringFromClass(controller.class);
+  return [name isEqualToString:@"_TtGC14RedditSliceKit24RedditBaseViewControllerC18Video_FBP_Internal16FBPListViewModel_"] ||
+         [name isEqualToString:@"_TtGC14RedditSliceKit24RedditBaseViewControllerC14Video_FBP_Impl16FBPListViewModel_"];
+}
+
+static Class RFFBPClass(NSString *name) {
+  return NSClassFromString([@"Video_FBP_Internal." stringByAppendingString:name])
+             ?: NSClassFromString([@"Video_FBP_Impl." stringByAppendingString:name]);
+}
 
 static BOOL RFArticleStackMatches(UINavigationController *navigation, NSArray<UIViewController *> *originalStack,
                                   UIViewController *destination) {
@@ -223,7 +232,7 @@ static void RFScheduleArticleInspection(RFArticlePushMarker *marker,
   void (^inspect)(void) = ^{
     dispatch_async(dispatch_get_main_queue(), ^{
       // The Swift view class may first become available while the pushed screen loads.
-      RFInspectArticlePush(marker, articleClass ?: NSClassFromString(@"Video_FBP_Impl.FBPArticleLinkConsumptionView"));
+      RFInspectArticlePush(marker, articleClass ?: RFFBPClass(@"FBPArticleLinkConsumptionView"));
     });
   };
   if (!coordinator || ![coordinator animateAlongsideTransition:nil completion:^(id<UIViewControllerTransitionCoordinatorContext> context) {
@@ -238,7 +247,7 @@ static void RFScheduleArticleInspection(RFArticlePushMarker *marker,
   UINavigationController *navigation = (UINavigationController *)self;
   RFArticlePushMarker *marker = nil;
   if (NSThread.isMainThread && RFArticleSafariLinksOn() &&
-      [NSStringFromClass(destination.class) isEqualToString:kRFArticleControllerName] &&
+      RFIsArticleController(destination) &&
       navigation.topViewController && navigation.topViewController != destination) {
     marker = [RFArticlePushMarker new];
     marker.navigation = navigation;
@@ -308,7 +317,7 @@ static void RFScheduleArticleInspection(RFArticlePushMarker *marker,
     %init(RFArticlePush, RFArticleNavigationController = navigation);
     hooks |= RFArticleSafariHookPush;
   }
-  Class web = NSClassFromString(@"Video_FBP_Impl.FBPArticleLinkConsumptionViewModel");
+  Class web = RFFBPClass(@"FBPArticleLinkConsumptionViewModel");
   Method start = class_getInstanceMethod(web, @selector(webView:didStartProvisionalNavigation:));
   if (start && strcmp(method_getTypeEncoding(start), "v32@0:8@16@24") == 0) {
     %init(RFArticleWebViewStart, RFArticleWebViewModel = web);

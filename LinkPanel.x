@@ -76,7 +76,9 @@ static void RFHidePanelNear(UIView *linkView) {
 %end
 
 %ctor {
-  Class linkView = NSClassFromString(@"Video_FBP_Impl.FBPArticleLinkConsumptionView");
+  // Reddit 2026.46 renamed the module from Video_FBP_Impl to Video_FBP_Internal.
+  Class linkView = NSClassFromString(@"Video_FBP_Internal.FBPArticleLinkConsumptionView")
+                       ?: NSClassFromString(@"Video_FBP_Impl.FBPArticleLinkConsumptionView");
   gPanelClass = NSClassFromString(@"PDP_FBPCommentSheetAdapter_Impl.FBPCommentSheetAdapterView");
   if (linkView && gPanelClass) %init(RFLinkViewHooks, RFLinkView = linkView, RFLinkPanelView = gPanelClass);
 }
