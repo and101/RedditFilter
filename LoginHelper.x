@@ -56,6 +56,8 @@ void RFClearPendingWebSession(void) {
 @property(nonatomic, copy) NSString *prefillUsername;
 @property(nonatomic, copy) NSString *prefillPassword;
 @property(nonatomic, assign) BOOL autofillScheduled;
+// How many more times to fill in and submit again if the page wipes the form after a submit.
+@property(nonatomic, assign) NSInteger resubmitsLeft;
 // Windows the page opened, such as Continue with Google or Apple, shown on top of it.
 @property(nonatomic, strong) NSMutableArray<WKWebView *> *popups;
 @end
@@ -65,6 +67,7 @@ void RFClearPendingWebSession(void) {
 - (void)viewDidLoad {
   [super viewDidLoad];
   self.title = self.prefillPassword ? @"Log in" : @"Log in with browser";
+  self.resubmitsLeft = 2;
   self.view.backgroundColor = UIColor.systemBackgroundColor;
   self.navigationItem.leftBarButtonItem =
       [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCancel
@@ -181,11 +184,43 @@ static NSString *const kAutofillScript =
     @"  input.blur();"
     @"}"
     @"await new Promise((resolve) => setTimeout(resolve, 400));"
+    // The page can still be setting the form up, which empties it again. Fill it in once it stays filled.
+    @"if (username.value !== user || password.value !== pass) return 'waiting';"
     @"const button = document.querySelector('faceplate-form#login button.login') ||"
     @"               document.querySelector('auth-flow-login button.login');"
     @"if (!button) return 'filled';"
     @"button.click();"
     @"return 'submitted';";
+
+// After a submit: 'wiped' if the page emptied both fields without moving on, which it does when the
+// form was submitted while still being set up. Anything else (an error, a code to enter) is left alone.
+static NSString *const kSubmittedCheckScript =
+    @"const field = (name) => {"
+    @"  const host = document.querySelector(`faceplate-text-input[name='${name}']`);"
+    @"  return host && host.shadowRoot && host.shadowRoot.querySelector('input');"
+    @"};"
+    @"const username = field('username'), password = field('password');"
+    @"if (!username || !password || !password.getClientRects().length) return 'moved';"
+    @"return username.value || password.value ? 'kept' : 'wiped';";
+
+- (void)checkSubmission {
+  if (self.finished || !self.prefillPassword) return;
+  __weak RFWebLoginViewController *weakSelf = self;
+  [self.webView callAsyncJavaScript:kSubmittedCheckScript
+                          arguments:@{}
+                            inFrame:nil
+                     inContentWorld:WKContentWorld.defaultClientWorld
+                  completionHandler:^(id result, NSError *error) {
+                    RFWebLoginViewController *strongSelf = weakSelf;
+                    if (!strongSelf || strongSelf.finished) return;
+                    if ([result isEqual:@"wiped"] && strongSelf.resubmitsLeft > 0) {
+                      strongSelf.resubmitsLeft--;
+                      [strongSelf autofillWithAttemptsLeft:20];
+                      return;
+                    }
+                    strongSelf.prefillPassword = nil;
+                  }];
+}
 
 - (void)autofillWithAttemptsLeft:(NSInteger)attemptsLeft {
   if (self.finished || !self.prefillPassword) return;
@@ -211,6 +246,14 @@ static NSString *const kAutofillScript =
                     }
                     // Filled in (and submitted, unless the button wasn't found). From here on the
                     // user can see the page and finish anything it asks for, such as a 2FA code.
+                    // Check back once, in case the page wiped the form instead of logging in.
+                    if ([result isEqual:@"submitted"] && strongSelf.resubmitsLeft > 0) {
+                      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)),
+                                     dispatch_get_main_queue(), ^{
+                                       [weakSelf checkSubmission];
+                                     });
+                      return;
+                    }
                     strongSelf.prefillPassword = nil;
                   }];
 }
