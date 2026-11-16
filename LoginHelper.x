@@ -58,6 +58,8 @@ void RFClearPendingWebSession(void) {
 @property(nonatomic, assign) BOOL autofillScheduled;
 // How many more times to fill in and submit again if the page wipes the form after a submit.
 @property(nonatomic, assign) NSInteger resubmitsLeft;
+// Over the page while RedditFilter fills it in by itself.
+@property(nonatomic, strong) UIView *cover;
 // Windows the page opened, such as Continue with Google or Apple, shown on top of it.
 @property(nonatomic, strong) NSMutableArray<WKWebView *> *popups;
 @end
@@ -112,6 +114,7 @@ void RFClearPendingWebSession(void) {
                                      .firstObject];
   [configuration.websiteDataStore.httpCookieStore addObserver:self];
   [self.view addSubview:self.webView];
+  if (self.prefillPassword) [self showCover];
   [self.webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:kWebLoginURL]]];
 }
 
@@ -193,17 +196,23 @@ static NSString *const kAutofillScript =
     @"return 'submitted';";
 
 // After a submit: 'wiped' if the page emptied both fields without moving on, which it does when the
-// form was submitted while still being set up. Anything else (an error, a code to enter) is left alone.
+// form was submitted while still being set up; 'error' if it shows a message by a field (a wrong
+// password, say); 'moved' if it's asking for something else, such as a 2FA code; otherwise 'kept'.
 static NSString *const kSubmittedCheckScript =
-    @"const field = (name) => {"
-    @"  const host = document.querySelector(`faceplate-text-input[name='${name}']`);"
-    @"  return host && host.shadowRoot && host.shadowRoot.querySelector('input');"
+    @"const host = (name) => document.querySelector(`faceplate-text-input[name='${name}']`);"
+    @"const field = (name) => { const h = host(name); return h && h.shadowRoot && h.shadowRoot.querySelector('input'); };"
+    @"const message = (name) => {"
+    @"  const h = host(name);"
+    @"  const helper = h && h.shadowRoot && h.shadowRoot.querySelector('faceplate-form-helper-text, [id*=helper]');"
+    @"  return ((helper && helper.innerText) || '').trim();"
     @"};"
     @"const username = field('username'), password = field('password');"
     @"if (!username || !password || !password.getClientRects().length) return 'moved';"
+    @"if (message('username') || message('password')) return 'error';"
     @"return username.value || password.value ? 'kept' : 'wiped';";
 
-- (void)checkSubmission {
+// `checksLeft`: how many more times to look again while the page still shows the filled-in form.
+- (void)checkSubmissionWithChecksLeft:(NSInteger)checksLeft {
   if (self.finished || !self.prefillPassword) return;
   __weak RFWebLoginViewController *weakSelf = self;
   [self.webView callAsyncJavaScript:kSubmittedCheckScript
@@ -218,7 +227,15 @@ static NSString *const kSubmittedCheckScript =
                       [strongSelf autofillWithAttemptsLeft:20];
                       return;
                     }
-                    strongSelf.prefillPassword = nil;
+                    // Still logging in, most likely: give it a little longer before showing the page.
+                    if ([result isEqual:@"kept"] && checksLeft > 0) {
+                      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)),
+                                     dispatch_get_main_queue(), ^{
+                                       [weakSelf checkSubmissionWithChecksLeft:checksLeft - 1];
+                                     });
+                      return;
+                    }
+                    [strongSelf handOverToUser];
                   }];
 }
 
@@ -231,31 +248,91 @@ static NSString *const kSubmittedCheckScript =
                      inContentWorld:WKContentWorld.defaultClientWorld
                   completionHandler:^(id result, NSError *error) {
                     RFWebLoginViewController *strongSelf = weakSelf;
-                    if (!strongSelf) return;
+                    if (!strongSelf || strongSelf.finished) return;
                     if ([result isEqual:@"waiting"] || error) {
-                      if (attemptsLeft <= 0) {
-                        // Leave the page for the user to fill in.
-                        strongSelf.prefillPassword = nil;
-                        return;
-                      }
+                      // Leave the page for the user to fill in.
+                      if (attemptsLeft <= 0) return [strongSelf handOverToUser];
                       dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
                                      dispatch_get_main_queue(), ^{
                                        [weakSelf autofillWithAttemptsLeft:attemptsLeft - 1];
                                      });
                       return;
                     }
-                    // Filled in (and submitted, unless the button wasn't found). From here on the
-                    // user can see the page and finish anything it asks for, such as a 2FA code.
-                    // Check back once, in case the page wiped the form instead of logging in.
-                    if ([result isEqual:@"submitted"] && strongSelf.resubmitsLeft > 0) {
+                    // Submitted: check back, in case the page wiped the form, shows an error or asks
+                    // for a code. Otherwise (no Log In button, or not reddit.com) show the page.
+                    if ([result isEqual:@"submitted"]) {
                       dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)),
                                      dispatch_get_main_queue(), ^{
-                                       [weakSelf checkSubmission];
+                                       [weakSelf checkSubmissionWithChecksLeft:3];
                                      });
                       return;
                     }
-                    strongSelf.prefillPassword = nil;
+                    [strongSelf handOverToUser];
                   }];
+}
+
+#pragma mark Cover
+
+// While RedditFilter logs in by itself, the page sits under a "Logging in" cover, so the cookie banner,
+// the reloads and the form filling itself in aren't shown. Cancel stays in the bar above it.
+- (void)showCover {
+  UIView *cover = [[UIView alloc] initWithFrame:self.view.bounds];
+  cover.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+  cover.backgroundColor = UIColor.systemBackgroundColor;
+
+  UIActivityIndicatorView *spinner =
+      [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleLarge];
+  [spinner startAnimating];
+  UILabel *title = [UILabel new];
+  title.text = @"Logging in…";
+  title.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
+  title.adjustsFontForContentSizeCategory = YES;
+  UILabel *detail = [UILabel new];
+  detail.text = @"Reddit wants this login finished on reddit.com. RedditFilter is doing that for you.";
+  detail.font = [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline];
+  detail.adjustsFontForContentSizeCategory = YES;
+  detail.textColor = UIColor.secondaryLabelColor;
+  detail.textAlignment = NSTextAlignmentCenter;
+  detail.numberOfLines = 0;
+
+  UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[ spinner, title, detail ]];
+  stack.axis = UILayoutConstraintAxisVertical;
+  stack.alignment = UIStackViewAlignmentCenter;
+  stack.spacing = 12;
+  stack.translatesAutoresizingMaskIntoConstraints = NO;
+  [cover addSubview:stack];
+  UILayoutGuide *safe = cover.safeAreaLayoutGuide;
+  [NSLayoutConstraint activateConstraints:@[
+    [stack.centerXAnchor constraintEqualToAnchor:safe.centerXAnchor],
+    [stack.centerYAnchor constraintEqualToAnchor:safe.centerYAnchor],
+    [stack.leadingAnchor constraintGreaterThanOrEqualToAnchor:safe.leadingAnchor constant:32],
+    [stack.trailingAnchor constraintLessThanOrEqualToAnchor:safe.trailingAnchor constant:-32],
+  ]];
+  [self.view addSubview:cover];
+  self.cover = cover;
+
+  // However the page behaves, don't keep it covered for long.
+  __weak RFWebLoginViewController *weakSelf = self;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(25 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    RFWebLoginViewController *strongSelf = weakSelf;
+    if (strongSelf && !strongSelf.succeeded) [strongSelf handOverToUser];
+  });
+}
+
+// Stops filling in and shows the page, for the user to finish or fix: a 2FA code, a wrong password, or
+// a page RedditFilter doesn't recognise. Logging in from the page still closes the sheet as usual.
+- (void)handOverToUser {
+  self.prefillPassword = nil;
+  UIView *cover = self.cover;
+  if (!cover) return;
+  self.cover = nil;
+  [UIView animateWithDuration:0.25
+      animations:^{
+        cover.alpha = 0;
+      }
+      completion:^(BOOL done) {
+        [cover removeFromSuperview];
+      }];
 }
 
 // Swiping the sheet away counts as cancelling, so a cookie or account check still on its way can't
