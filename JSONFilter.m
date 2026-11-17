@@ -1190,6 +1190,32 @@ NSData *RFLocalShareURLResponse(NSURLRequest *request) {
   return [NSJSONSerialization dataWithJSONObject:answer options:0 error:NULL];
 }
 
+#pragma mark - Trackers
+
+BOOL RFIsTrackerURL(NSURL *url) {
+  NSString *host = url.host.lowercaseString;
+  if (!host.length) return NO;
+  // Reddit's own event logging: batches of usage events. Only that path, as the same hosts serve the app.
+  if ([url.path hasPrefix:@"/v2p"] && [host hasSuffix:@".reddit.com"] &&
+      ([host hasPrefix:@"gql"] || [host containsString:@".gql"]))
+    return YES;
+  static NSArray *domains;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    domains = @[
+      @"appsflyersdk.com", @"appsflyer.com",                                            // AppsFlyer
+      @"app-analytics-services.com", @"app-analytics-services-att.com",                 // Google Analytics for Firebase
+      @"firebaselogging.googleapis.com", @"firebaselogging-pa.googleapis.com",          // Firebase event upload
+      @"crashlytics.com", @"crashlyticsreports-pa.googleapis.com",                      // Crashlytics
+      @"app-ads-services.com", @"googleadservices.com",                                 // Google ad conversion
+      @"graph.facebook.com",                                                            // Facebook app events
+    ];
+  });
+  for (NSString *domain in domains)
+    if ([host isEqualToString:domain] || [host hasSuffix:[@"." stringByAppendingString:domain]]) return YES;
+  return NO;
+}
+
 #pragma mark - Operation name
 
 NSString *RFOperationName(NSURLRequest *request) {

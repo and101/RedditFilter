@@ -12,6 +12,7 @@
 #import "Preferences.h"
 #import "PostPageFeed.h"
 #import "ScreenRestore.h"
+#import "TrackerBlock.h"
 #import "Redgifs.h"
 #import "SwipeCollapse.h"
 
@@ -41,6 +42,7 @@ extern "C" void RFReloadPreferences(void) {
   prefs.redgifsHD = [defaults boolForKey:kRedditFilterRedgifsHD];
   prefs.redgifsHDWiFiOnly = [defaults boolForKey:kRedditFilterRedgifsHDWiFiOnly];
   prefs.cleanShareLinks = [defaults boolForKey:kRedditFilterCleanShareLinks];
+  RFSetTrackerBlocking([defaults boolForKey:kRedditFilterBlockTrackers]);
   // Keep feed position: the kept posts were filtered with the old settings, so a change forgets them
   // (otherwise posts the new settings hide could come back). Not at launch, only when they change.
   static NSArray *lastFilters;
@@ -672,6 +674,7 @@ BOOL RFCleanCachedExperiments(void) {
     kRedditFilterSafariLinks : @NO,
     kRedditFilterCheckUpdates : @YES,
     kRedditFilterCleanShareLinks : @NO,
+    kRedditFilterBlockTrackers : @NO,
   }];
   RFReloadPreferences();
   if (globalPrefs.promoted) RFCleanCachedExperiments();

@@ -48,6 +48,11 @@ NSString *RFOperationName(NSURLRequest *request);
 // A link with its tracking query items (utm_*, share_id and the like) removed; nil if it isn't a link.
 NSString *RFCleanShareURL(NSString *url);
 
+// Block trackers: whether a request goes to an analytics, ad-conversion or crash-report service (AppsFlyer,
+// Firebase, Crashlytics, Google and Facebook ad services) or to Reddit's own event logging. Nothing the app
+// needs to work: logging in, feeds, media and notifications all use other addresses.
+BOOL RFIsTrackerURL(NSURL *url);
+
 // Clean share links: the answer to the app's CreateShareUrl request, made here instead of by Reddit,
 // whose /s/ short links are tied to the account that shared them. The plain link the app asked to
 // shorten, without tracking. Returns nil if the request isn't one RedditFilter recognises.

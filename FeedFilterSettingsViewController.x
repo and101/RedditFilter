@@ -32,7 +32,7 @@ typedef NS_ENUM(NSInteger, RFToggleTag) {
   RFAwards, RFScores, RFColoured, RFApollo, RFKeywordComments, RFKeywordReplies,
   RFUpdates, RFDirect, RFSD, RFMobileSD, RFAutoMod, RFDiagnostics,
   RFSwipe, RFLeft, RFRight, RFHaptics, RFTap, RFKeepFeed, RFRestoreScreens, RFRestoreAfterSwipe,
-  RFRefreshPill, RFCleanShare,
+  RFRefreshPill, RFCleanShare, RFBlockTrackers,
 };
 static const RFToggleRow kToggleRows[] = {
     {kRedditFilterPromoted, @"Promoted", @"Show ads in feeds and comments", @"rpl3/tag,icon_tag", YES},
@@ -92,6 +92,8 @@ static const RFToggleRow kToggleRows[] = {
      @"rpl3/refresh,icon_refresh", YES},
     {kRedditFilterCleanShareLinks, @"Clean share links", @"Share plain links, not ones tied to you",
      @"rpl3/share,icon_share", NO},
+    {kRedditFilterBlockTrackers, @"Block trackers", @"Stop analytics and event logging",
+     @"rpl3/hide,rpl3/lock,icon_hide", NO},
 };
 static const NSInteger kToggleRowCount = sizeof(kToggleRows) / sizeof(kToggleRows[0]);
 static const NSInteger kAboutUpdateRow = 1;
@@ -500,7 +502,7 @@ static NSArray<NSNumber *> *RFTags(RFSection section) {
     case RFSectionFeed: return @[@(RFKeepFeed), @(RFRestoreScreens)];
     case RFSectionRestoreOptions: return @[@(RFRestoreAfterSwipe)]; // then the Restore for row
     case RFSectionRedgifs: return @[@(RFDirect), @(RFSD), @(RFMobileSD)];
-    case RFSectionPrivacy: return @[@(RFCleanShare)];
+    case RFSectionPrivacy: return @[@(RFCleanShare), @(RFBlockTrackers)];
     default: return @[];
   }
 }
@@ -590,8 +592,10 @@ static NSString *RFFooterText(id settings, NSInteger section) {
     case RFSectionAbout: return @"Based on original work by level3tjg and NicholasBly.";
     case RFSectionPrivacy:
       return @"Reddit's share links (reddit.com/r/…/s/…) are made for your account, so whoever opens one can be "
-             @"linked back to you. With this on, Share and Copy link give the plain link instead, without "
-             @"tracking, and Reddit isn't asked for one.";
+             @"linked back to you. Clean share links gives the plain link instead, without tracking, and Reddit "
+             @"isn't asked for one.\n\nBlock trackers stops AppsFlyer, Google Analytics for Firebase, Crashlytics "
+             @"crash reports, Google and Facebook ad tracking, and Reddit's own usage events from leaving your "
+             @"device. Logging in, feeds, videos and notifications aren't affected.";
   }
   return nil;
 }
@@ -1126,8 +1130,14 @@ static CGFloat RFSettingsTopInset(UIViewController *settings) {
       case RFPageDiagnostics: subtitle = RFDiagnosticsEnabled() ? @"On" : @"Off"; icon = @"rpl3/bug"; symbol = @"ladybug"; break;
       case RFPageAbout: subtitle = RFVersionText(); icon = @"rpl3/info"; symbol = @"info.circle"; break;
       case RFPagePrivacy:
-        subtitle = [NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterCleanShareLinks] ? @"Clean share links on"
-                                                                                                 : @"Clean share links off";
+      {
+        NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+        BOOL clean = [defaults boolForKey:kRedditFilterCleanShareLinks], block = [defaults boolForKey:kRedditFilterBlockTrackers];
+        subtitle = clean && block ? @"Clean links and tracker blocking on"
+                   : clean        ? @"Clean share links on"
+                   : block        ? @"Tracker blocking on"
+                                  : @"Off";
+      }
         icon = @"rpl3/lock,icon_lock"; symbol = @"hand.raised";
         break;
       case RFPageExperimental: {

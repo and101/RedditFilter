@@ -57,6 +57,20 @@ int main(void) {
     Check([searchEdges[1][@"node"][@"children"][@"edges"] count] == 0, @"Remove nested search ads");
     Check([Filter(search, @"SearchDynamic", off) isEqual:search], @"Promoted off leaves search ads");
 
+    // Block trackers.
+    NSURL *(^U)(NSString *) = ^(NSString *s) { return [NSURL URLWithString:s]; };
+    Check(RFIsTrackerURL(U(@"https://tpr0m7.conversions.appsflyersdk.com/api/v6")), @"AppsFlyer");
+    Check(RFIsTrackerURL(U(@"https://app-analytics-services.com/a?x=1")), @"Firebase analytics");
+    Check(RFIsTrackerURL(U(@"https://firebaselogging-pa.googleapis.com/v1/firelog/legacy/batchlog")), @"Firebase logging");
+    Check(RFIsTrackerURL(U(@"https://firebase-settings.crashlytics.com/spi/v2")), @"Crashlytics");
+    Check(RFIsTrackerURL(U(@"https://gql-fed.reddit.com/v2p")), @"Reddit events");
+    Check(RFIsTrackerURL(U(@"https://cf.gql-fed.reddit.com/v2p")), @"Reddit events on the Cloudflare route");
+    Check(!RFIsTrackerURL(U(@"https://gql-fed.reddit.com/")), @"Keep GraphQL");
+    Check(!RFIsTrackerURL(U(@"https://www.reddit.com/v2p")), @"Only the API hosts' events");
+    Check(!RFIsTrackerURL(U(@"https://firebaseinstallations.googleapis.com/v1/projects")), @"Keep Firebase installations");
+    Check(!RFIsTrackerURL(U(@"https://www.recaptcha.net/recaptcha/api.js")), @"Keep reCAPTCHA");
+    Check(!RFIsTrackerURL(U(@"https://notappsflyersdk.com/")), @"Whole domains only");
+
     // Clean share links.
     Check([RFCleanShareURL(@"https://www.reddit.com/r/iphone/?utm_source=share&utm_medium=ios_app&utm_name=ioscss&utm_content=1&utm_term=1") isEqual:@"https://www.reddit.com/r/iphone/"], @"Strip utm items");
     Check([RFCleanShareURL(@"https://www.reddit.com/r/a/comments/x/t/?share_id=abc&context=3") isEqual:@"https://www.reddit.com/r/a/comments/x/t/?context=3"], @"Keep other items");
