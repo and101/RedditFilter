@@ -217,6 +217,7 @@ static NSString *const kAutofillScript =
 
 // After a submit, what the page shows now:
 // - 'code': the 2FA step (a code from an authenticator app, or a backup code).
+// - 'invalid': a field marked invalid but no message (yet).
 // - 'error:<message>': a message by a field, such as "Invalid username or password." It sits in the shadow root
 //   of the field's helper text, itself in the field's shadow root, so innerText on the host misses it.
 // - 'wiped': both fields emptied without moving on, which the page does when the form was submitted
@@ -240,7 +241,7 @@ static NSString *const kSubmittedCheckScript =
     @"};"
     @"const text = message('password') || message('username');"
     @"const invalid = [host('username'), host('password')].some((h) => h.getAttribute('faceplate-validity') === 'invalid');"
-    @"return text || invalid ? 'error:' + text : 'kept';";
+    @"return text ? 'error:' + text : invalid ? 'invalid' : 'kept';";
 
 // How often to look at the page after a submit, and for how long while it still shows the filled-in form.
 static const NSTimeInterval kSubmittedCheckInterval = 0.25;
@@ -266,6 +267,10 @@ static const NSTimeInterval kSubmittedCheckLimit = 12;
                     if ([state hasPrefix:@"error:"])
                       return [strongSelf handOverToUser:RFHandOverError message:[state substringFromIndex:6]];
                     BOOL confirmed = [state isEqual:lastResult];
+                    // A field marked invalid with no message yet: wait for a second look, as a resubmit
+                    // after 'wiped' can briefly leave the emptied fields marked.
+                    if ([state isEqual:@"invalid"] && confirmed)
+                      return [strongSelf handOverToUser:RFHandOverError message:nil];
                     if ([state isEqual:@"wiped"] && confirmed && strongSelf.resubmitsLeft > 0) {
                       strongSelf.resubmitsLeft--;
                       [strongSelf autofillWithAttemptsLeft:20];

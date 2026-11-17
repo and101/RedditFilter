@@ -1205,6 +1205,7 @@ BOOL RFIsTrackerURL(NSURL *url) {
     domains = @[
       @"appsflyersdk.com", @"appsflyer.com",                                            // AppsFlyer
       @"app-analytics-services.com", @"app-analytics-services-att.com",                 // Google Analytics for Firebase
+      @"app-measurement.com",                                                           // its older address
       @"firebaselogging.googleapis.com", @"firebaselogging-pa.googleapis.com",          // Firebase event upload
       @"crashlytics.com", @"crashlyticsreports-pa.googleapis.com",                      // Crashlytics
       @"app-ads-services.com", @"googleadservices.com",                                 // Google ad conversion

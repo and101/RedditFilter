@@ -595,7 +595,7 @@ static NSString *RFFooterText(id settings, NSInteger section) {
              @"linked back to you. Clean share links gives the plain link instead, without tracking, and Reddit "
              @"isn't asked for one.\n\nBlock trackers stops AppsFlyer, Google Analytics for Firebase, Crashlytics "
              @"crash reports, Google and Facebook ad tracking, and Reddit's own usage events from leaving your "
-             @"device. Logging in, feeds, videos and notifications aren't affected.";
+             @"device. Nothing the app needs is blocked: logging in, feeds and videos use other addresses.";
   }
   return nil;
 }

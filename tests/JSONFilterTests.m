@@ -61,6 +61,7 @@ int main(void) {
     NSURL *(^U)(NSString *) = ^(NSString *s) { return [NSURL URLWithString:s]; };
     Check(RFIsTrackerURL(U(@"https://tpr0m7.conversions.appsflyersdk.com/api/v6")), @"AppsFlyer");
     Check(RFIsTrackerURL(U(@"https://app-analytics-services.com/a?x=1")), @"Firebase analytics");
+    Check(RFIsTrackerURL(U(@"https://app-measurement.com/a")), @"Firebase analytics, older address");
     Check(RFIsTrackerURL(U(@"https://firebaselogging-pa.googleapis.com/v1/firelog/legacy/batchlog")), @"Firebase logging");
     Check(RFIsTrackerURL(U(@"https://firebase-settings.crashlytics.com/spi/v2")), @"Crashlytics");
     Check(RFIsTrackerURL(U(@"https://gql-fed.reddit.com/v2p")), @"Reddit events");
@@ -356,6 +357,9 @@ int main(void) {
     Check(RFPostRule(@"meme") == nil && RFPostRule(@"r/gaming") == nil && RFPostRule(@"site:") == nil, @"Plain words aren't rules");
     RFSetFilterKeywords(@[@"site:x.com", @"r/gaming flair:meme"]);
     Check(RFPostDetailsRequest(feedRequest, Data(bodyFeed), keywords) != nil, @"Rules alone get the details check");
+    NSDictionary *ruleTitled = Feed(@[@{@"__typename": @"PostPreviewComponent", @"id": @"t3_g",
+                                       @"post": @{@"title": @"site:x.com flair meme", @"content": NSNull.null}}]);
+    Check([Filter(ruleTitled, @"HomeFeedSdui", keywords) isEqual:ruleTitled], @"Rules alone don't hide by words");
     NSDictionary *ruled = @{@"data": @{@"postsInfoByIds": @[
       @{@"id": @"t3_a", @"title": @"site:x.com", @"domain": @"mobile.x.com", @"subreddit": @{@"name": @"news"}},
       @{@"id": @"t3_b", @"title": @"Hi", @"domain": @"self.gaming", @"subreddit": @{@"name": @"Gaming"},
