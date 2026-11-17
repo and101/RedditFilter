@@ -36,6 +36,10 @@ BOOL RFPrefsAnyEnabled(RFPrefs prefs);
 // case and accents. Thread-safe.
 void RFSetFilterKeywords(NSArray<NSString *> *keywords);
 
+// A keyword entry that's a rule on a post's website or flair ("site:example.com", "flair:Meme",
+// "r/gaming flair:Meme"), or nil for ordinary words. Rules are checked against feed posts' details.
+NSDictionary *RFPostRule(NSString *entry);
+
 // Best-effort GraphQL operation name for a request: the Apollo
 // X-APOLLO-OPERATION-NAME header, then "operationName" in the JSON body, then
 // the ?operationName= query item. Returns @"Unknown" when none is found.

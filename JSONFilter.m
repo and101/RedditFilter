@@ -73,6 +73,8 @@ static NSString *RFFolded(NSString *text) {
 }
 
 static NSRegularExpression *gKeywordRegex;
+// Rules in the keyword list that match a post's website or flair rather than its text (see RFPostRule).
+static NSArray *gPostRules;
 static NSObject *RFKeywordLock(void) {
   static NSObject *lock;
   static dispatch_once_t once;
@@ -87,27 +89,111 @@ static NSRegularExpression *RFCurrentKeywords(RFPrefs prefs) {
   }
 }
 
+// Whole words: no letter or digit right before or after.
+static NSString *RFWholeWordPattern(NSString *inner) {
+  return [NSString stringWithFormat:@"(?<![\\p{L}\\p{N}])(?:%@)(?![\\p{L}\\p{N}])", inner];
+}
+
+// A phrase as a pattern: folded, escaped, and any run of spaces matching any whitespace.
+static NSString *RFPhrasePattern(NSString *phrase) {
+  NSArray *words = [RFFolded(phrase) componentsSeparatedByCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+  NSMutableArray *escaped = [NSMutableArray array];
+  for (NSString *word in words)
+    if (word.length) [escaped addObject:[NSRegularExpression escapedPatternForString:word]];
+  return [escaped componentsJoinedByString:@"\\s+"];
+}
+
+// A keyword entry that's a rule rather than words to look for:
+//   site:example.com        posts linking to example.com or any of its subdomains
+//   flair:Meme              posts whose flair has that word or phrase
+//   r/gaming flair:Meme     the same, in r/gaming only (works with site: too)
+// Returns nil for an ordinary keyword. Keys: "site" (a domain) or "flair" (a regex), and "subreddit".
+NSDictionary *RFPostRule(NSString *entry) {
+  NSString *text = [entry stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+  NSString *subreddit = nil;
+  NSString *lower = text.lowercaseString;
+  if ([lower hasPrefix:@"r/"] || [lower hasPrefix:@"/r/"]) {
+    NSRange space = [text rangeOfCharacterFromSet:NSCharacterSet.whitespaceCharacterSet];
+    if (space.location == NSNotFound) return nil;
+    subreddit = [[text substringToIndex:space.location] substringFromIndex:[lower hasPrefix:@"/"] ? 3 : 2].lowercaseString;
+    text = [[text substringFromIndex:space.location] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+    lower = text.lowercaseString;
+    if (!subreddit.length) return nil;
+  }
+  NSMutableDictionary *rule = [NSMutableDictionary dictionary];
+  if (subreddit) rule[@"subreddit"] = subreddit;
+  if ([lower hasPrefix:@"site:"]) {
+    NSString *site = [[lower substringFromIndex:5] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+    for (NSString *prefix in @[ @"https://", @"http://", @"www." ])
+      if ([site hasPrefix:prefix]) site = [site substringFromIndex:prefix.length];
+    site = [site componentsSeparatedByString:@"/"].firstObject;
+    if (!site.length || [site rangeOfCharacterFromSet:NSCharacterSet.whitespaceCharacterSet].location != NSNotFound) return nil;
+    rule[@"site"] = site;
+    return rule;
+  }
+  if ([lower hasPrefix:@"flair:"]) {
+    NSString *pattern = RFPhrasePattern([text substringFromIndex:6]);
+    NSRegularExpression *regex = pattern.length
+        ? [NSRegularExpression regularExpressionWithPattern:RFWholeWordPattern(pattern) options:0 error:NULL]
+        : nil;
+    if (!regex) return nil;
+    rule[@"flair"] = regex;
+    return rule;
+  }
+  return nil;
+}
+
+static BOOL RFPostMatchesRule(NSDictionary *post, NSDictionary *rule) {
+  NSString *subreddit = rule[@"subreddit"];
+  if (subreddit && ![RFString(RFDict(post[@"subreddit"])[@"name"]).lowercaseString isEqualToString:subreddit]) return NO;
+  NSString *site = rule[@"site"];
+  if (site) {
+    NSString *domain = RFString(post[@"domain"]).lowercaseString;
+    if ([domain hasPrefix:@"www."]) domain = [domain substringFromIndex:4];
+    return [domain isEqualToString:site] || [domain hasSuffix:[@"." stringByAppendingString:site]];
+  }
+  NSRegularExpression *flair = rule[@"flair"];
+  NSString *text = RFString(RFDict(post[@"flair"])[@"text"]);
+  if (!flair || !text.length) return NO;
+  NSString *folded = RFFolded(text);
+  return [flair firstMatchInString:folded options:0 range:NSMakeRange(0, folded.length)] != nil;
+}
+
+static NSArray *RFCurrentPostRules(RFPrefs prefs) {
+  if (!prefs.keywords) return nil;
+  @synchronized(RFKeywordLock()) {
+    return gPostRules;
+  }
+}
+
+static BOOL RFPostMatchesRules(NSDictionary *post, NSArray *rules) {
+  for (NSDictionary *rule in rules)
+    if (RFPostMatchesRule(post, rule)) return YES;
+  return NO;
+}
+
 void RFSetFilterKeywords(NSArray<NSString *> *keywords) {
   NSMutableArray *patterns = [NSMutableArray array];
+  NSMutableArray *rules = [NSMutableArray array];
   for (id keyword in keywords) {
     NSString *trimmed = [RFString(keyword) stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
     if (!trimmed.length) continue;
-    // Any run of spaces in a phrase matches any whitespace in the post.
-    NSArray *words = [RFFolded(trimmed) componentsSeparatedByCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
-    NSMutableArray *escaped = [NSMutableArray array];
-    for (NSString *word in words)
-      if (word.length) [escaped addObject:[NSRegularExpression escapedPatternForString:word]];
-    [patterns addObject:[escaped componentsJoinedByString:@"\\s+"]];
+    NSDictionary *rule = RFPostRule(trimmed);
+    if (rule) {
+      [rules addObject:rule];
+      continue;
+    }
+    NSString *pattern = RFPhrasePattern(trimmed);
+    if (pattern.length) [patterns addObject:pattern];
   }
-  NSRegularExpression *regex = nil;
-  if (patterns.count) {
-    // Whole words: no letter or digit right before or after the keyword.
-    NSString *pattern = [NSString stringWithFormat:@"(?<![\\p{L}\\p{N}])(?:%@)(?![\\p{L}\\p{N}])",
-                                                   [patterns componentsJoinedByString:@"|"]];
-    regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:NULL];
-  }
+  NSRegularExpression *regex =
+      patterns.count ? [NSRegularExpression regularExpressionWithPattern:RFWholeWordPattern([patterns componentsJoinedByString:@"|"])
+                                                                options:0
+                                                                  error:NULL]
+                     : nil;
   @synchronized(RFKeywordLock()) {
     gKeywordRegex = regex;
+    gPostRules = rules.count ? rules : nil;
   }
 }
 
@@ -925,7 +1011,7 @@ static NSDictionary<NSString *, NSArray<NSMutableDictionary *> *> *RFVisibleFeed
 
 NSURLRequest *RFPostDetailsRequest(NSURLRequest *feedRequest, NSData *feedData, RFPrefs prefs) {
   NSString *operation = RFOperationName(feedRequest);
-  if (!RFCurrentKeywords(prefs) || !feedData.length ||
+  if (!(RFCurrentKeywords(prefs) || RFCurrentPostRules(prefs)) || !feedData.length ||
       !([operation hasSuffix:@"FeedSdui"] || [operation isEqualToString:@"FollowingFeed"]))
     return nil;
   NSDictionary *json = RFDict([NSJSONSerialization JSONObjectWithData:feedData
@@ -955,7 +1041,8 @@ NSURLRequest *RFPostDetailsRequest(NSURLRequest *feedRequest, NSData *feedData, 
 
 NSData *RFFeedHidingFullTextMatches(NSData *feedData, NSData *detailsData, RFPrefs prefs) {
   NSRegularExpression *keywords = RFCurrentKeywords(prefs);
-  if (!keywords || !feedData.length || !detailsData.length) return nil;
+  NSArray *rules = RFCurrentPostRules(prefs);
+  if (!(keywords || rules) || !feedData.length || !detailsData.length) return nil;
   NSDictionary *details = RFDict([NSJSONSerialization JSONObjectWithData:detailsData options:0 error:NULL]);
   NSArray *posts = RFArray(RFValueAtPath(details, @"data.postsInfoByIds"));
   if (!posts) return nil;
@@ -967,7 +1054,8 @@ NSData *RFFeedHidingFullTextMatches(NSData *feedData, NSData *detailsData, RFPre
   for (id item in posts) {
     NSDictionary *post = RFDict(item);
     NSArray *matching = cards[RFString(post[@"id"]) ?: @""];
-    if (!matching || !RFContentMatchesKeywords(post, keywords)) continue;
+    if (!matching) continue;
+    if (!(keywords && RFContentMatchesKeywords(post, keywords)) && !RFPostMatchesRules(post, rules)) continue;
     RFCount(RFStatKeywordPosts, post);
     for (NSMutableDictionary *card in matching) card[@"cells"] = @[];
     changed = YES;

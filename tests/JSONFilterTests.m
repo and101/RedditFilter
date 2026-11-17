@@ -336,6 +336,29 @@ int main(void) {
     Check([linkedEdges[1][@"node"][@"cells"] count] == 0, @"Match link labels");
     Check(RFFeedHidingFullTextMatches(Data(bodyFeed), Data(@{@"data": NSNull.null}), keywords) == nil, @"Ignore a failed full-text check");
 
+    // Website and flair rules in the keyword list.
+    Check([RFPostRule(@"site:https://www.YouTube.com/watch")[@"site"] isEqual:@"youtube.com"], @"Read a site rule");
+    Check([RFPostRule(@"r/Gaming flair:Meme")[@"subreddit"] isEqual:@"gaming"], @"Read a subreddit-only rule");
+    Check(RFPostRule(@"meme") == nil && RFPostRule(@"r/gaming") == nil && RFPostRule(@"site:") == nil, @"Plain words aren't rules");
+    RFSetFilterKeywords(@[@"site:x.com", @"r/gaming flair:meme"]);
+    Check(RFPostDetailsRequest(feedRequest, Data(bodyFeed), keywords) != nil, @"Rules alone get the details check");
+    NSDictionary *ruled = @{@"data": @{@"postsInfoByIds": @[
+      @{@"id": @"t3_a", @"title": @"site:x.com", @"domain": @"mobile.x.com", @"subreddit": @{@"name": @"news"}},
+      @{@"id": @"t3_b", @"title": @"Hi", @"domain": @"self.gaming", @"subreddit": @{@"name": @"Gaming"},
+        @"flair": @{@"text": @"Meme"}},
+    ]}};
+    NSArray *ruledEdges = [NSJSONSerialization JSONObjectWithData:RFFeedHidingFullTextMatches(Data(bodyFeed), Data(ruled), keywords)
+                                                          options:0 error:NULL][@"data"][@"homeV3"][@"elements"][@"edges"];
+    Check([ruledEdges[0][@"node"][@"cells"] count] == 0, @"Hide posts linking to a site's subdomains");
+    Check([ruledEdges[1][@"node"][@"cells"] count] == 0, @"Hide a flair in its subreddit");
+    NSDictionary *elsewhere = @{@"data": @{@"postsInfoByIds": @[
+      @{@"id": @"t3_a", @"title": @"About x.com", @"domain": @"notx.com", @"subreddit": @{@"name": @"news"}},
+      @{@"id": @"t3_b", @"title": @"Hi", @"subreddit": @{@"name": @"memes"}, @"flair": @{@"text": @"Meme"}},
+    ]}};
+    Check(RFFeedHidingFullTextMatches(Data(bodyFeed), Data(elsewhere), keywords) == nil,
+          @"Rules don't match other sites, other subreddits or the words themselves");
+    RFSetFilterKeywords(@[@"tesla"]);
+
     // Comments
     RFPrefs keywordComments = {.keywords = YES, .keywordComments = YES, .keywordCommentReplies = YES};
     RFPrefs keepReplies = {.keywords = YES, .keywordComments = YES};
