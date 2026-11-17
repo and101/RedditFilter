@@ -60,6 +60,8 @@ typedef NS_ENUM(NSInteger, RFHandOverReason) {
 @property(nonatomic, assign) BOOL succeeded;
 // reddit.com has set a session cookie: the account check that closes the sheet is under way.
 @property(nonatomic, assign) BOOL sessionSeen;
+// Account checks that found no logged-in account since the cookie appeared (see checkForSession).
+@property(nonatomic, assign) NSInteger emptySessionChecks;
 // Called once if the sheet closes without logging in.
 @property(nonatomic, copy) void (^cancellation)(void);
 // Filled in on reddit.com/login and submitted once the page is ready. Cleared once used.
@@ -738,8 +740,17 @@ static UIImageView *symbolView(NSString *name, UIColor *color, UIFontTextStyle s
                // Not while the sheet is being swiped away either.
                if (self.finished || self.navigationController.isBeingDismissed) return;
                NSString *username = [result isKindOfClass:NSString.class] ? result : nil;
-               // The cookie isn't a logged-in session after all: show the page rather than wait under the cover.
-               if (!username.length) return [self handOverToUser:RFHandOverStep message:nil];
+               if (!username.length) {
+                 // Right after logging in, reddit.com can take a few seconds to say who's logged in (2.5 s in
+                 // one test). Look again every half second for up to 8 s. If there's still no account, the cookie
+                 // isn't a logged-in session after all, so show the page rather than wait under the cover.
+                 if (++self.emptySessionChecks >= 16) return [self handOverToUser:RFHandOverStep message:nil];
+                 __weak RFWebLoginViewController *weakSelf = self;
+                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                   [weakSelf checkForSession];
+                 });
+                 return;
+               }
                self.finished = YES;
                self.succeeded = YES;
                void (^completion)(NSString *, NSString *) = self.completion;
