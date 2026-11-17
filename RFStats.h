@@ -16,8 +16,13 @@ typedef NS_ENUM(NSInteger, RFStat) {
   RFStatKeywordPosts,    // posts that mention a keyword
   RFStatKeywordComments, // comments that mention a keyword, and replies hidden with them
   RFStatExtraCards,      // suggestion, promo and survey cards in feeds
+  // Not hidden items: kept out of the hidden total and the daily counts (see RFStatIsHidden).
+  RFStatTrackers,        // tracker requests answered on the device (Block trackers)
   RFStatCount
 };
+
+// Whether a stat counts hidden items, as opposed to blocked tracker requests.
+static inline BOOL RFStatIsHidden(RFStat stat) { return stat < RFStatTrackers; }
 
 // Keys of RFStatsSnapshot()
 extern NSString *const kRFStatsCounts; // NSArray<NSNumber *>, indexed by RFStat
@@ -49,6 +54,11 @@ BOOL RFStatsValidate(NSDictionary *stats, NSError **error);
 // Replaces the counts, days and since date from an exported dictionary. Validates first, so a
 // bad dictionary changes nothing.
 BOOL RFStatsImport(NSDictionary *stats, NSError **error);
+
+// The hidden items in RFStatsSnapshot()'s counts (indexed by RFStat), or in an exported stats dictionary's
+// counts (by name): every stat but the blocked trackers.
+unsigned long long RFStatsHiddenTotal(NSArray<NSNumber *> *counts);
+unsigned long long RFStatsExportedHiddenTotal(NSDictionary *countsByName);
 
 // Sets everything back to zero, from now.
 void RFStatsReset(void);

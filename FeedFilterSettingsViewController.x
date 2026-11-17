@@ -734,7 +734,7 @@ static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
 
 static UITableViewCell *RFStatsCell(UITableView *tableView) {
   NSDictionary *stats = RFStatsSnapshot();
-  NSNumber *total = [stats[kRFStatsCounts] valueForKeyPath:@"@sum.self"];
+  NSNumber *total = @(RFStatsHiddenTotal(stats[kRFStatsCounts]));
   NSNumber *today = stats[kRFStatsDays][RFStatsDayKey([NSDate date])] ?: @0;
   NSString *title = total.unsignedLongLongValue == 0
                         ? @"Nothing hidden yet"

@@ -264,9 +264,7 @@ RFBackupSummary *RFBackupParse(NSData *data, NSError **error) {
   summary.keywordCount = keywords.count;
   summary.stats = stats;
   summary.hasStats = hasStats;
-  unsigned long long total = 0;
-  for (NSNumber *count in [stats[kRFStatsCounts] allValues]) total += count.unsignedLongLongValue;
-  summary.totalHidden = total;
+  summary.totalHidden = RFStatsExportedHiddenTotal(stats[kRFStatsCounts]);
   return summary;
 }
 

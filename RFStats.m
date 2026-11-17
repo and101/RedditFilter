@@ -17,7 +17,7 @@ static NSString *const kRFStatsDefaultsKey = @"kRedditFilterStats";
 // Stored by name, so reordering RFStat never mixes up saved counts.
 static NSString *const kRFStatNames[RFStatCount] = {
     @"feedAds", @"commentAds", @"recommended", @"videosForYou", @"nsfw", @"keywordPosts", @"keywordComments",
-    @"extraCards",
+    @"extraCards", @"trackers",
 };
 static const NSUInteger kRFDaysKept = 30;
 static const NSUInteger kRFSeenLimit = 5000; // IDs remembered for counting once per launch
@@ -126,8 +126,10 @@ void RFStatsRecord(RFStat stat, NSString *identifier) {
   }
   if (counted) {
     gCounts[stat]++;
-    gDays[today] = @(gDays[today].unsignedLongLongValue + 1);
-    RFStatsPruneDays(today);
+    if (RFStatIsHidden(stat)) {
+      gDays[today] = @(gDays[today].unsignedLongLongValue + 1);
+      RFStatsPruneDays(today);
+    }
     RFStatsScheduleSave();
   }
   os_unfair_lock_unlock(&gLock);
@@ -141,6 +143,22 @@ NSDictionary *RFStatsSnapshot(void) {
   NSDictionary *snapshot = @{kRFStatsCounts : counts, kRFStatsDays : [gDays copy], kRFStatsSince : gSince};
   os_unfair_lock_unlock(&gLock);
   return snapshot;
+}
+
+unsigned long long RFStatsHiddenTotal(NSArray<NSNumber *> *counts) {
+  unsigned long long total = 0;
+  for (NSInteger i = 0; i < (NSInteger)counts.count && i < RFStatCount; i++)
+    if (RFStatIsHidden(i)) total += counts[i].unsignedLongLongValue;
+  return total;
+}
+
+unsigned long long RFStatsExportedHiddenTotal(NSDictionary *countsByName) {
+  unsigned long long total = 0;
+  for (NSInteger i = 0; i < RFStatCount; i++) {
+    id count = countsByName[kRFStatNames[i]];
+    if (RFStatIsHidden(i) && [count isKindOfClass:NSNumber.class]) total += [count unsignedLongLongValue];
+  }
+  return total;
 }
 
 #pragma mark - Settings backup

@@ -21,6 +21,7 @@ static const RFStatInfo kRFStatInfo[RFStatCount] = {
     [RFStatKeywordPosts] = {@"Posts with keywords", @"text.magnifyingglass"},
     [RFStatKeywordComments] = {@"Comments with keywords", @"bubble.left.and.bubble.right.fill"},
     [RFStatExtraCards] = {@"Extra cards", @"rectangle.stack.fill"},
+    [RFStatTrackers] = {@"Trackers blocked", @"hand.raised.fill"},
 };
 
 static UIColor *RFStatColor(RFStat stat) {
@@ -33,6 +34,7 @@ static UIColor *RFStatColor(RFStat stat) {
     case RFStatKeywordPosts: return UIColor.systemTealColor;
     case RFStatKeywordComments: return UIColor.systemGreenColor;
     case RFStatExtraCards: return UIColor.systemIndigoColor;
+    case RFStatTrackers: return UIColor.systemGrayColor;
     case RFStatCount: break;
   }
   return UIColor.systemGrayColor;
@@ -125,11 +127,13 @@ static UIImage *RFTileIcon(RFStat stat) {
 
 #pragma mark - The screen
 
-typedef NS_ENUM(NSInteger, RFStatsSection) { RFStatsSectionTotal, RFStatsSectionFilters, RFStatsSectionReset };
+typedef NS_ENUM(NSInteger, RFStatsSection) {
+  RFStatsSectionTotal, RFStatsSectionFilters, RFStatsSectionTrackers, RFStatsSectionReset
+};
 
 @implementation RFStatsViewController {
   NSDictionary *_stats;
-  NSArray<NSNumber *> *_order; // filters, biggest count first
+  NSArray<NSNumber *> *_order; // filters (hidden items only), biggest count first
 }
 
 - (instancetype)init {
@@ -156,7 +160,8 @@ typedef NS_ENUM(NSInteger, RFStatsSection) { RFStatsSectionTotal, RFStatsSection
   _stats = RFStatsSnapshot();
   NSArray<NSNumber *> *counts = _stats[kRFStatsCounts];
   NSMutableArray *order = [NSMutableArray array];
-  for (NSInteger i = 0; i < RFStatCount; i++) [order addObject:@(i)];
+  for (NSInteger i = 0; i < RFStatCount; i++)
+    if (RFStatIsHidden(i)) [order addObject:@(i)];
   [order sortWithOptions:NSSortStable usingComparator:^NSComparisonResult(NSNumber *a, NSNumber *b) {
     return [counts[b.integerValue] compare:counts[a.integerValue]];
   }];
@@ -168,8 +173,13 @@ typedef NS_ENUM(NSInteger, RFStatsSection) { RFStatsSectionTotal, RFStatsSection
   [self.tableView reloadData];
 }
 
+// Hidden items only: blocked trackers have their own section.
 - (unsigned long long)total {
-  return [[_stats[kRFStatsCounts] valueForKeyPath:@"@sum.self"] unsignedLongLongValue];
+  return RFStatsHiddenTotal(_stats[kRFStatsCounts]);
+}
+
+- (unsigned long long)trackers {
+  return [_stats[kRFStatsCounts][RFStatTrackers] unsignedLongLongValue];
 }
 
 - (UITableViewCell *)styledCell:(UITableViewCell *)cell {
@@ -186,18 +196,23 @@ typedef NS_ENUM(NSInteger, RFStatsSection) { RFStatsSectionTotal, RFStatsSection
 #pragma mark - Table
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-  return 3;
+  return 4;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-  return section == RFStatsSectionFilters ? RFStatCount : 1;
+  return section == RFStatsSectionFilters ? (NSInteger)_order.count : 1;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-  return section == RFStatsSectionFilters ? @"By filter" : nil;
+  if (section == RFStatsSectionFilters) return @"By filter";
+  if (section == RFStatsSectionTrackers) return @"Privacy";
+  return nil;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
+  if (section == RFStatsSectionTrackers)
+    return @"Requests to analytics, ad tracking and Reddit's event logging that Block trackers stopped from leaving "
+           @"your device. Not included in the hidden total.";
   if (section != RFStatsSectionFilters) return nil;
   return @"Counted on this device while a filter is on. A post counts once per launch, so it can count again "
          @"after a restart.";
@@ -229,7 +244,7 @@ typedef NS_ENUM(NSInteger, RFStatsSection) { RFStatsSectionTotal, RFStatsSection
   RFApplySettingsTheme(caption, @selector(setTextColor:), @selector(metaTextColor));
 
   RFSplitBar *bar = [RFSplitBar new];
-  bar.counts = counts;
+  bar.counts = [counts subarrayWithRange:NSMakeRange(0, MIN((NSUInteger)RFStatTrackers, counts.count))];
 
   // A coloured dot and name for each filter that hid something, biggest first.
   NSMutableAttributedString *legend = [NSMutableAttributedString new];
@@ -280,7 +295,7 @@ typedef NS_ENUM(NSInteger, RFStatsSection) { RFStatsSectionTotal, RFStatsSection
                                                                     reuseIdentifier:nil]];
     cell.textLabel.text = @"Reset stats";
     cell.textLabel.textAlignment = NSTextAlignmentCenter;
-    BOOL any = self.total > 0;
+    BOOL any = self.total > 0 || self.trackers > 0;
     cell.textLabel.textColor = any ? UIColor.systemRedColor : UIColor.tertiaryLabelColor;
     cell.selectionStyle = any ? UITableViewCellSelectionStyleDefault : UITableViewCellSelectionStyleNone;
     cell.accessibilityTraits = UIAccessibilityTraitButton | (any ? 0 : UIAccessibilityTraitNotEnabled);
@@ -291,7 +306,7 @@ typedef NS_ENUM(NSInteger, RFStatsSection) { RFStatsSectionTotal, RFStatsSection
   if (!cell)
     cell = [self styledCell:[[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1
                                                    reuseIdentifier:@"RFStatCell"]];
-  RFStat stat = _order[indexPath.row].integerValue;
+  RFStat stat = indexPath.section == RFStatsSectionTrackers ? RFStatTrackers : _order[indexPath.row].integerValue;
   cell.imageView.image = RFTileIcon(stat);
   cell.textLabel.text = kRFStatInfo[stat].name;
   cell.detailTextLabel.text = RFStatsFormattedCount([_stats[kRFStatsCounts][stat] unsignedLongLongValue]);
@@ -300,7 +315,8 @@ typedef NS_ENUM(NSInteger, RFStatsSection) { RFStatsSectionTotal, RFStatsSection
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
   [tableView deselectRowAtIndexPath:indexPath animated:YES];
-  if (indexPath.section == RFStatsSectionReset && self.total > 0) [self confirmResetFrom:indexPath];
+  if (indexPath.section == RFStatsSectionReset && (self.total > 0 || self.trackers > 0))
+    [self confirmResetFrom:indexPath];
 }
 
 - (void)confirmResetFrom:(NSIndexPath *)indexPath {

@@ -6,6 +6,7 @@
 
 #import "TrackerBlock.h"
 #import "JSONFilter.h"
+#import "RFStats.h"
 #import <stdatomic.h>
 
 static atomic_bool gBlockTrackers;
@@ -26,6 +27,7 @@ void RFSetTrackerBlocking(BOOL enabled) { atomic_store(&gBlockTrackers, enabled)
 }
 
 - (void)startLoading {
+  RFStatsRecord(RFStatTrackers, nil);
   NSHTTPURLResponse *response = [[NSHTTPURLResponse alloc] initWithURL:self.request.URL
                                                             statusCode:200
                                                            HTTPVersion:@"HTTP/1.1"

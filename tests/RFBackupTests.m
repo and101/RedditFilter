@@ -203,6 +203,24 @@ int main(void) {
     Check(keptDays.count == 30, @"import keeps the latest 30 days");
     Check(keptDays[@"2026-01-11"] != nil && keptDays[@"2026-01-10"] == nil, @"import drops the oldest days");
 
+    // Blocked trackers: kept and backed up like the other counts, but not hidden items.
+    RFStatsReset();
+    RFStatsRecord(RFStatFeedAds, nil);
+    RFStatsRecord(RFStatTrackers, nil);
+    RFStatsRecord(RFStatTrackers, nil);
+    NSDictionary *withTrackers = RFStatsSnapshot();
+    Check([withTrackers[kRFStatsCounts][RFStatTrackers] integerValue] == 2, @"count blocked trackers");
+    Check(RFStatsHiddenTotal(withTrackers[kRFStatsCounts]) == 1, @"trackers aren't in the hidden total");
+    Check([withTrackers[kRFStatsDays][RFStatsDayKey([NSDate date])] integerValue] == 1, @"trackers aren't in the daily count");
+    NSData *trackerBackup = RFBackupExport(defaults);
+    Check([JSONObject(trackerBackup)[@"stats"][@"counts"][@"trackers"] integerValue] == 2, @"back up blocked trackers");
+    RFBackupSummary *trackerSummary = RFBackupParse(trackerBackup, &error);
+    Check(trackerSummary.totalHidden == 1, @"backup summary leaves trackers out of the hidden total");
+    RFStatsReset();
+    Check(RFBackupApply(trackerSummary, defaults, &error) &&
+              [RFStatsSnapshot()[kRFStatsCounts][RFStatTrackers] integerValue] == 2,
+          @"restore blocked trackers");
+
     [defaults removePersistentDomainForName:suite];
     NSLog(@"RFBackupTests passed");
   }
