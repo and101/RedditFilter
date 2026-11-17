@@ -16,9 +16,10 @@ trap 'rm -rf "$test_dir"' EXIT HUP INT TERM
 flags="-target arm64-apple-ios16.0-simulator -fobjc-arc -I. -Iinclude -DREDDITFILTER_DEBUG=1 -DRF_SIDELOADED=1"
 "$THEOS/bin/logos.pl" -c generator=internal Tweak.xm >"$test_dir/Tweak.mm"
 xcrun --sdk iphonesimulator clang++ $flags -Wno-module-import-in-extern-c -c "$test_dir/Tweak.mm" -o "$test_dir/Tweak.o"
+"$THEOS/bin/logos.pl" -c generator=internal TrackerBlock.x >"$test_dir/TrackerBlock.m"
 xcrun --sdk iphonesimulator clang $flags -framework UIKit -framework Network -lc++ \
   -DRF_VERSION='"1.3.4"' FeedCache.m JSONFilter.m RFStats.m Redgifs.m UpdateChecker.m RFVersion.m tests/NetworkTests.m \
-  -x objective-c DebugMenu.x -x none "$test_dir/Tweak.o" \
+  "$test_dir/TrackerBlock.m" -x objective-c DebugMenu.x -x none "$test_dir/Tweak.o" \
   -o "$test_dir/NetworkTests"
 xcrun simctl spawn "$device" "$test_dir/NetworkTests"
 
