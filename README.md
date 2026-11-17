@@ -45,8 +45,14 @@ To open RedditFilter, long press the sidebar button at the top left of Reddit, o
 
 ### Filters
 
-- **Posts and ads**: hide promoted posts and comment ads, recommendations (including the endless **From your feed** list below a post's comments), NSFW posts, the Videos for you carousel, extra cards such as suggested communities, promos and surveys, and the floating new posts button on Home (**Refresh button**). These switches show that content when on, so turn one off to hide it. A For You page left short by hidden posts is topped up from the next page.
+- **Posts and ads**: hide promoted posts, ads in search results and comment ads, recommendations (including the endless **From your feed** list below a post's comments), NSFW posts, the Videos for you carousel, extra cards such as suggested communities, promos and surveys, and the floating new posts button on Home (**Refresh button**). These switches show that content when on, so turn one off to hide it. A For You page left short by hidden posts is topped up from the next page.
 - **Keywords**: hide posts that mention a word or phrase. Matching is whole-word and ignores capitals, and it checks a post's full text, not just the title and preview. With **Filter comments too**, comments that mention a keyword are hidden with their replies, or replaced by a placeholder if you want to keep the replies.
+- **Website and flair**: add `site:x.com` to the keywords to hide posts linking to that site, `flair:Meme` to hide a flair everywhere, or `r/gaming flair:Meme` to hide it in one community.
+
+### Privacy
+
+- **Clean share links**: Reddit's share links (`…/s/…`) are tied to your account, so Reddit can link everyone who opens one back to you. This shares the plain link instead, without tracking.
+- **Block trackers**: stops analytics, crash reports, ad tracking and Reddit's usage data from leaving your device. Logging in and feeds aren't affected.
 
 ### Display
 
@@ -66,7 +72,7 @@ These are new, so they're off by default. They work in any app language.
 ### More
 
 - **Open Reddit links here**: a separate Safari extension opens incoming Reddit links from Safari in the app, asking first each time. It does not block ads or enable the article browser.
-- **Stats**: see how much has been hidden in total, today and by filter. It stays on your device.
+- **Stats**: see how much has been hidden in total, today and by filter, and how many tracker requests were blocked. It stays on your device.
 - **Backup**: export your settings, keywords and stats to a file, and import them later. No account details are included.
 - **Diagnostics**: check whether RedditFilter still finds posts and ads in Reddit's responses, see how Reddit was last closed, check Safari article links, and share a report with a bug report. Nothing leaves your device unless you share it.
 - **Update check**: RedditFilter checks GitHub once a day for a new release. Turn it off under **About**.
@@ -85,7 +91,9 @@ If an article stays in Reddit's viewer, turn on **Diagnostics**, try the link ag
 
 Log in as usual: **I already have an account** (or **Log in**) → **Use email or username**, then type your username and password. To add another account, open the account switcher → **Add account** → **Log in**.
 
-When the app is sideloaded, Reddit can't check that the app is its own build, so RedditFilter tells it this iPhone can't do that check (as some devices can't), which Reddit accepts. If Reddit still turns the login down, a reddit.com sheet opens, fills in your username and password and logs in for you, closing by itself once you're in. If Reddit asks for a 2FA code or a check there, finish it in the sheet.
+Reddit no longer accepts the app's own login when it's sideloaded. Earlier versions of RedditFilter got around Reddit's App Attest check, but that workaround stopped working with Reddit's changes in November 2026. So RedditFilter now logs in for you on reddit.com instead: after you tap **Log in**, a sheet shows **Logging in as u/yourname** and ticks off each step while it fills in your details on reddit.com, then hands you over to the app. It takes a few seconds.
+
+If reddit.com needs you, for a 2FA code or because the password was wrong, the sheet shows the page with a note saying why. Finish there and the app carries on logging in.
 
 Your password only goes to Reddit, the same as logging in on the website.
 
@@ -101,6 +109,8 @@ For accounts without a Reddit password, such as ones made with Apple, or if the 
 ## Install
 
 Download the IPA from [Releases](../../releases), sign it with your usual signer and install it.
+
+On a jailbroken device, install the .deb from the same release instead: `RedditFilter_<version>_rootless.deb` for rootless jailbreaks such as Dopamine or palera1n, or `RedditFilter_<version>_rootful.deb` for rootful ones. It needs a tweak injector (ElleKit or Substrate) and works with the Reddit app from the App Store. As that is Reddit's own app, its login should work as usual.
 
 ## Build
 
