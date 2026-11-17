@@ -92,7 +92,7 @@ static const RFToggleRow kToggleRows[] = {
      @"rpl3/refresh,icon_refresh", YES},
     {kRedditFilterCleanShareLinks, @"Clean share links", @"Share plain links, not ones tied to you",
      @"rpl3/share,icon_share", NO},
-    {kRedditFilterBlockTrackers, @"Block trackers", @"Stop analytics and event logging",
+    {kRedditFilterBlockTrackers, @"Block trackers", @"Stop analytics and ad tracking",
      @"rpl3/hide,rpl3/lock,icon_hide", NO},
 };
 static const NSInteger kToggleRowCount = sizeof(kToggleRows) / sizeof(kToggleRows[0]);
@@ -591,11 +591,10 @@ static NSString *RFFooterText(id settings, NSInteger section) {
              @"it's cleared when Reddit closes or you turn this off.";
     case RFSectionAbout: return @"Based on original work by level3tjg and NicholasBly.";
     case RFSectionPrivacy:
-      return @"Reddit's share links (reddit.com/r/…/s/…) are made for your account, so whoever opens one can be "
-             @"linked back to you. Clean share links gives the plain link instead, without tracking, and Reddit "
-             @"isn't asked for one.\n\nBlock trackers stops AppsFlyer, Google Analytics for Firebase, Crashlytics "
-             @"crash reports, Google and Facebook ad tracking, and Reddit's own usage events from leaving your "
-             @"device. Nothing the app needs is blocked: logging in, feeds and videos use other addresses.";
+      return @"Reddit's share links (…/s/…) are tied to your account, so Reddit can link everyone who opens one back "
+             @"to you. Clean share links shares the plain link instead.\n\nBlock trackers stops analytics, crash "
+             @"reports, ad tracking and Reddit's usage data from leaving your device. Logging in and feeds aren't "
+             @"affected.";
   }
   return nil;
 }
@@ -1133,9 +1132,9 @@ static CGFloat RFSettingsTopInset(UIViewController *settings) {
       {
         NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
         BOOL clean = [defaults boolForKey:kRedditFilterCleanShareLinks], block = [defaults boolForKey:kRedditFilterBlockTrackers];
-        subtitle = clean && block ? @"Clean links and tracker blocking on"
+        subtitle = clean && block ? @"Both on"
                    : clean        ? @"Clean share links on"
-                   : block        ? @"Tracker blocking on"
+                   : block        ? @"Block trackers on"
                                   : @"Off";
       }
         icon = @"rpl3/lock,icon_lock"; symbol = @"hand.raised";

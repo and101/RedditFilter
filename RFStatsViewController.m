@@ -211,8 +211,9 @@ typedef NS_ENUM(NSInteger, RFStatsSection) {
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
   if (section == RFStatsSectionTrackers)
-    return @"Requests to analytics, ad tracking and Reddit's event logging that Block trackers stopped from leaving "
-           @"your device. Not included in the hidden total.";
+    return [NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterBlockTrackers] || self.trackers > 0
+               ? @"Tracker requests that Block trackers stopped. Not part of the hidden total."
+               : @"Turn on Block trackers in Privacy to count these.";
   if (section != RFStatsSectionFilters) return nil;
   return @"Counted on this device while a filter is on. A post counts once per launch, so it can count again "
          @"after a restart.";

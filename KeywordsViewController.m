@@ -194,8 +194,8 @@ typedef NS_ENUM(NSInteger, RFKeywordSection) { RFKeywordSectionOptions, RFKeywor
   if (section != RFKeywordSectionAdd) return nil;
   return @"Posts with a keyword in their title or text are hidden from your feeds. Only whole words match, "
          @"and capitals don't matter: \"cat\" hides \"Cat pics\" but not \"category\". Separate several with commas.\n\n"
-         @"To hide posts linking to a website, add site: and its address, like site:x.com. To hide posts by "
-         @"flair, add flair: and the flair, like flair:Meme, or r/gaming flair:Meme for one community only.";
+         @"You can also hide posts by website or flair: site:x.com, flair:Meme, or r/gaming flair:Meme for one "
+         @"community.";
 }
 
 - (UITableViewCell *)styledCell:(UITableViewCell *)cell {
