@@ -1071,6 +1071,37 @@ NSData *RFRedgifsResponse(NSData *data, NSDictionary<NSString *, NSString *> *vi
   return changed ? [NSJSONSerialization dataWithJSONObject:json options:0 error:NULL] : nil;
 }
 
+#pragma mark - Share links
+
+NSString *RFCleanShareURL(NSString *url) {
+  NSURLComponents *components = url ? [NSURLComponents componentsWithString:url] : nil;
+  if (!components.scheme.length || !components.host.length) return nil;
+  static NSSet *tracking;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    tracking = [NSSet setWithObjects:@"share_id", @"ref", @"ref_source", @"ref_campaign", @"rdt", @"sh", nil];
+  });
+  NSMutableArray *kept = [NSMutableArray array];
+  for (NSURLQueryItem *item in components.queryItems) {
+    NSString *name = item.name.lowercaseString;
+    if ([name hasPrefix:@"utm_"] || [tracking containsObject:name]) continue;
+    [kept addObject:item];
+  }
+  components.queryItems = kept.count ? kept : nil;
+  return components.string;
+}
+
+NSData *RFLocalShareURLResponse(NSURLRequest *request) {
+  NSData *body = request.HTTPBody;
+  NSDictionary *json = body.length ? RFDict([NSJSONSerialization JSONObjectWithData:body options:0 error:NULL]) : nil;
+  NSString *url = RFCleanShareURL(RFString(RFValueAtPath(json, @"variables.input.url")));
+  if (!url) return nil;
+  NSDictionary *answer = @{
+    @"data" : @{@"createShareUrl" : @{@"__typename" : @"CreateShareUrlPayload", @"shareUrl" : url}}
+  };
+  return [NSJSONSerialization dataWithJSONObject:answer options:0 error:NULL];
+}
+
 #pragma mark - Operation name
 
 NSString *RFOperationName(NSURLRequest *request) {

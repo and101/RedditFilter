@@ -40,6 +40,7 @@ extern "C" void RFReloadPreferences(void) {
   prefs.redgifsDirect = [defaults boolForKey:kRedditFilterRedgifsDirect];
   prefs.redgifsHD = [defaults boolForKey:kRedditFilterRedgifsHD];
   prefs.redgifsHDWiFiOnly = [defaults boolForKey:kRedditFilterRedgifsHDWiFiOnly];
+  prefs.cleanShareLinks = [defaults boolForKey:kRedditFilterCleanShareLinks];
   // Keep feed position: the kept posts were filtered with the old settings, so a change forgets them
   // (otherwise posts the new settings hide could come back). Not at launch, only when they change.
   static NSArray *lastFilters;
@@ -392,6 +393,22 @@ static BOOL RFIsAPIHost(NSString *host) {
   RFPrefs prefs = globalPrefs;
   os_unfair_lock_unlock(&globalPrefsLock);
   NSString *operation = completionHandler && RFIsAPIHost(host) ? RFOperationName(request) : nil;
+
+  // Clean share links: Reddit turns the link being shared into a /s/ short link tied to the account.
+  // Answer here with the plain link instead, so the request never reaches Reddit.
+  if (prefs.cleanShareLinks && [operation isEqualToString:@"CreateShareUrl"]) {
+    NSData *answer = RFLocalShareURLResponse(request);
+    if (answer) {
+      NSHTTPURLResponse *response = [[NSHTTPURLResponse alloc] initWithURL:request.URL
+                                                                statusCode:200
+                                                               HTTPVersion:@"HTTP/1.1"
+                                                              headerFields:@{@"Content-Type" : @"application/json"}];
+      return %orig([NSURLRequest requestWithURL:[NSURL URLWithString:@"data:application/json,%7B%7D"]],
+                   ^(NSData *data, NSURLResponse *_, NSError *error) {
+                     completionHandler(answer, response, nil);
+                   });
+    }
+  }
   // Keep feed position: every request's login token says whether Reddit's in incognito.
   if (operation && RFFeedCacheEnabled()) RFFeedCacheNoteRequest(operation, request);
 
@@ -654,6 +671,7 @@ BOOL RFCleanCachedExperiments(void) {
     kRedditFilterRestoreHours : @12,
     kRedditFilterSafariLinks : @NO,
     kRedditFilterCheckUpdates : @YES,
+    kRedditFilterCleanShareLinks : @NO,
   }];
   RFReloadPreferences();
   if (globalPrefs.promoted) RFCleanCachedExperiments();

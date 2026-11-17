@@ -21,6 +21,7 @@ typedef struct {
   BOOL redgifsDirect; // play RedGIFs videos from RedGIFs, with sound, instead of Reddit's silent copy
   BOOL redgifsHD; // prefer the larger HD file
   BOOL redgifsHDWiFiOnly; // keep HD for Wi-Fi, rather than mobile data or Low Data Mode
+  BOOL cleanShareLinks; // share plain links instead of Reddit's /s/ links tied to the account
 } RFPrefs;
 
 #ifdef __cplusplus
@@ -39,6 +40,14 @@ void RFSetFilterKeywords(NSArray<NSString *> *keywords);
 // X-APOLLO-OPERATION-NAME header, then "operationName" in the JSON body, then
 // the ?operationName= query item. Returns @"Unknown" when none is found.
 NSString *RFOperationName(NSURLRequest *request);
+
+// A link with its tracking query items (utm_*, share_id and the like) removed; nil if it isn't a link.
+NSString *RFCleanShareURL(NSString *url);
+
+// Clean share links: the answer to the app's CreateShareUrl request, made here instead of by Reddit,
+// whose /s/ short links are tied to the account that shared them. The plain link the app asked to
+// shorten, without tracking. Returns nil if the request isn't one RedditFilter recognises.
+NSData *RFLocalShareURLResponse(NSURLRequest *request);
 
 // Filters a GraphQL response. Returns the new response bytes, or nil when the
 // response was left untouched (not JSON, ignored operation, nothing to change),

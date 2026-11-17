@@ -34,4 +34,5 @@
 #define kRedditFilterRestoreHours @"kRedditFilterRestoreHours" // restore for 12 or 24 hours after leaving, 0 = always
 #define kRedditFilterSafariLinks @"kRedditFilterSafariLinks"
 #define kRedditFilterCheckUpdates @"kRedditFilterCheckUpdates"
+#define kRedditFilterCleanShareLinks @"kRedditFilterCleanShareLinks" // share plain links, not Reddit's /s/ ones
 #define kRedditFilterDiagnostics @"kRedditFilterDiagnostics" // record schema paths for bug reports

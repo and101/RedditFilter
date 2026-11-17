@@ -57,6 +57,19 @@ int main(void) {
     Check([searchEdges[1][@"node"][@"children"][@"edges"] count] == 0, @"Remove nested search ads");
     Check([Filter(search, @"SearchDynamic", off) isEqual:search], @"Promoted off leaves search ads");
 
+    // Clean share links.
+    Check([RFCleanShareURL(@"https://www.reddit.com/r/iphone/?utm_source=share&utm_medium=ios_app&utm_name=ioscss&utm_content=1&utm_term=1") isEqual:@"https://www.reddit.com/r/iphone/"], @"Strip utm items");
+    Check([RFCleanShareURL(@"https://www.reddit.com/r/a/comments/x/t/?share_id=abc&context=3") isEqual:@"https://www.reddit.com/r/a/comments/x/t/?context=3"], @"Keep other items");
+    Check(RFCleanShareURL(@"not a link") == nil, @"Ignore non-links");
+    NSMutableURLRequest *shareRequest = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"https://gql-fed.reddit.com/"]];
+    shareRequest.HTTPBody = [NSJSONSerialization dataWithJSONObject:@{@"operationName": @"CreateShareUrl",
+        @"variables": @{@"input": @{@"url": @"https://www.reddit.com/r/iphone/?utm_source=share"}}} options:0 error:NULL];
+    NSDictionary *shareAnswer = [NSJSONSerialization JSONObjectWithData:RFLocalShareURLResponse(shareRequest) options:0 error:NULL];
+    Check([shareAnswer[@"data"][@"createShareUrl"][@"shareUrl"] isEqual:@"https://www.reddit.com/r/iphone/"], @"Answer with the plain link");
+    Check([shareAnswer[@"data"][@"createShareUrl"][@"__typename"] isEqual:@"CreateShareUrlPayload"], @"Answer with Reddit's type");
+    shareRequest.HTTPBody = [@"{}" dataUsingEncoding:NSUTF8StringEncoding];
+    Check(RFLocalShareURLResponse(shareRequest) == nil, @"Leave unknown share requests to Reddit");
+
     NSDictionary *unknownAds = Post(@{@"pdpCommentsAds": @{@"futureField": @YES}});
     Check([Filter(unknownAds, @"PdpCommentsAds", ads) isEqual:unknownAds], @"Keep unknown ad shapes");
 

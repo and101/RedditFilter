@@ -32,7 +32,7 @@ typedef NS_ENUM(NSInteger, RFToggleTag) {
   RFAwards, RFScores, RFColoured, RFApollo, RFKeywordComments, RFKeywordReplies,
   RFUpdates, RFDirect, RFSD, RFMobileSD, RFAutoMod, RFDiagnostics,
   RFSwipe, RFLeft, RFRight, RFHaptics, RFTap, RFKeepFeed, RFRestoreScreens, RFRestoreAfterSwipe,
-  RFRefreshPill,
+  RFRefreshPill, RFCleanShare,
 };
 static const RFToggleRow kToggleRows[] = {
     {kRedditFilterPromoted, @"Promoted", @"Show ads in feeds and comments", @"rpl3/tag,icon_tag", YES},
@@ -90,6 +90,8 @@ static const RFToggleRow kToggleRows[] = {
      @"rpl3/swipeUp,rpl3/refresh,icon_refresh", NO, kRedditFilterKeepFeedPosition},
     {kRedditFilterRefreshPill, @"Refresh button", @"Show the new posts button on Home",
      @"rpl3/refresh,icon_refresh", YES},
+    {kRedditFilterCleanShareLinks, @"Clean share links", @"Share plain links, not ones tied to you",
+     @"rpl3/share,icon_share", NO},
 };
 static const NSInteger kToggleRowCount = sizeof(kToggleRows) / sizeof(kToggleRows[0]);
 static const NSInteger kAboutUpdateRow = 1;
@@ -438,7 +440,7 @@ typedef NS_ENUM(NSInteger, RFSection) {
   RFSectionAbout,
   RFSectionDebug,
   RFSectionAppearance, RFSectionRootFilters, RFSectionDisplay, RFSectionMore, RFSectionFeed,
-  RFSectionExperimental, RFSectionRestoreOptions,
+  RFSectionExperimental, RFSectionRestoreOptions, RFSectionPrivacy,
 };
 
 // The IPA includes the Safari extension unless it was built without it.
@@ -454,7 +456,7 @@ static BOOL RFHasSafariExtension(void) {
 
 typedef NS_ENUM(NSInteger, RFPage) {
   RFPageRoot, RFPagePosts, RFPageAppearance, RFPageCollapse, RFPageRedgifs,
-  RFPageBackup, RFPageDiagnostics, RFPageAbout, RFPageExperimental,
+  RFPageBackup, RFPageDiagnostics, RFPageAbout, RFPageExperimental, RFPagePrivacy,
 };
 static char kRFPageKey, kRFSnapshotKey;
 static RFPage RFCurrentPage(id settings) {
@@ -462,7 +464,7 @@ static RFPage RFCurrentPage(id settings) {
 }
 static NSString *RFPageTitle(RFPage page) {
   return @[@"RedditFilter", @"Posts and ads", @"Appearance", @"Collapsing comments", @"RedGIFs",
-           @"Backup", @"Diagnostics", @"About", @"Experimental features"][page];
+           @"Backup", @"Diagnostics", @"About", @"Experimental features", @"Privacy"][page];
 }
 static NSArray *RFDebugSnapshot(id settings) {
   return objc_getAssociatedObject(settings, &kRFSnapshotKey) ?: @[];
@@ -482,6 +484,7 @@ static NSArray<NSNumber *> *RFSections(id settings) {
     case RFPageBackup: return @[@(RFSectionBackup)];
     case RFPageDiagnostics: return @[@(RFSectionDebug)];
     case RFPageAbout: return @[@(RFSectionAbout)];
+    case RFPagePrivacy: return @[@(RFSectionPrivacy)];
     case RFPageRoot:
       return @[@(RFSectionStats), @(RFSectionRootFilters), @(RFSectionDisplay), @(RFSectionExperimental), @(RFSectionMore)];
   }
@@ -497,6 +500,7 @@ static NSArray<NSNumber *> *RFTags(RFSection section) {
     case RFSectionFeed: return @[@(RFKeepFeed), @(RFRestoreScreens)];
     case RFSectionRestoreOptions: return @[@(RFRestoreAfterSwipe)]; // then the Restore for row
     case RFSectionRedgifs: return @[@(RFDirect), @(RFSD), @(RFMobileSD)];
+    case RFSectionPrivacy: return @[@(RFCleanShare)];
     default: return @[];
   }
 }
@@ -504,6 +508,7 @@ static RFPage RFDestination(id settings, NSIndexPath *path) {
   if (RFCurrentPage(settings) != RFPageRoot) return RFPageRoot;
   RFSection section = [RFSections(settings)[path.section] integerValue];
   if (section == RFSectionRootFilters && path.row == 0) return RFPagePosts;
+  if (section == RFSectionRootFilters && path.row == 2) return RFPagePrivacy;
   if (section == RFSectionDisplay) return [@[@(RFPageAppearance), @(RFPageCollapse), @(RFPageRedgifs)][path.row] integerValue];
   if (section == RFSectionExperimental) return RFPageExperimental;
   if (section == RFSectionMore) {
@@ -583,6 +588,10 @@ static NSString *RFFooterText(id settings, NSInteger section) {
              @"Share report never includes it. Nothing leaves your device unless you copy or share it, and "
              @"it's cleared when Reddit closes or you turn this off.";
     case RFSectionAbout: return @"Based on original work by level3tjg and NicholasBly.";
+    case RFSectionPrivacy:
+      return @"Reddit's share links (reddit.com/r/…/s/…) are made for your account, so whoever opens one can be "
+             @"linked back to you. With this on, Share and Copy link give the plain link instead, without "
+             @"tracking, and Reddit isn't asked for one.";
   }
   return nil;
 }
@@ -1083,7 +1092,7 @@ static CGFloat RFSettingsTopInset(UIViewController *settings) {
   if (RFTags(kind).count) return RFTags(kind).count;
   switch (kind) {
     case RFSectionStats: return 1;
-    case RFSectionRootFilters: return 2;
+    case RFSectionRootFilters: return 3;
     case RFSectionDisplay: return 3;
     case RFSectionMore: return 3 + RFHasSafariExtension();
     case RFSectionBackup: return 2;
@@ -1116,6 +1125,11 @@ static CGFloat RFSettingsTopInset(UIViewController *settings) {
       case RFPageBackup: subtitle = @"Export or import your settings"; icon = @"rpl3/download"; symbol = @"arrow.up.arrow.down"; break;
       case RFPageDiagnostics: subtitle = RFDiagnosticsEnabled() ? @"On" : @"Off"; icon = @"rpl3/bug"; symbol = @"ladybug"; break;
       case RFPageAbout: subtitle = RFVersionText(); icon = @"rpl3/info"; symbol = @"info.circle"; break;
+      case RFPagePrivacy:
+        subtitle = [NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterCleanShareLinks] ? @"Clean share links on"
+                                                                                                 : @"Clean share links off";
+        icon = @"rpl3/lock,icon_lock"; symbol = @"hand.raised";
+        break;
       case RFPageExperimental: {
         NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
         BOOL keep = [defaults boolForKey:kRedditFilterKeepFeedPosition];
