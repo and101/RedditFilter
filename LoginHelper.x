@@ -42,6 +42,14 @@ void RFClearPendingWebSession(void) {
 
 #pragma mark - Browser
 
+// Why the cover lifted, which picks the banner shown over the page.
+typedef NS_ENUM(NSInteger, RFHandOverReason) {
+  RFHandOverError,  // reddit.com shows an error, such as a wrong password
+  RFHandOverCode,   // the 2FA step
+  RFHandOverStep,   // some other step, or a page RedditFilter doesn't recognise
+  RFHandOverSlow,   // the page didn't load, or reddit.com didn't answer, in time
+};
+
 @interface RFWebLoginViewController
     : UIViewController <WKNavigationDelegate, WKUIDelegate, WKHTTPCookieStoreObserver,
                         UIAdaptivePresentationControllerDelegate>
@@ -50,6 +58,8 @@ void RFClearPendingWebSession(void) {
 @property(nonatomic, assign) BOOL finished;
 // Logged in: the sheet is closing to hand the session over.
 @property(nonatomic, assign) BOOL succeeded;
+// reddit.com has set a session cookie: the account check that closes the sheet is under way.
+@property(nonatomic, assign) BOOL sessionSeen;
 // Called once if the sheet closes without logging in.
 @property(nonatomic, copy) void (^cancellation)(void);
 // Filled in on reddit.com/login and submitted once the page is ready. Cleared once used.
@@ -60,6 +70,13 @@ void RFClearPendingWebSession(void) {
 @property(nonatomic, assign) NSInteger resubmitsLeft;
 // Over the page while RedditFilter fills it in by itself.
 @property(nonatomic, strong) UIView *cover;
+// The cover's progress rows: an indicator and a label each, and which row is under way.
+@property(nonatomic, strong) NSArray<UIView *> *stepIndicators;
+@property(nonatomic, strong) NSArray<UILabel *> *stepLabels;
+@property(nonatomic, strong) UIStackView *stepStack;
+@property(nonatomic, assign) NSInteger coverStep;
+// The login form has turned up on the page.
+@property(nonatomic, assign) BOOL formFound;
 // Windows the page opened, such as Continue with Google or Apple, shown on top of it.
 @property(nonatomic, strong) NSMutableArray<WKWebView *> *popups;
 @end
@@ -166,7 +183,8 @@ void RFClearPendingWebSession(void) {
 #pragma mark Filling in the page
 
 // Fills reddit.com's username and password fields and taps Log In. The fields are web components
-// that only appear once the page has set itself up, so this returns 'waiting' until they're there.
+// that only appear once the page has set itself up, so this returns 'waiting' until they're there,
+// then 'found' once (until `fill` is set) so the cover can move on to its next step.
 // The address is checked here, right before filling in, so the password only ever goes into
 // reddit.com. Anywhere else, 'elsewhere' ends the autofill like any other final answer.
 static NSString *const kAutofillScript =
@@ -179,6 +197,8 @@ static NSString *const kAutofillScript =
     @"};"
     @"const username = field('username'), password = field('password');"
     @"if (!username || !password) return 'waiting';"
+    // Say the form's there before filling it in, so the cover can show the next step.
+    @"if (!fill) return 'found';"
     @"for (const [input, value] of [[username, user], [password, pass]]) {"
     @"  input.focus();"
     @"  input.value = value;"
@@ -195,25 +215,44 @@ static NSString *const kAutofillScript =
     @"button.click();"
     @"return 'submitted';";
 
-// After a submit: 'wiped' if the page emptied both fields without moving on, which it does when the
-// form was submitted while still being set up; 'error' if it shows a message by a field (a wrong
-// password, say); 'moved' if it's asking for something else, such as a 2FA code; otherwise 'kept'.
+// After a submit, what the page shows now:
+// - 'code': the 2FA step (a code from an authenticator app, or a backup code).
+// - 'error:<message>': a message by a field, such as "Invalid username or password." It sits in the shadow root
+//   of the field's helper text, itself in the field's shadow root, so innerText on the host misses it.
+// - 'wiped': both fields emptied without moving on, which the page does when the form was submitted
+//   while still being set up.
+// - 'moved': the form's gone without a 2FA step, such as another check, or the page moving on after
+//   logging in.
+// - 'kept': still the filled-in form, most likely waiting for reddit.com's answer.
 static NSString *const kSubmittedCheckScript =
+    @"const shown = (el) => !!el && el.getClientRects().length > 0;"
+    @"if ([...document.querySelectorAll(\"faceplate-form[id*='otp']\")].some(shown)) return 'code';"
     @"const host = (name) => document.querySelector(`faceplate-text-input[name='${name}']`);"
     @"const field = (name) => { const h = host(name); return h && h.shadowRoot && h.shadowRoot.querySelector('input'); };"
+    @"const username = field('username'), password = field('password');"
+    @"if (!username || !password || !shown(password)) return 'moved';"
+    @"if (!username.value && !password.value) return 'wiped';"
     @"const message = (name) => {"
     @"  const h = host(name);"
-    @"  const helper = h && h.shadowRoot && h.shadowRoot.querySelector('faceplate-form-helper-text, [id*=helper]');"
-    @"  return ((helper && helper.innerText) || '').trim();"
+    @"  const helper = h.shadowRoot && h.shadowRoot.querySelector('faceplate-form-helper-text');"
+    @"  const text = helper && helper.shadowRoot && helper.shadowRoot.querySelector('#helper-text');"
+    @"  return (text && text.textContent.trim()) || '';"
     @"};"
-    @"const username = field('username'), password = field('password');"
-    @"if (!username || !password || !password.getClientRects().length) return 'moved';"
-    @"if (message('username') || message('password')) return 'error';"
-    @"return username.value || password.value ? 'kept' : 'wiped';";
+    @"const text = message('password') || message('username');"
+    @"const invalid = [host('username'), host('password')].some((h) => h.getAttribute('faceplate-validity') === 'invalid');"
+    @"return text || invalid ? 'error:' + text : 'kept';";
 
-// `checksLeft`: how many more times to look again while the page still shows the filled-in form.
-- (void)checkSubmissionWithChecksLeft:(NSInteger)checksLeft {
-  if (self.finished || !self.prefillPassword) return;
+// How often to look at the page after a submit, and for how long while it still shows the filled-in form.
+static const NSTimeInterval kSubmittedCheckInterval = 0.25;
+static const NSTimeInterval kSubmittedCheckLimit = 12;
+
+// Looks at the page every quarter of a second after a submit, so an error or a 2FA step is shown as soon
+// as it appears. `checksLeft`: how many more looks while the page still shows the filled-in form.
+// `lastResult`: the previous look's answer; 'wiped' and 'moved' only count when seen twice in a row,
+// since the page passes through both briefly while re-rendering or moving on after logging in.
+- (void)checkSubmissionWithChecksLeft:(NSInteger)checksLeft lastResult:(NSString *)lastResult {
+  // A session cookie means reddit.com logged in: checkForSession closes the sheet from here.
+  if (self.finished || !self.prefillPassword || self.sessionSeen) return;
   __weak RFWebLoginViewController *weakSelf = self;
   [self.webView callAsyncJavaScript:kSubmittedCheckScript
                           arguments:@{}
@@ -221,21 +260,24 @@ static NSString *const kSubmittedCheckScript =
                      inContentWorld:WKContentWorld.defaultClientWorld
                   completionHandler:^(id result, NSError *error) {
                     RFWebLoginViewController *strongSelf = weakSelf;
-                    if (!strongSelf || strongSelf.finished) return;
-                    if ([result isEqual:@"wiped"] && strongSelf.resubmitsLeft > 0) {
+                    if (!strongSelf || strongSelf.finished || strongSelf.sessionSeen) return;
+                    NSString *state = [result isKindOfClass:NSString.class] ? result : @"kept";
+                    if ([state isEqual:@"code"]) return [strongSelf handOverToUser:RFHandOverCode message:nil];
+                    if ([state hasPrefix:@"error:"])
+                      return [strongSelf handOverToUser:RFHandOverError message:[state substringFromIndex:6]];
+                    BOOL confirmed = [state isEqual:lastResult];
+                    if ([state isEqual:@"wiped"] && confirmed && strongSelf.resubmitsLeft > 0) {
                       strongSelf.resubmitsLeft--;
                       [strongSelf autofillWithAttemptsLeft:20];
                       return;
                     }
-                    // Still logging in, most likely: give it a little longer before showing the page.
-                    if ([result isEqual:@"kept"] && checksLeft > 0) {
-                      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)),
-                                     dispatch_get_main_queue(), ^{
-                                       [weakSelf checkSubmissionWithChecksLeft:checksLeft - 1];
-                                     });
-                      return;
-                    }
-                    [strongSelf handOverToUser];
+                    if (([state isEqual:@"wiped"] || [state isEqual:@"moved"]) && confirmed)
+                      return [strongSelf handOverToUser:RFHandOverStep message:nil];
+                    if (checksLeft <= 0) return [strongSelf handOverToUser:RFHandOverSlow message:nil];
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kSubmittedCheckInterval * NSEC_PER_SEC)),
+                                   dispatch_get_main_queue(), ^{
+                                     [weakSelf checkSubmissionWithChecksLeft:checksLeft - 1 lastResult:state];
+                                   });
                   }];
 }
 
@@ -243,15 +285,25 @@ static NSString *const kSubmittedCheckScript =
   if (self.finished || !self.prefillPassword) return;
   __weak RFWebLoginViewController *weakSelf = self;
   [self.webView callAsyncJavaScript:kAutofillScript
-                          arguments:@{@"user" : self.prefillUsername ?: @"", @"pass" : self.prefillPassword}
+                          arguments:@{
+                            @"user" : self.prefillUsername ?: @"",
+                            @"pass" : self.prefillPassword,
+                            @"fill" : @(self.formFound)
+                          }
                             inFrame:nil
                      inContentWorld:WKContentWorld.defaultClientWorld
                   completionHandler:^(id result, NSError *error) {
                     RFWebLoginViewController *strongSelf = weakSelf;
                     if (!strongSelf || strongSelf.finished) return;
+                    if ([result isEqual:@"found"]) {
+                      strongSelf.formFound = YES;
+                      [strongSelf advanceCoverToStep:1];
+                      [strongSelf autofillWithAttemptsLeft:attemptsLeft];
+                      return;
+                    }
                     if ([result isEqual:@"waiting"] || error) {
                       // Leave the page for the user to fill in.
-                      if (attemptsLeft <= 0) return [strongSelf handOverToUser];
+                      if (attemptsLeft <= 0) return [strongSelf handOverToUser:RFHandOverSlow message:nil];
                       dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
                                      dispatch_get_main_queue(), ^{
                                        [weakSelf autofillWithAttemptsLeft:attemptsLeft - 1];
@@ -261,67 +313,231 @@ static NSString *const kSubmittedCheckScript =
                     // Submitted: check back, in case the page wiped the form, shows an error or asks
                     // for a code. Otherwise (no Log In button, or not reddit.com) show the page.
                     if ([result isEqual:@"submitted"]) {
-                      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)),
+                      [strongSelf advanceCoverToStep:2];
+                      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kSubmittedCheckInterval * NSEC_PER_SEC)),
                                      dispatch_get_main_queue(), ^{
-                                       [weakSelf checkSubmissionWithChecksLeft:3];
+                                       [weakSelf checkSubmissionWithChecksLeft:kSubmittedCheckLimit / kSubmittedCheckInterval
+                                                                    lastResult:nil];
                                      });
                       return;
                     }
-                    [strongSelf handOverToUser];
+                    [strongSelf handOverToUser:RFHandOverStep message:nil];
                   }];
 }
 
 #pragma mark Cover
 
+static UIImageView *symbolView(NSString *name, UIColor *color, UIFontTextStyle style, UIImageSymbolWeight weight) {
+  UIImageSymbolConfiguration *configuration =
+      [[UIImageSymbolConfiguration configurationWithTextStyle:style]
+          configurationByApplyingConfiguration:[UIImageSymbolConfiguration configurationWithWeight:weight]];
+  UIImageView *view = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:name withConfiguration:configuration]];
+  view.tintColor = color;
+  view.contentMode = UIViewContentModeScaleAspectFit;
+  return view;
+}
+
 // While RedditFilter logs in by itself, the page sits under a "Logging in" cover, so the cookie banner,
-// the reloads and the form filling itself in aren't shown. Cancel stays in the bar above it.
+// the reloads and the form filling itself in aren't shown. It lists the steps and ticks each one off.
+// Cancel stays in the bar above it.
 - (void)showCover {
   UIView *cover = [[UIView alloc] initWithFrame:self.view.bounds];
   cover.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
   cover.backgroundColor = UIColor.systemBackgroundColor;
+  self.cover = cover;
 
-  UIActivityIndicatorView *spinner =
-      [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleLarge];
-  [spinner startAnimating];
+  // A shield in a tinted circle, with a soft pulse around it.
+  UIColor *accent = UIColor.systemOrangeColor;
+  const CGFloat badgeSize = 64;
+  UIView *badge = [UIView new];
+  badge.translatesAutoresizingMaskIntoConstraints = NO;
+  UIView *halo = [UIView new];
+  UIView *circle = [UIView new];
+  for (UIView *view in @[ halo, circle ]) {
+    view.translatesAutoresizingMaskIntoConstraints = NO;
+    view.layer.cornerRadius = badgeSize / 2;
+    [badge addSubview:view];
+    [NSLayoutConstraint activateConstraints:@[
+      [view.centerXAnchor constraintEqualToAnchor:badge.centerXAnchor],
+      [view.centerYAnchor constraintEqualToAnchor:badge.centerYAnchor],
+      [view.widthAnchor constraintEqualToConstant:badgeSize],
+      [view.heightAnchor constraintEqualToConstant:badgeSize],
+    ]];
+  }
+  halo.backgroundColor = [accent colorWithAlphaComponent:0.3];
+  halo.alpha = 0;
+  circle.backgroundColor = [accent colorWithAlphaComponent:0.16];
+  UIImageView *shield = symbolView(@"checkmark.shield", accent, UIFontTextStyleTitle1, UIImageSymbolWeightMedium);
+  shield.translatesAutoresizingMaskIntoConstraints = NO;
+  [badge addSubview:shield];
+  [NSLayoutConstraint activateConstraints:@[
+    [badge.widthAnchor constraintEqualToConstant:badgeSize + 24],
+    [badge.heightAnchor constraintEqualToConstant:badgeSize + 24],
+    [shield.centerXAnchor constraintEqualToAnchor:badge.centerXAnchor],
+    [shield.centerYAnchor constraintEqualToAnchor:badge.centerYAnchor],
+  ]];
+  if (!UIAccessibilityIsReduceMotionEnabled()) {
+    halo.alpha = 1;
+    CABasicAnimation *grow = [CABasicAnimation animationWithKeyPath:@"transform.scale"];
+    grow.fromValue = @1;
+    grow.toValue = @1.35;
+    CABasicAnimation *fade = [CABasicAnimation animationWithKeyPath:@"opacity"];
+    fade.fromValue = @1;
+    fade.toValue = @0;
+    CAAnimationGroup *pulse = [CAAnimationGroup animation];
+    pulse.animations = @[ grow, fade ];
+    pulse.duration = 1.8;
+    pulse.repeatCount = HUGE_VALF;
+    pulse.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
+    [halo.layer addAnimation:pulse forKey:@"pulse"];
+  }
+
+  // "Logging in as u/name", with the account in the accent colour.
   UILabel *title = [UILabel new];
-  title.text = @"Logging in…";
-  title.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
+  UIFont *titleFont = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
+  NSString *name = [self.prefillUsername stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+  for (NSString *prefix in @[ @"/u/", @"u/" ])
+    if ([name.lowercaseString hasPrefix:prefix]) name = [name substringFromIndex:prefix.length];
+  if (name.length) {
+    if (![name containsString:@"@"]) name = [@"u/" stringByAppendingString:name];
+    NSMutableAttributedString *text =
+        [[NSMutableAttributedString alloc] initWithString:@"Logging in as "
+                                               attributes:@{NSForegroundColorAttributeName : UIColor.labelColor}];
+    [text appendAttributedString:[[NSAttributedString alloc] initWithString:name
+                                                                 attributes:@{NSForegroundColorAttributeName : accent}]];
+    title.attributedText = text;
+  } else {
+    title.text = @"Logging in…";
+  }
+  title.font = titleFont;
   title.adjustsFontForContentSizeCategory = YES;
+  title.textAlignment = NSTextAlignmentCenter;
+  title.numberOfLines = 0;
+
   UILabel *detail = [UILabel new];
-  detail.text = @"Reddit wants this login finished on reddit.com. RedditFilter is doing that for you.";
+  detail.text = @"This takes a few seconds.";
   detail.font = [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline];
   detail.adjustsFontForContentSizeCategory = YES;
   detail.textColor = UIColor.secondaryLabelColor;
   detail.textAlignment = NSTextAlignmentCenter;
   detail.numberOfLines = 0;
 
-  UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[ spinner, title, detail ]];
+  // The steps, ticked off as they finish (see advanceCoverToStep:).
+  NSMutableArray *indicators = [NSMutableArray array], *labels = [NSMutableArray array], *rows = [NSMutableArray array];
+  for (NSString *text in @[ @"Opening reddit.com", @"Entering your details", @"Checking your account" ]) {
+    UIView *indicator = [UIView new];
+    indicator.translatesAutoresizingMaskIntoConstraints = NO;
+    [NSLayoutConstraint activateConstraints:@[
+      [indicator.widthAnchor constraintEqualToConstant:20],
+      [indicator.heightAnchor constraintEqualToConstant:20],
+    ]];
+    UILabel *label = [UILabel new];
+    label.text = text;
+    label.adjustsFontForContentSizeCategory = YES;
+    label.numberOfLines = 0;
+    UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:@[ indicator, label ]];
+    row.spacing = 10;
+    row.alignment = UIStackViewAlignmentCenter;
+    [indicators addObject:indicator];
+    [labels addObject:label];
+    [rows addObject:row];
+  }
+  UIStackView *steps = [[UIStackView alloc] initWithArrangedSubviews:rows];
+  steps.axis = UILayoutConstraintAxisVertical;
+  steps.alignment = UIStackViewAlignmentLeading;
+  steps.spacing = 12;
+  self.stepIndicators = indicators;
+  self.stepLabels = labels;
+  self.stepStack = steps;
+  self.coverStep = -1;
+  [self advanceCoverToStep:0];
+
+  UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[ badge, title, detail, steps ]];
   stack.axis = UILayoutConstraintAxisVertical;
   stack.alignment = UIStackViewAlignmentCenter;
-  stack.spacing = 12;
+  stack.spacing = 6;
+  [stack setCustomSpacing:4 afterView:badge];
+  [stack setCustomSpacing:28 afterView:detail];
   stack.translatesAutoresizingMaskIntoConstraints = NO;
   [cover addSubview:stack];
   UILayoutGuide *safe = cover.safeAreaLayoutGuide;
   [NSLayoutConstraint activateConstraints:@[
     [stack.centerXAnchor constraintEqualToAnchor:safe.centerXAnchor],
-    [stack.centerYAnchor constraintEqualToAnchor:safe.centerYAnchor],
+    [stack.centerYAnchor constraintEqualToAnchor:safe.centerYAnchor constant:-20],
     [stack.leadingAnchor constraintGreaterThanOrEqualToAnchor:safe.leadingAnchor constant:32],
     [stack.trailingAnchor constraintLessThanOrEqualToAnchor:safe.trailingAnchor constant:-32],
   ]];
   [self.view addSubview:cover];
-  self.cover = cover;
 
   // However the page behaves, don't keep it covered for long.
   __weak RFWebLoginViewController *weakSelf = self;
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(25 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
     RFWebLoginViewController *strongSelf = weakSelf;
-    if (strongSelf && !strongSelf.succeeded) [strongSelf handOverToUser];
+    if (strongSelf && !strongSelf.succeeded) [strongSelf handOverToUser:RFHandOverSlow message:nil];
   });
 }
 
+// Marks the steps before `step` done and `step` itself under way; 3 marks them all done.
+- (void)advanceCoverToStep:(NSInteger)step {
+  if (!self.cover || step <= self.coverStep) return;
+  self.coverStep = step;
+  UIFont *font = [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline];
+  UIFont *bold = [UIFont fontWithDescriptor:[font.fontDescriptor fontDescriptorWithSymbolicTraits:UIFontDescriptorTraitBold]
+                                       size:0];
+  void (^update)(void) = ^{
+    for (NSUInteger i = 0; i < self.stepIndicators.count; i++) {
+      UIView *indicator = self.stepIndicators[i];
+      UILabel *label = self.stepLabels[i];
+      for (UIView *view in indicator.subviews) [view removeFromSuperview];
+      UIView *content;
+      CGFloat side = 20;
+      if ((NSInteger)i < step) {
+        content = symbolView(@"checkmark.circle.fill", UIColor.systemGreenColor, UIFontTextStyleBody,
+                             UIImageSymbolWeightRegular);
+        label.font = font;
+        label.textColor = UIColor.secondaryLabelColor;
+      } else if ((NSInteger)i == step) {
+        UIActivityIndicatorView *spinner =
+            [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
+        spinner.color = UIColor.systemOrangeColor;
+        spinner.transform = CGAffineTransformMakeScale(0.8, 0.8);
+        [spinner startAnimating];
+        content = spinner;
+        label.font = bold;
+        label.textColor = UIColor.labelColor;
+      } else {
+        content = [UIView new];
+        content.layer.borderWidth = 1.5;
+        content.layer.borderColor = UIColor.tertiaryLabelColor.CGColor;
+        content.layer.cornerRadius = 8;
+        side = 16;
+        label.font = font;
+        label.textColor = UIColor.tertiaryLabelColor;
+      }
+      content.translatesAutoresizingMaskIntoConstraints = NO;
+      [indicator addSubview:content];
+      [NSLayoutConstraint activateConstraints:@[
+        [content.centerXAnchor constraintEqualToAnchor:indicator.centerXAnchor],
+        [content.centerYAnchor constraintEqualToAnchor:indicator.centerYAnchor],
+        [content.widthAnchor constraintEqualToConstant:side],
+        [content.heightAnchor constraintEqualToConstant:side],
+      ]];
+    }
+  };
+  if (self.coverStep == 0)
+    update();
+  else
+    [UIView transitionWithView:self.stepStack
+                      duration:0.2
+                       options:UIViewAnimationOptionTransitionCrossDissolve
+                    animations:update
+                    completion:nil];
+}
+
 // Stops filling in and shows the page, for the user to finish or fix: a 2FA code, a wrong password, or
-// a page RedditFilter doesn't recognise. Logging in from the page still closes the sheet as usual.
-- (void)handOverToUser {
+// a page RedditFilter doesn't recognise. A banner says why the page appeared. Logging in from the page
+// still closes the sheet as usual. `message`: the page's own error text, if it showed one.
+- (void)handOverToUser:(RFHandOverReason)reason message:(NSString *)message {
   self.prefillPassword = nil;
   UIView *cover = self.cover;
   if (!cover) return;
@@ -332,6 +548,128 @@ static NSString *const kSubmittedCheckScript =
       }
       completion:^(BOOL done) {
         [cover removeFromSuperview];
+      }];
+  [self showBannerForReason:reason message:message];
+}
+
+- (void)showBannerForReason:(RFHandOverReason)reason message:(NSString *)message {
+  NSString *heading, *body, *symbol;
+  UIColor *color;
+  UINotificationFeedbackType feedback = UINotificationFeedbackTypeWarning;
+  switch (reason) {
+  case RFHandOverError:
+    symbol = @"exclamationmark.circle.fill";
+    color = UIColor.systemRedColor;
+    feedback = UINotificationFeedbackTypeError;
+    if (!message.length || [message rangeOfString:@"username or password" options:NSCaseInsensitiveSearch].location != NSNotFound) {
+      heading = @"Wrong username or password";
+      body = @"Fix it below and tap Log In.";
+    } else {
+      heading = @"Reddit couldn't log you in";
+      body = message;
+    }
+    break;
+  case RFHandOverCode:
+    symbol = @"number.circle.fill";
+    color = UIColor.systemBlueColor;
+    heading = @"One more step";
+    body = @"Enter the code from your authenticator app.";
+    break;
+  case RFHandOverStep:
+    symbol = @"arrow.down.circle.fill";
+    color = UIColor.systemBlueColor;
+    heading = @"One more step";
+    body = @"Finish logging in below.";
+    break;
+  case RFHandOverSlow:
+    symbol = @"clock.fill";
+    color = UIColor.systemOrangeColor;
+    heading = @"Taking longer than usual";
+    body = @"You can finish logging in below.";
+    break;
+  }
+
+  UIVisualEffectView *banner =
+      [[UIVisualEffectView alloc] initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemThickMaterial]];
+  banner.translatesAutoresizingMaskIntoConstraints = NO;
+  banner.layer.cornerRadius = 14;
+  banner.layer.cornerCurve = kCACornerCurveContinuous;
+  banner.layer.borderWidth = 0.5;
+  banner.layer.borderColor = [color colorWithAlphaComponent:0.45].CGColor;
+  banner.clipsToBounds = YES;
+  banner.contentView.backgroundColor = [color colorWithAlphaComponent:0.14];
+
+  UIImageView *icon = symbolView(symbol, color, UIFontTextStyleTitle3, UIImageSymbolWeightRegular);
+  [icon setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
+  UILabel *headingLabel = [UILabel new];
+  headingLabel.text = heading;
+  headingLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
+  UILabel *bodyLabel = [UILabel new];
+  bodyLabel.text = body;
+  bodyLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline];
+  bodyLabel.textColor = UIColor.secondaryLabelColor;
+  for (UILabel *label in @[ headingLabel, bodyLabel ]) {
+    label.adjustsFontForContentSizeCategory = YES;
+    label.numberOfLines = 0;
+  }
+  UIStackView *texts = [[UIStackView alloc] initWithArrangedSubviews:@[ headingLabel, bodyLabel ]];
+  texts.axis = UILayoutConstraintAxisVertical;
+  texts.spacing = 2;
+  UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:@[ icon, texts ]];
+  row.spacing = 12;
+  row.alignment = UIStackViewAlignmentCenter;
+  row.translatesAutoresizingMaskIntoConstraints = NO;
+  [banner.contentView addSubview:row];
+  [self.view addSubview:banner];
+  UILayoutGuide *safe = self.view.safeAreaLayoutGuide;
+  [NSLayoutConstraint activateConstraints:@[
+    [row.topAnchor constraintEqualToAnchor:banner.contentView.topAnchor constant:12],
+    [row.bottomAnchor constraintEqualToAnchor:banner.contentView.bottomAnchor constant:-12],
+    [row.leadingAnchor constraintEqualToAnchor:banner.contentView.leadingAnchor constant:14],
+    [row.trailingAnchor constraintEqualToAnchor:banner.contentView.trailingAnchor constant:-14],
+    [banner.topAnchor constraintEqualToAnchor:safe.topAnchor constant:8],
+    [banner.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor constant:12],
+    [banner.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-12],
+  ]];
+  banner.isAccessibilityElement = YES;
+  banner.accessibilityLabel = [NSString stringWithFormat:@"%@. %@", heading, body];
+
+  // Slides down and fades in, stays a few seconds, and goes on a tap or by itself.
+  banner.alpha = 0;
+  banner.transform = CGAffineTransformMakeTranslation(0, -16);
+  [UIView animateWithDuration:0.35
+                        delay:0
+       usingSpringWithDamping:0.8
+        initialSpringVelocity:0
+                      options:0
+                   animations:^{
+                     banner.alpha = 1;
+                     banner.transform = CGAffineTransformIdentity;
+                   }
+                   completion:nil];
+  [[UINotificationFeedbackGenerator new] notificationOccurred:feedback];
+  UIAccessibilityPostNotification(UIAccessibilityAnnouncementNotification, banner.accessibilityLabel);
+
+  [banner addGestureRecognizer:[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(bannerTapped:)]];
+  __weak UIVisualEffectView *weakBanner = banner;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(6 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    [RFWebLoginViewController hideBanner:weakBanner];
+  });
+}
+
+- (void)bannerTapped:(UITapGestureRecognizer *)tap {
+  [RFWebLoginViewController hideBanner:tap.view];
+}
+
++ (void)hideBanner:(UIView *)banner {
+  if (!banner.superview) return;
+  [UIView animateWithDuration:0.25
+      animations:^{
+        banner.alpha = 0;
+        banner.transform = CGAffineTransformMakeTranslation(0, -16);
+      }
+      completion:^(BOOL done) {
+        [banner removeFromSuperview];
       }];
 }
 
@@ -380,6 +718,7 @@ static NSString *const kSubmittedCheckScript =
               cookie.value.length)
             session = cookie.value;
         if (!session || self.finished) return;
+        self.sessionSeen = YES;
         // Confirm the session belongs to a logged-in account and get its username.
         [self.webView
             callAsyncJavaScript:@"try {"
@@ -394,17 +733,43 @@ static NSString *const kSubmittedCheckScript =
                // Not while the sheet is being swiped away either.
                if (self.finished || self.navigationController.isBeingDismissed) return;
                NSString *username = [result isKindOfClass:NSString.class] ? result : nil;
-               if (!username.length) return;
+               // The cookie isn't a logged-in session after all: show the page rather than wait under the cover.
+               if (!username.length) return [self handOverToUser:RFHandOverStep message:nil];
                self.finished = YES;
                self.succeeded = YES;
-               self.prefillPassword = nil;
                void (^completion)(NSString *, NSString *) = self.completion;
+               // The app's own Log in button: answer the app now and keep the sheet up, covered, until
+               // the app moves on to its "switching account" screen (the running mascot). Closing it first
+               // would show the app's Log in screen again for a moment.
+               if (self.prefillUsername) {
+                 self.prefillPassword = nil;
+                 if (!self.cover) [self showCover];
+                 [self advanceCoverToStep:3];
+                 if (completion) completion(session, username);
+                 [self closeWhenWindow:self.view.window leaves:self.view.window.rootViewController checksLeft:80];
+                 return;
+               }
                [self dismissViewControllerAnimated:YES
                                         completion:^{
                                           if (completion) completion(session, username);
                                         }];
              }];
       }];
+}
+
+// After logging in for the app's own Log in button. The app shows its "switching account" screen by
+// replacing the window's root screen, which takes this sheet away with the old one, so there's nothing
+// to close then. Checks every 0.1 s; if the app hasn't moved on by the last check, closes the sheet.
+- (void)closeWhenWindow:(UIWindow *)window leaves:(UIViewController *)root checksLeft:(NSInteger)checksLeft {
+  if (!self.view.window) return; // gone with the old root screen
+  if (window.rootViewController != root || checksLeft <= 0) {
+    [self dismissViewControllerAnimated:checksLeft <= 0 completion:nil];
+    return;
+  }
+  __weak RFWebLoginViewController *weakSelf = self;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    [weakSelf closeWhenWindow:window leaves:root checksLeft:checksLeft - 1];
+  });
 }
 
 @end
