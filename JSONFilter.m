@@ -504,6 +504,46 @@ static BOOL RFFilterPostExtras(NSMutableDictionary *root, const RFContext *ctx) 
   return changed;
 }
 
+#pragma mark - Search
+
+// An ad among search results: a SearchAdPost card wrapping an AdPost, at
+// search.dynamic.components.main.edges (Reddit 2026.46). Matched by type rather than path, so it still
+// works if the results move.
+static BOOL RFIsSearchAd(id edge) {
+  NSDictionary *node = RFDict(RFDict(edge)[@"node"]);
+  return [RFString(node[@"__typename"]) isEqualToString:@"SearchAdPost"] ||
+         [RFString(RFDict(node[@"post"])[@"__typename"]) isEqualToString:@"AdPost"];
+}
+
+// Removes search ad cards from every list of edges in a search response. Removed rather than emptied:
+// search sections are plain lists, so there's no card shape to keep.
+static BOOL RFDropSearchAds(id object) {
+  BOOL changed = NO;
+  if (RFArray(object)) {
+    for (id item in object) changed |= RFDropSearchAds(item);
+    return changed;
+  }
+  NSMutableDictionary *dict = RFMutableDict(object);
+  if (!dict) return NO;
+  NSArray *edges = RFArray(dict[@"edges"]);
+  if (edges) {
+    NSMutableArray *kept = [NSMutableArray arrayWithCapacity:edges.count];
+    for (id edge in edges) {
+      if (RFIsSearchAd(edge)) {
+        RFCount(RFStatFeedAds, RFDict(edge)[@"node"]);
+        continue;
+      }
+      [kept addObject:edge];
+    }
+    if (kept.count != edges.count) {
+      dict[@"edges"] = kept;
+      changed = YES;
+    }
+  }
+  for (id value in dict.allValues) changed |= RFDropSearchAds(value);
+  return changed;
+}
+
 #pragma mark - Filtering whole responses
 
 // Schema-agnostic fallback for operations without a fast path, or when a fast
@@ -632,6 +672,11 @@ static BOOL RFFilterResponse(NSMutableDictionary *json, NSDictionary *payload, N
   if ([op isEqualToString:@"PostInfoById"] || [op isEqualToString:@"PostInfoByIdComments"])
     return RFFilterPostInfo(json, payload, ctx);
   if ([op isEqualToString:@"PdpCommentsAds"]) return RFFilterCommentAds(json, payload, ctx);
+  // Search results (SearchDynamic, and any other search operation).
+  if ([op hasPrefix:@"Search"]) {
+    BOOL changed = ctx->prefs.promoted && RFDropSearchAds(payload);
+    return RFFilterGeneric(payload, ctx) || changed;
+  }
   return RFFilterGeneric(payload, ctx); // e.g. ProfileFeedSdui, HomeFeedSduiBg
 }
 

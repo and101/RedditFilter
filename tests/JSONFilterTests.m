@@ -43,6 +43,20 @@ int main(void) {
       Check([Filter(Post(@{@"pdpCommentsAds": NSNull.null}), op, ads)[@"data"][@"postInfoById"][@"pdpCommentsAds"] isEqual:NSNull.null], @"Keep null ad payloads");
       Check([Filter(Post(@{@"pdpCommentsAds": @[@1]}), op, ads)[@"data"][@"postInfoById"][@"pdpCommentsAds"] count] == 0, @"Support old ad arrays");
     }
+    // Ads among search results: SearchAdPost cards are removed, everything else stays.
+    NSDictionary *searchAd = @{@"node": @{@"__typename": @"SearchAdPost", @"id": @"sa",
+                                          @"post": @{@"__typename": @"AdPost", @"id": @"t3_ad"}}};
+    NSDictionary *searchPost = @{@"node": @{@"__typename": @"SearchPost", @"id": @"sp",
+                                            @"post": @{@"__typename": @"SubredditPost", @"id": @"t3_p"}}};
+    NSDictionary *search = @{@"data": @{@"search": @{@"dynamic": @{@"components": @{@"main": @{
+        @"edges": @[searchPost, searchAd, @{@"node": @{@"__typename": @"SearchNavigationList",
+                                                        @"children": @{@"edges": @[searchAd]}}}]}}}}}};
+    NSArray *searchEdges = Filter(search, @"SearchDynamic", ads)[@"data"][@"search"][@"dynamic"][@"components"][@"main"][@"edges"];
+    Check(searchEdges.count == 2, @"Remove search ad cards");
+    Check([searchEdges[0][@"node"][@"id"] isEqual:@"sp"], @"Keep search results");
+    Check([searchEdges[1][@"node"][@"children"][@"edges"] count] == 0, @"Remove nested search ads");
+    Check([Filter(search, @"SearchDynamic", off) isEqual:search], @"Promoted off leaves search ads");
+
     NSDictionary *unknownAds = Post(@{@"pdpCommentsAds": @{@"futureField": @YES}});
     Check([Filter(unknownAds, @"PdpCommentsAds", ads) isEqual:unknownAds], @"Keep unknown ad shapes");
 
