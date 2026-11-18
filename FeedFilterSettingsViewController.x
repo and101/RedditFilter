@@ -11,6 +11,7 @@
 #import "RFStats.h"
 #import "RFStatsViewController.h"
 #import "UpdateChecker.h"
+#import "HomeStartFeed.h"
 
 #ifndef RF_VERSION
 #define RF_VERSION "dev" // the Makefile passes the real version
@@ -32,7 +33,7 @@ typedef NS_ENUM(NSInteger, RFToggleTag) {
   RFAwards, RFScores, RFColoured, RFApollo, RFKeywordComments, RFKeywordReplies,
   RFUpdates, RFDirect, RFSD, RFMobileSD, RFAutoMod, RFDiagnostics,
   RFSwipe, RFLeft, RFRight, RFHaptics, RFTap, RFKeepFeed, RFRestoreScreens, RFRestoreAfterSwipe,
-  RFRefreshPill, RFCleanShare, RFBlockTrackers,
+  RFRefreshPill, RFCleanShare, RFBlockTrackers, RFStartFollowing,
 };
 static const RFToggleRow kToggleRows[] = {
     {kRedditFilterPromoted, @"Promoted", @"Show ads in feeds and comments", @"rpl3/tag,icon_tag", YES},
@@ -94,6 +95,8 @@ static const RFToggleRow kToggleRows[] = {
      @"rpl3/share,icon_share", NO},
     {kRedditFilterBlockTrackers, @"Block trackers", @"Stop analytics and ad tracking",
      @"rpl3/hide,rpl3/lock,icon_hide", NO},
+    {kRedditFilterStartOnFollowing, @"Start on Following", @"Open Home on Following, not For You",
+     @"rpl3/home,icon_home", NO},
 };
 static const NSInteger kToggleRowCount = sizeof(kToggleRows) / sizeof(kToggleRows[0]);
 static const NSInteger kAboutUpdateRow = 1;
@@ -442,7 +445,7 @@ typedef NS_ENUM(NSInteger, RFSection) {
   RFSectionAbout,
   RFSectionDebug,
   RFSectionAppearance, RFSectionRootFilters, RFSectionDisplay, RFSectionMore, RFSectionFeed,
-  RFSectionExperimental, RFSectionRestoreOptions, RFSectionPrivacy,
+  RFSectionExperimental, RFSectionRestoreOptions, RFSectionPrivacy, RFSectionHome,
 };
 
 // The IPA includes the Safari extension unless it was built without it.
@@ -476,9 +479,21 @@ static void RFRefreshSnapshot(id settings) {
       RFCurrentPage(settings) == RFPageDiagnostics && RFDiagnosticsEnabled() ? [[RFSchemaDebug shared] snapshot] : nil,
       OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
+// Start on Following only means something where Home has the For You and Following tabs. Checked at most
+// once a second: the table asks for its sections often.
+static BOOL RFShowsHomeSection(void) {
+  static BOOL shows;
+  static CFAbsoluteTime checkedAt;
+  CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+  if (now - checkedAt > 1) {
+    shows = RFHomeHasFeedTabs();
+    checkedAt = now;
+  }
+  return shows;
+}
 static NSArray<NSNumber *> *RFSections(id settings) {
   switch (RFCurrentPage(settings)) {
-    case RFPagePosts: return @[@(RFSectionFilters)];
+    case RFPagePosts: return RFShowsHomeSection() ? @[@(RFSectionFilters), @(RFSectionHome)] : @[@(RFSectionFilters)];
     case RFPageExperimental: return @[@(RFSectionFeed), @(RFSectionRestoreOptions)];
     case RFPageAppearance: return @[@(RFSectionAppearance)];
     case RFPageCollapse: return @[@(RFSectionSwipe), @(RFSectionCollapse)];
@@ -503,6 +518,7 @@ static NSArray<NSNumber *> *RFTags(RFSection section) {
     case RFSectionRestoreOptions: return @[@(RFRestoreAfterSwipe)]; // then the Restore for row
     case RFSectionRedgifs: return @[@(RFDirect), @(RFSD), @(RFMobileSD)];
     case RFSectionPrivacy: return @[@(RFCleanShare), @(RFBlockTrackers)];
+    case RFSectionHome: return @[@(RFStartFollowing)];
     default: return @[];
   }
 }
@@ -590,6 +606,7 @@ static NSString *RFFooterText(id settings, NSInteger section) {
              @"Share report never includes it. Nothing leaves your device unless you copy or share it, and "
              @"it's cleared when Reddit closes or you turn this off.";
     case RFSectionAbout: return @"Based on original work by level3tjg and NicholasBly.";
+    case RFSectionHome: return @"Reddit opens Home on the tab you last used. This opens it on Following every time.";
     case RFSectionPrivacy:
       return @"Reddit's share links (…/s/…) are tied to your account, so Reddit can link everyone who opens one back "
              @"to you. Clean share links shares the plain link instead.\n\nBlock trackers stops analytics, crash "

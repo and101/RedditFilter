@@ -46,6 +46,7 @@ To open RedditFilter, long press the sidebar button at the top left of Reddit, o
 ### Filters
 
 - **Posts and ads**: hide promoted posts, ads in search results and comment ads, recommendations (including the endless **From your feed** list below a post's comments), NSFW posts, the Videos for you carousel, extra cards such as suggested communities, promos and surveys, and the floating new posts button on Home (**Refresh button**). These switches show that content when on, so turn one off to hide it. A For You page left short by hidden posts is topped up from the next page.
+- **Start on Following**: where Home has the For You and Following tabs, open Home on Following every time instead of the tab you last used. The switch is on the Posts and ads page, and only shows for accounts with those tabs.
 - **Keywords**: hide posts that mention a word or phrase. Matching is whole-word and ignores capitals, and it checks a post's full text, not just the title and preview. With **Filter comments too**, comments that mention a keyword are hidden with their replies, or replaced by a placeholder if you want to keep the replies.
 - **Website and flair**: add `site:x.com` to the keywords to hide posts linking to that site, `flair:Meme` to hide a flair everywhere, or `r/gaming flair:Meme` to hide it in one community.
 

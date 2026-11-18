@@ -9,6 +9,7 @@
 #import "JSONFilter.h"
 #import "LinkPanel.h"
 #import "RefreshPill.h"
+#import "HomeStartFeed.h"
 #import "Preferences.h"
 #import "PostPageFeed.h"
 #import "ScreenRestore.h"
@@ -65,6 +66,7 @@ extern "C" void RFReloadPreferences(void) {
                        [defaults boolForKey:kRedditFilterColoredCommentsApollo]);
   RFSetHideLinkPanel([defaults boolForKey:kRedditFilterHideLinkPanel]);
   RFSetHideRefreshPill([defaults boolForKey:kRedditFilterRefreshPill]);
+  RFSetStartOnFollowing([defaults boolForKey:kRedditFilterStartOnFollowing]);
   RFSetHidePostPageFeed(prefs.recommended); // "From your feed" below a post's comments
   RFSetKeepFeedPosition([defaults boolForKey:kRedditFilterKeepFeedPosition]);
   RFSetRestoreScreens([defaults boolForKey:kRedditFilterKeepFeedPosition] &&
@@ -659,6 +661,7 @@ BOOL RFCleanCachedExperiments(void) {
     kRedditFilterVideosForYou : @NO,
     kRedditFilterExtraCards : @NO,
     kRedditFilterRefreshPill : @NO,
+    kRedditFilterStartOnFollowing : @NO,
     kRedditFilterKeywordComments : @NO,
     kRedditFilterKeywordCommentReplies : @YES,
     kRedditFilterRedgifsDirect : @NO,

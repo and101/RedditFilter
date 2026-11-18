@@ -19,6 +19,7 @@
 #define kRedditFilterVideosForYou @"kRedditFilterVideosForYou"
 #define kRedditFilterExtraCards @"kRedditFilterExtraCards" // hide suggestion, promo and survey cards in feeds
 #define kRedditFilterRefreshPill @"kRedditFilterRefreshPill" // hide the floating "new posts" button on Home
+#define kRedditFilterStartOnFollowing @"kRedditFilterStartOnFollowing" // Home opens on Following where it has tabs
 #define kRedditFilterKeywords @"kRedditFilterKeywords" // array of strings
 #define kRedditFilterKeywordComments @"kRedditFilterKeywordComments"
 #define kRedditFilterKeywordCommentReplies @"kRedditFilterKeywordCommentReplies"
