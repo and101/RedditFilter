@@ -130,9 +130,15 @@
         event.navigationType === "replace"));
   } else {
     // Scripts like this one can't see the page's own history calls, so look for a new address.
-    // Back and forward come with popstate first, so they're noted without asking.
-    window.addEventListener("popstate", () => changed(false));
-    setInterval(() => changed(true), 500);
+    // Back and forward come with popstate first, so they're noted without asking. A new page adds
+    // a history entry; tidying the address replaces the entry, so the count stays the same.
+    let entries = history.length;
+    window.addEventListener("popstate", () => { entries = history.length; changed(false); });
+    setInterval(() => {
+      const replaced = history.length === entries;
+      entries = history.length;
+      changed(true, replaced);
+    }, 500);
   }
   // A page restored from Safari's back-forward cache keeps this script running.
   window.addEventListener("pageshow", (event) => { if (event.persisted) current = location.href; });

@@ -31,9 +31,10 @@ static NSUserActivity *activityForWebURL(NSURL *webURL) {
   NSMutableSet *others = [NSMutableSet set];
   for (UIOpenURLContext *context in URLContexts) {
     NSURL *webURL = webURLForAppURL(context.URL);
+    // The app's own handling for anything else, or if it can't take a universal link here.
     if (webURL && [self respondsToSelector:@selector(scene:continueUserActivity:)])
       [(id<UISceneDelegate>)self scene:scene continueUserActivity:activityForWebURL(webURL)];
-    else if (!webURL)
+    else
       [others addObject:context];
   }
   if (others.count) %orig(scene, others);

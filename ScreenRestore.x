@@ -23,6 +23,7 @@
 
 #import <UIKit/UIKit.h>
 #import <objc/message.h>
+#import <malloc/malloc.h>
 #import <objc/runtime.h>
 #import <os/lock.h>
 #import "FeedCache.h"
@@ -1266,7 +1267,11 @@ static id RFAccountContext(void) {
   UITabBarController *tabs = RFTabBar();
   Ivar ivar = tabs ? class_getInstanceVariable(tabs.class, "accountContext") : NULL;
   if (!ivar) return nil;
-  id value = (__bridge id)(*(void **)((uint8_t *)(__bridge void *)tabs + ivar_getOffset(ivar)));
+  void *raw = *(void **)((uint8_t *)(__bridge void *)tabs + ivar_getOffset(ivar));
+  // Only a pointer to a heap object, before it's used as one: if Reddit changes how it keeps the property
+  // (a struct or an enum, say), these raw bytes are something else and messaging them would crash.
+  if (!raw || ((uintptr_t)raw & 0xF) || (intptr_t)raw < 0 || !malloc_zone_from_ptr(raw)) return nil;
+  id value = (__bridge id)raw;
   Class valueClass = object_getClass(value);
   // One object of a class (not a class itself nor a plain number), and the app's account context (Reddit's
   // own AccountContext class). Checked here so a renamed or moved property can't pass something else on.
