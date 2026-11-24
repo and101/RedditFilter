@@ -4,6 +4,8 @@ Filters unwanted content from the Reddit app, and adds the comment, video and li
 
 To open RedditFilter, long press the sidebar button at the top left of Reddit, or go to Profile → Settings and tap the button at the top right.
 
+To get it, see [Install](#install).
+
 <table>
   <tr>
     <th colspan="2">Coloured comment threads</th>
@@ -107,6 +109,27 @@ For accounts without a Reddit password, such as ones made with Apple, or if the 
 - **Open login link**: first tap **Email me a login link instead**, then copy the link from Reddit's email and paste it here.
 
 ## Install
+
+### Add the source
+
+On your iPhone or iPad, tap the app you sideload with. New releases then appear there.
+
+<p>
+  <a href="https://and101.github.io/RedditFilter/?app=altstore"><img src="docs/buttons/altstore.svg" height="48" alt="Add to AltStore"></a>
+  <a href="https://and101.github.io/RedditFilter/?app=sidestore"><img src="docs/buttons/sidestore.svg" height="48" alt="Add to SideStore"></a>
+  <a href="https://and101.github.io/RedditFilter/?app=feather"><img src="docs/buttons/feather.svg" height="48" alt="Add to Feather"></a>
+  <a href="https://and101.github.io/RedditFilter/?app=signet"><img src="docs/buttons/signet.svg" height="48" alt="Add to Signet"></a>
+</p>
+
+The AltStore button is for AltStore Classic. For any other app that takes AltStore sources, or if a button doesn't work, add this URL in the app:
+
+```
+https://and101.github.io/RedditFilter/source.json
+```
+
+If a release keeps the same Reddit version, your app may not show it as an update. Install it from the source again, or from [Releases](../../releases).
+
+### Other ways
 
 Download the IPA from [Releases](../../releases), sign it with your usual signer and install it.
 

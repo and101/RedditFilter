@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Add the RedditFilter source to AltStore, SideStore, Feather or Signet.">
+<title>RedditFilter source</title>
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<style>
+  :root { color-scheme: light dark; --bg: #f3f4f8; --card: #fff; --text: #161c2b; --muted: #5a6275; --line: #dde0e8; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #10141e; --card: #1a2130; --text: #f1f3f8; --muted: #a2abbe; --line: #2d3648; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 48px 16px; background: var(--bg); color: var(--text);
+         font: 17px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { max-width: 400px; margin: 0 auto; text-align: center; }
+  .icon { width: 88px; height: 88px; border-radius: 20px; }
+  h1 { margin: 16px 0 4px; font-size: 26px; line-height: 1.2; text-wrap: balance; }
+  p { margin: 0 0 24px; color: var(--muted); }
+  a.button { display: block; margin: 0 0 12px; padding: 14px; border-radius: 12px; color: #fff; font-weight: 600;
+             text-decoration: none; }
+  a.button:focus-visible, button:focus-visible { outline: 3px solid #ff6a3d; outline-offset: 2px; }
+  .altstore { background: #0e7f86; } .sidestore { background: #7b3fe4; }
+  .feather { background: #3e63c9; } .signet { background: #c8382a; }
+  .copy { margin-top: 28px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--card);
+          text-align: left; }
+  .copy p { margin: 0 0 8px; font-size: 15px; }
+  code { display: block; font-size: 14px; overflow-wrap: anywhere; user-select: all; -webkit-user-select: all; }
+  button { width: 100%; margin-top: 12px; padding: 10px; border: 1px solid var(--line); border-radius: 10px;
+           background: none; color: inherit; font: inherit; font-size: 16px; cursor: pointer; }
+  footer { margin-top: 24px; font-size: 14px; color: var(--muted); }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <img class="icon" src="icon.png" alt="">
+  <h1 id="title">Add RedditFilter</h1>
+  <p id="hint">Choose the app you sideload with.</p>
+  <div id="buttons">
+    <a class="button altstore" data-app="altstore" href="altstore://source?url=https%3A%2F%2Fand101.github.io%2FRedditFilter%2Fsource.json">Add to AltStore</a>
+    <a class="button sidestore" data-app="sidestore" href="sidestore://source?url=https%3A%2F%2Fand101.github.io%2FRedditFilter%2Fsource.json">Add to SideStore</a>
+    <a class="button feather" data-app="feather" href="feather://source/https://and101.github.io/RedditFilter/source.json">Add to Feather</a>
+    <a class="button signet" data-app="signet" href="signet://source?url=https%3A%2F%2Fand101.github.io%2FRedditFilter%2Fsource.json">Add to Signet</a>
+  </div>
+  <div class="copy">
+    <p>Or add this URL in your app's Sources:</p>
+    <code id="url">https://and101.github.io/RedditFilter/source.json</code>
+    <button type="button" id="copy">Copy URL</button>
+  </div>
+  <footer><a href="https://github.com/and101/RedditFilter">RedditFilter on GitHub</a></footer>
+</main>
+<script>
+  // ?app=signet (from the README's buttons) opens that app straight away. GitHub doesn't allow links to
+  // apps, so the buttons come here first. Only the apps listed above can be opened.
+  var wanted = new URLSearchParams(location.search).get("app");
+  document.querySelectorAll("a.button").forEach(function (link) {
+    if (link.dataset.app !== wanted) return;
+    var name = link.textContent.replace("Add to ", "");
+    document.getElementById("title").textContent = "Opening " + name;
+    document.getElementById("hint").textContent = "If it doesn't open, tap the button. You need " + name + " installed on this device.";
+    document.querySelectorAll("a.button").forEach(function (other) { other.style.display = other === link ? "" : "none"; });
+    location.href = link.href;
+  });
+  document.getElementById("copy").addEventListener("click", function () {
+    var button = this, url = document.getElementById("url");
+    function done() { button.textContent = "Copied"; }
+    function select() {
+      var range = document.createRange();
+      range.selectNodeContents(url);
+      getSelection().removeAllRanges();
+      getSelection().addRange(range);
+      button.textContent = "Selected: copy it from the menu";
+    }
+    if (navigator.clipboard) navigator.clipboard.writeText(url.textContent).then(done, select);
+    else select();
+  });
+</script>
+</body>
+</html>
