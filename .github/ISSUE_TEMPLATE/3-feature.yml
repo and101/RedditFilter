@@ -1,0 +1,40 @@
+name: Feature suggestion
+description: Suggest something new, or a change to something RedditFilter already does.
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: Say what it would do and where in the app. A screenshot or sketch helps.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: What would it help with?
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part is it about?
+      options:
+        - Filters and keywords
+        - Privacy
+        - Comments
+        - Feeds and posts
+        - Videos and links
+        - Logging in
+        - Installing and updating
+        - Something else
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you suggest
+      options:
+        - label: I searched the existing issues and it hasn't been suggested.
+          required: true

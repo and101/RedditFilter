@@ -1,0 +1,72 @@
+name: Ad showing
+description: An ad or promoted post that RedditFilter didn't hide.
+title: "[Ad] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Issues are public. Please don't include your username, messages or anything else private, and crop or cover them in screenshots.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you report
+      options:
+        - label: The **Promoted** switch under **Posts and ads** is off (switches show that content when on).
+          required: true
+        - label: I closed Reddit fully, reopened it, and the ad still shows.
+          required: true
+        - label: I'm on the latest RedditFilter release.
+          required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where does the ad show?
+      options:
+        - Home (For You)
+        - Home (Following)
+        - Popular or Latest
+        - A community
+        - A custom feed
+        - A post's page, above or among the comments
+        - Below a post's comments
+        - Search
+        - Full-screen videos
+        - Somewhere else (say where below)
+    validations:
+      required: true
+  - type: textarea
+    id: ad
+    attributes:
+      label: What does it look like?
+      description: For example, whether it says Promoted, if it's a video or carousel, and how often it shows. Add a screenshot if you can.
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: Diagnostics report
+      description: |
+        This shows how Reddit sent the ad. In RedditFilter settings, turn on **Diagnostics**, find the ad again without closing Reddit, then tap **Share report** on the same page and paste it here. Please use **Share report**, not **Copy JSON**, which can include usernames. The report has no account details or browsing history, and includes your versions.
+      render: text
+    validations:
+      required: false
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: RedditFilter (settings → About), Reddit and iOS. Leave it out if you pasted the report.
+      placeholder: RedditFilter 1.4.0, Reddit 2026.46.0, iOS 27.2
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options:
+        - AltStore
+        - SideStore
+        - Feather
+        - Signet
+        - Sideloadly
+        - Another sideloading app
+        - Jailbreak (.deb)
+    validations:
+      required: true
