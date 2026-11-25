@@ -29,13 +29,13 @@ To get it, see [Install](#install).
   </tr>
   <tr>
     <td align="center" width="25%"><img src="screenshots/settings.png" width="200" alt="RedditFilter settings: root page"></td>
-    <td align="center" width="25%"><img src="screenshots/settings2.png" width="200" alt="RedditFilter settings: Collapsing comments"></td>
+    <td align="center" width="25%"><img src="screenshots/settings2.png" width="200" alt="RedditFilter settings: Swipe gestures"></td>
     <td align="center" width="25%"><img src="screenshots/settings3.png" width="200" alt="RedditFilter settings: Keywords"></td>
     <td align="center" width="25%"><img src="screenshots/safari.png" width="200" alt="Steps to turn on the RedditFilter Safari extension"></td>
   </tr>
   <tr>
     <td align="center"><b>Settings</b><br><sub>Filters, display and more</sub></td>
-    <td align="center"><b>Collapsing comments</b><br><sub>Swipe or tap, and AutoMod</sub></td>
+    <td align="center"><b>Swipe gestures</b><br><sub>Collapse comments, vote and save</sub></td>
     <td align="center"><b>Keywords</b><br><sub>Words to hide, and comment options</sub></td>
     <td align="center"><b>Open Reddit links here</b><br><sub>Set up the Safari extension</sub></td>
   </tr>
@@ -78,7 +78,7 @@ These are new, so they're off by default. They work in any app language.
 - **Open Reddit links here**: a separate Safari extension opens incoming Reddit links from Safari in the app, asking first each time. It does not block ads or enable the article browser.
 - **Stats**: see how much has been hidden in total, today and by filter, and how many tracker requests were blocked. It stays on your device.
 - **Backup**: export your settings, keywords and stats to a file, and import them later. No account details are included.
-- **Diagnostics**: check whether RedditFilter still finds posts and ads in Reddit's responses, see how Reddit was last closed, check Safari article links, and share a report with a bug report. Nothing leaves your device unless you share it.
+- **Diagnostics**: check whether RedditFilter still finds posts and ads in Reddit's responses, see how Reddit was last closed, check article links and settings scrolling, and share the results with a bug report. Nothing leaves your device unless you share it.
 - **Update check**: RedditFilter checks GitHub once a day for a new release. Turn it off under **About**.
 
 ## Safari article links
