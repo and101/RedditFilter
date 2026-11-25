@@ -6,9 +6,6 @@
   "iconURL": "https://and101.github.io/RedditFilter/icon.png",
   "website": "https://github.com/and101/RedditFilter",
   "tintColor": "#FF6A3D",
-  "featuredApps": [
-    "com.reddit.Reddit"
-  ],
   "apps": [
     {
       "name": "RedditFilter",

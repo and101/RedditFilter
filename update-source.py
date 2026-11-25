@@ -130,7 +130,6 @@ def main():
         "iconURL": f"{PAGES}/icon.png",
         "website": f"https://github.com/{REPO}",
         "tintColor": TINT,
-        "featuredApps": [app["CFBundleIdentifier"]],
         "apps": [{
             "name": "RedditFilter",
             "bundleIdentifier": app["CFBundleIdentifier"],
