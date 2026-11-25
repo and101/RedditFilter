@@ -1,0 +1,83 @@
+{
+  "name": "RedditFilter",
+  "identifier": "com.and101.redditfilter.source",
+  "subtitle": "Reddit without the ads",
+  "description": "RedditFilter releases: the Reddit app with ads and other unwanted content filtered out.",
+  "iconURL": "https://and101.github.io/RedditFilter/icon.png",
+  "website": "https://github.com/and101/RedditFilter",
+  "tintColor": "#FF6A3D",
+  "featuredApps": [
+    "com.reddit.Reddit"
+  ],
+  "apps": [
+    {
+      "name": "RedditFilter",
+      "bundleIdentifier": "com.reddit.Reddit",
+      "developerName": "and101",
+      "subtitle": "Reddit without the ads",
+      "localizedDescription": "The Reddit app with RedditFilter built in. Unofficial, and not affiliated with Reddit.\n\n• Hide promoted posts, comment ads, recommendations, NSFW posts and more\n• Filter by keyword, website or flair\n• Coloured comment threads and swipe to collapse\n• Clean share links and a tracker blocker\n• RedGIFs videos with sound\n\nLong press the sidebar button at the top left of Reddit to open RedditFilter.",
+      "iconURL": "https://and101.github.io/RedditFilter/icon.png",
+      "tintColor": "#FF6A3D",
+      "category": "social",
+      "screenshots": [
+        {
+          "imageURL": "https://raw.githubusercontent.com/and101/RedditFilter/main/screenshots/threads.png",
+          "width": 600,
+          "height": 1304
+        },
+        {
+          "imageURL": "https://raw.githubusercontent.com/and101/RedditFilter/main/screenshots/swipe.png",
+          "width": 600,
+          "height": 1304
+        },
+        {
+          "imageURL": "https://raw.githubusercontent.com/and101/RedditFilter/main/screenshots/settings.png",
+          "width": 600,
+          "height": 1304
+        },
+        {
+          "imageURL": "https://raw.githubusercontent.com/and101/RedditFilter/main/screenshots/settings3.png",
+          "width": 600,
+          "height": 1304
+        }
+      ],
+      "versions": [
+        {
+          "version": "2026.46.0",
+          "buildVersion": "676861",
+          "marketingVersion": "1.4.0 (Reddit 2026.46.0)",
+          "date": "2026-11-17",
+          "localizedDescription": "RedditFilter 1.4.0, built for Reddit 2026.46.0.\n\nLogging in has been reworked\n\nReddit no longer accepts the app's own login on sideloaded installs. The App Attest workaround that earlier versions used stopped working with Reddit's changes this month, so logins were turned down.\n\nRedditFilter now logs in for you on reddit.com instead. Log in as usual: type your username and password and tap Log in. A sheet shows Logging in as u/yourname and ticks off each step, then hands you over to the app. It takes a few seconds, and you don't need to do anything else.\n\n• If the password is wrong, or Reddit asks for a 2FA code, the sheet shows the page straight away with a note saying why. Finish there and the app carries on logging in.\n• Other options on the login screen still offers Log in with browser and Open login link, for accounts without a password, such as ones made with Apple.\n\nNew in 1.4.0\n\n• Reddit 2026.46.0: the IPA now contains Reddit 2026.46.0.\n• Jailbroken devices: a .deb is now included for rootless and rootful jailbreaks.\n• Privacy: a new page under Filters, with two switches. Both are off by default.\n  • Clean share links: Reddit's share links (…/s/…) are tied to your account, so Reddit can link everyone who opens one back to you. This shares the plain link instead, without tracking.\n  • Block trackers: stops analytics (AppsFlyer, Google Analytics for Firebase), Crashlytics crash reports, Google and Facebook ad tracking, and Reddit's usage data from leaving your device. Logging in and feeds aren't affected. Stats shows how many requests were blocked.\n• Website and flair: add site:x.com to your keywords to hide posts linking to that site, flair:Meme to hide a flair everywhere, or r/gaming flair:Meme to hide it in one community.\n• Ads in search results are now hidden with Promoted.\n• Backups include the new switches.\n\nFixes\n\n• Article links and Hide panel on opened links work again on Reddit 2026.46.0, which renamed part of the app they hook into.\n• iPhone Duo: RedditFilter's settings no longer jump back to the top while you scroll on the closed screen, and no longer hang off the side of the sheet in landscape.",
+          "downloadURL": "https://github.com/and101/RedditFilter/releases/download/v2026.46.0-1.4.0/RedditFilter_2026.46.0-1.4.0.ipa",
+          "size": 145293856,
+          "sha256": "2ecef9441614ec0493d1e1c20daffd4bfe35dae8b677d580376649eeb80cc38e",
+          "minOSVersion": "16.0"
+        }
+      ],
+      "appPermissions": {
+        "entitlements": [
+          "aps-environment",
+          "com.apple.developer.applesignin",
+          "com.apple.developer.associated-domains",
+          "com.apple.developer.declared-age-range",
+          "com.apple.developer.icloud-container-identifiers",
+          "com.apple.developer.icloud-services",
+          "com.apple.developer.networking.multipath",
+          "com.apple.developer.ubiquity-container-identifiers",
+          "com.apple.security.application-groups",
+          "keychain-access-groups"
+        ],
+        "privacy": {
+          "NSCalendarsUsageDescription": "Reddit needs access to your calendar to operate the community calendar widget.",
+          "NSCameraUsageDescription": "Use your camera to record videos. See our Privacy Policy for more information.",
+          "NSFaceIDUsageDescription": "Reddit needs access to Face ID to unlock your Vault.",
+          "NSMicrophoneUsageDescription": "Reddit needs access to your microphone to post videos with audio.",
+          "NSPhotoLibraryAddUsageDescription": "Reddit needs permission to save photos and videos to your photo library.",
+          "NSPhotoLibraryUsageDescription": "Reddit needs access to your photo library to post, save, and upload photos or videos.",
+          "NSUserTrackingUsageDescription": "This allows Reddit to provide you with a better ads experience."
+        }
+      }
+    }
+  ],
+  "news": []
+}

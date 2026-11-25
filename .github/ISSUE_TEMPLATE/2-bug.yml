@@ -1,0 +1,54 @@
+name: Bug
+description: Something else isn't working, such as logging in, a setting or a crash.
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Issues are public. Please don't include your username, messages or anything else private, and crop or cover them in screenshots.
+  - type: textarea
+    id: what
+    attributes:
+      label: What's wrong?
+      description: What happened, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can it be repeated?
+      placeholder: |
+        1. Open …
+        2. Tap …
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: RedditFilter (settings → About), Reddit and iOS.
+      placeholder: RedditFilter 1.4.0, Reddit 2026.46.0, iOS 27.2
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options:
+        - AltStore
+        - SideStore
+        - Feather
+        - Signet
+        - Sideloadly
+        - Another sideloading app
+        - Jailbreak (.deb)
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: Diagnostics report
+      description: Optional. In RedditFilter settings, turn on **Diagnostics**, repeat the problem without closing Reddit, then tap **Share report** on the same page and paste it here. Please use **Share report**, not **Copy JSON**, which can include usernames. The report has no account details or browsing history.
+      render: text
+    validations:
+      required: false
