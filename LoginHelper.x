@@ -60,8 +60,10 @@ typedef NS_ENUM(NSInteger, RFHandOverReason) {
 @property(nonatomic, assign) BOOL succeeded;
 // reddit.com has set a session cookie: the account check that closes the sheet is under way.
 @property(nonatomic, assign) BOOL sessionSeen;
-// Account checks that found no logged-in account since the cookie appeared (see checkForSession).
-@property(nonatomic, assign) NSInteger emptySessionChecks;
+// When an account check first found no logged-in account (see checkForSession).
+@property(nonatomic, strong) NSDate *firstEmptySessionCheck;
+// The next account check is already due.
+@property(nonatomic, assign) BOOL sessionCheckScheduled;
 // Called once if the sheet closes without logging in.
 @property(nonatomic, copy) void (^cancellation)(void);
 // Filled in on reddit.com/login and submitted once the page is ready. Cleared once used.
@@ -77,11 +79,24 @@ typedef NS_ENUM(NSInteger, RFHandOverReason) {
 @property(nonatomic, strong) NSArray<UILabel *> *stepLabels;
 @property(nonatomic, strong) UIStackView *stepStack;
 @property(nonatomic, assign) NSInteger coverStep;
+// The page went on to reddit.com's feed, and was covered for it (see coverFeedPage).
+@property(nonatomic, assign) BOOL feedPageCovered;
 // The login form has turned up on the page.
 @property(nonatomic, assign) BOOL formFound;
 // Windows the page opened, such as Continue with Google or Apple, shown on top of it.
 @property(nonatomic, strong) NSMutableArray<WKWebView *> *popups;
 @end
+
+// reddit.com's own feeds, where its login page goes once it's done: a page with ads on it, not a login step.
+static BOOL RFIsFeedPage(NSURL *url) {
+  NSString *host = url.host.lowercaseString;
+  if (![host isEqualToString:@"reddit.com"] && ![host hasSuffix:@".reddit.com"]) return NO;
+  NSArray<NSString *> *parts = url.pathComponents; // the first is "/"
+  if (parts.count < 2) return YES;
+  return [@[ @"best", @"hot", @"new", @"top", @"rising", @"home", @"popular", @"r" ] containsObject:parts[1]];
+}
+
+static void *kRFLoginURLContext = &kRFLoginURLContext;
 
 @implementation RFWebLoginViewController
 
@@ -117,6 +132,9 @@ typedef NS_ENUM(NSInteger, RFHandOverReason) {
                            injectionTime:WKUserScriptInjectionTimeAtDocumentEnd
                         forMainFrameOnly:YES
                           inContentWorld:WKContentWorld.defaultClientWorld]];
+  // A video on the page must not open full screen, over the cover.
+  configuration.allowsInlineMediaPlayback = YES;
+  configuration.mediaTypesRequiringUserActionForPlayback = WKAudiovisualMediaTypeAll;
   self.webView = [[WKWebView alloc] initWithFrame:self.view.bounds configuration:configuration];
   self.webView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
   self.webView.navigationDelegate = self;
@@ -132,6 +150,7 @@ typedef NS_ENUM(NSInteger, RFHandOverReason) {
                                      componentsSeparatedByString:@"."]
                                      .firstObject];
   [configuration.websiteDataStore.httpCookieStore addObserver:self];
+  [self.webView addObserver:self forKeyPath:@"URL" options:0 context:kRFLoginURLContext];
   [self.view addSubview:self.webView];
   if (self.prefillPassword) [self showCover];
   [self.webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:kWebLoginURL]]];
@@ -145,7 +164,7 @@ typedef NS_ENUM(NSInteger, RFHandOverReason) {
     createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
                forNavigationAction:(WKNavigationAction *)navigationAction
                     windowFeatures:(WKWindowFeatures *)windowFeatures {
-  if (self.finished) return nil;
+  if (self.finished || self.cover) return nil; // under the cover, nobody tapped anything
   WKWebView *popup = [[WKWebView alloc] initWithFrame:self.view.bounds configuration:configuration];
   popup.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
   popup.customUserAgent = self.webView.customUserAgent;
@@ -165,6 +184,7 @@ typedef NS_ENUM(NSInteger, RFHandOverReason) {
 
 - (void)dealloc {
   [self.webView.configuration.websiteDataStore.httpCookieStore removeObserver:self];
+  [self.webView removeObserver:self forKeyPath:@"URL" context:kRFLoginURLContext];
 }
 
 - (void)cancel {
@@ -278,7 +298,9 @@ static const NSTimeInterval kSubmittedCheckLimit = 12;
                       [strongSelf autofillWithAttemptsLeft:20];
                       return;
                     }
-                    if (([state isEqual:@"wiped"] || [state isEqual:@"moved"]) && confirmed)
+                    // On to the feed isn't a step for the user: coverFeedPage waits for the session.
+                    if (([state isEqual:@"wiped"] || [state isEqual:@"moved"]) && confirmed &&
+                        !RFIsFeedPage(strongSelf.webView.URL))
                       return [strongSelf handOverToUser:RFHandOverStep message:nil];
                     if (checksLeft <= 0) return [strongSelf handOverToUser:RFHandOverSlow message:nil];
                     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kSubmittedCheckInterval * NSEC_PER_SEC)),
@@ -348,6 +370,7 @@ static UIImageView *symbolView(NSString *name, UIColor *color, UIFontTextStyle s
 // the reloads and the form filling itself in aren't shown. It lists the steps and ticks each one off.
 // Cancel stays in the bar above it.
 - (void)showCover {
+  [self.view endEditing:YES];
   UIView *cover = [[UIView alloc] initWithFrame:self.view.bounds];
   cover.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
   cover.backgroundColor = UIColor.systemBackgroundColor;
@@ -478,9 +501,10 @@ static UIImageView *symbolView(NSString *name, UIColor *color, UIFontTextStyle s
 
   // However the page behaves, don't keep it covered for long.
   __weak RFWebLoginViewController *weakSelf = self;
+  __weak UIView *weakCover = cover;
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(25 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
     RFWebLoginViewController *strongSelf = weakSelf;
-    if (strongSelf && !strongSelf.succeeded) [strongSelf handOverToUser:RFHandOverSlow message:nil];
+    if (strongSelf && !strongSelf.succeeded && weakCover && strongSelf.cover == weakCover) [strongSelf handOverToUser:RFHandOverSlow message:nil];
   });
 }
 
@@ -714,6 +738,31 @@ static UIImageView *symbolView(NSString *name, UIColor *color, UIFontTextStyle s
   }
 }
 
+// Watched rather than taken from a navigation: reddit.com goes to its feed without loading a new page.
+- (void)observeValueForKeyPath:(NSString *)keyPath
+                      ofObject:(id)object
+                        change:(NSDictionary *)change
+                       context:(void *)context {
+  if (context != kRFLoginURLContext) return [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
+  if (RFIsFeedPage(self.webView.URL)) [self coverFeedPage];
+}
+
+// Logged in, reddit.com goes on to its feed while the session is being checked. Its ads shouldn't show, so
+// cover it. If there's no session after a few seconds (the page was left without logging in), show it.
+- (void)coverFeedPage {
+  if (self.finished || self.feedPageCovered) return;
+  self.feedPageCovered = YES;
+  if (!self.cover) [self showCover];
+  [self advanceCoverToStep:2];
+  [self checkForSession];
+  __weak RFWebLoginViewController *weakSelf = self;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 4 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+    RFWebLoginViewController *strongSelf = weakSelf;
+    if (strongSelf && !strongSelf.finished && !strongSelf.sessionSeen)
+      [strongSelf handOverToUser:RFHandOverStep message:nil];
+  });
+}
+
 - (void)checkForSession {
   if (self.finished) return;
   [self.webView.configuration.websiteDataStore.httpCookieStore
@@ -725,7 +774,11 @@ static UIImageView *symbolView(NSString *name, UIColor *color, UIFontTextStyle s
               cookie.value.length)
             session = cookie.value;
         if (!session || self.finished) return;
-        self.sessionSeen = YES;
+        if (!self.sessionSeen) {
+          self.sessionSeen = YES;
+          if (!self.cover) [self showCover];
+          [self advanceCoverToStep:2];
+        }
         // Confirm the session belongs to a logged-in account and get its username.
         [self.webView
             callAsyncJavaScript:@"try {"
@@ -744,23 +797,30 @@ static UIImageView *symbolView(NSString *name, UIColor *color, UIFontTextStyle s
                  // Right after logging in, reddit.com can take a few seconds to say who's logged in (2.5 s in
                  // one test). Look again every half second for up to 8 s. If there's still no account, the cookie
                  // isn't a logged-in session after all, so show the page rather than wait under the cover.
-                 if (++self.emptySessionChecks >= 16) return [self handOverToUser:RFHandOverStep message:nil];
+                 // Counted in time, not checks: every cookie the page sets brings another check.
+                 if (!self.firstEmptySessionCheck) self.firstEmptySessionCheck = [NSDate date];
+                 if (-self.firstEmptySessionCheck.timeIntervalSinceNow >= 8)
+                   return [self handOverToUser:RFHandOverStep message:nil];
+                 if (self.sessionCheckScheduled) return;
+                 self.sessionCheckScheduled = YES;
                  __weak RFWebLoginViewController *weakSelf = self;
                  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                   weakSelf.sessionCheckScheduled = NO;
                    [weakSelf checkForSession];
                  });
                  return;
                }
                self.finished = YES;
                self.succeeded = YES;
+               [self.webView stopLoading];
+               if (!self.cover) [self showCover];
+               [self advanceCoverToStep:3];
                void (^completion)(NSString *, NSString *) = self.completion;
                // The app's own Log in button: answer the app now and keep the sheet up, covered, until
                // the app moves on to its "switching account" screen (the running mascot). Closing it first
                // would show the app's Log in screen again for a moment.
                if (self.prefillUsername) {
                  self.prefillPassword = nil;
-                 if (!self.cover) [self showCover];
-                 [self advanceCoverToStep:3];
                  if (completion) completion(session, username);
                  [self closeWhenWindow:self.view.window leaves:self.view.window.rootViewController checksLeft:80];
                  return;
