@@ -65,6 +65,9 @@ extern NSString *const kRFDebugFeedCards;     // NSArray   on the feed cards row
                                               //           starting "? " if Extra cards can't hide it, else "\u2713 "
 extern NSString *const kRFDebugSummary;       // NSString  compatibility summary, never response or browsing data
 
+// How a check went, for its colour.
+typedef NS_ENUM(NSInteger, RFDebugLevel) { RFDebugLevelNone, RFDebugLevelGood, RFDebugLevelBad };
+
 typedef NS_OPTIONS(NSUInteger, RFArticleSafariHooks) {
   RFArticleSafariHookLegacy = 1 << 0,
   RFArticleSafariHookPush = 1 << 1,
@@ -126,7 +129,7 @@ typedef NS_ENUM(NSUInteger, RFArticleSafariResult) {
 // page titles and class names only. Only recorded while Diagnostics is on; reset/off clears them.
 - (void)addSettingsScrollEvent:(NSString *)line;
 // `stuck`: also keep this as the state after the latest drag that didn't scroll.
-- (void)setSettingsScrollState:(NSString *)state stuck:(BOOL)stuck;
+- (void)setSettingsScrollState:(NSString *)state drag:(BOOL)drag stuck:(BOOL)stuck;
 
 // What -snapshot shows, as plain text for a bug report. It holds operation names, schema paths,
 // Reddit API addresses, card types and article compatibility only: captured JSON is never included.
@@ -137,6 +140,26 @@ typedef NS_ENUM(NSUInteger, RFArticleSafariResult) {
 - (void)reset;
 
 @end
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+// What the Diagnostics page shows for a record from -snapshot: its name in plain words, a short status,
+// a sentence on what that means, and the technical details (never captured JSON).
+NSString *RFDebugTitle(NSDictionary *record);
+NSString *RFDebugStatus(NSDictionary *record, RFDebugLevel *level);
+NSString *RFDebugExplanation(NSDictionary *record);
+NSString *RFDebugDetails(NSDictionary *record);
+// Whether a list at `offset` (between `top` and `bottom`) can follow a finger that moved `dy`: at an edge a
+// drag moves the sheet, or nothing.
+BOOL RFDragHasRoom(double dy, double offset, double top, double bottom);
+// Whether it did: it moved the right way by at least a fifth of what it could have. A stuck list can still jitter.
+BOOL RFDragScrolled(double dy, double offset, double top, double bottom, double moved);
+// The snapshot's records for the Filter checks (or App checks) list, in display order.
+NSArray<NSDictionary *> *RFDebugChecks(NSArray<NSDictionary *> *snapshot, BOOL app);
+#ifdef __cplusplus
+}
+#endif
 
 // Recording macros used at the call sites. They do nothing unless Diagnostics is on.
 // (Parameter names start with an underscore so they can't collide with the

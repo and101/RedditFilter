@@ -225,12 +225,17 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
   });
 }
 
-- (void)setSettingsScrollState:(NSString *)state stuck:(BOOL)stuck {
+- (void)setSettingsScrollState:(NSString *)state drag:(BOOL)drag stuck:(BOOL)stuck {
   if (!RFDiagnosticsEnabled() || !state.length) return;
   dispatch_sync(_queue, ^{
     if (!RFDiagnosticsEnabled()) return;
     _scrollState = [state copy];
     if (stuck) _scrollStuck = [state copy];
+    if (!drag) return;
+    NSMutableDictionary *record = _records[kRFSettingsScrollRow];
+    NSString *count = stuck ? kRFDebugMisses : kRFDebugHits;
+    record[kRFDebugSeen] = @YES;
+    record[count] = @([record[count] integerValue] + 1);
   });
 }
 
@@ -246,7 +251,7 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
 // Caller is on _queue. This is a single fixed outcome, not a browsing history.
 - (NSString *)articleSafariSummary {
   NSArray<NSString *> *results = @[
-    @"none yet with Diagnostics on",
+    @"none yet with \"Diagnostics\" on",
     @"Safari presented (legacy article)",
     @"Safari presented (post-page article)",
     @"native behaviour kept (option off or transition cancelled)",
@@ -295,7 +300,14 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
       // Deep-ish copy: the values are immutable, so a shallow copy is a safe
       // immutable snapshot for the UI to read on the main thread.
       NSMutableDictionary *record = [_records[op] mutableCopy];
-      if ([op isEqualToString:kRFArticleSafariRow]) record[kRFDebugSummary] = [self articleSafariSummary];
+      if ([op isEqualToString:kRFArticleSafariRow]) {
+        record[kRFDebugSummary] = [self articleSafariSummary];
+        NSInteger missing = 0;
+        for (NSNumber *hook in @[ @(RFArticleSafariHookLegacy), @(RFArticleSafariHookPush), @(RFArticleSafariHookStart),
+                                  @(RFArticleSafariHookPolicy) ])
+          missing += !(_articleSafariHooks & hook.unsignedIntegerValue);
+        record[kRFDebugMisses] = @(missing);
+      }
       if ([op isEqualToString:kRFSettingsScrollRow]) record[kRFDebugSummary] = [self settingsScrollSummary];
       if ([op isEqualToString:kRFUnfilteredRow]) {
         NSArray *keys = [_unfiltered keysSortedByValueUsingComparator:^NSComparisonResult(id a, id b) {
@@ -500,3 +512,133 @@ static const NSUInteger kRFMaxArrayProbe = 6; // array elements descended into
 
 @end
 
+#pragma mark - The Diagnostics page
+
+static BOOL RFIsRow(NSDictionary *record, NSString *row) { return [record[kRFDebugOp] isEqualToString:row]; }
+
+// "1 miss", "3 misses".
+static NSString *RFPlural(NSInteger count, NSString *one, NSString *many) {
+  return [NSString stringWithFormat:@"%ld %@", (long)count, count == 1 ? one : many];
+}
+
+static NSInteger RFUnknownCards(NSDictionary *record) {
+  NSInteger unknown = 0;
+  for (NSString *line in record[kRFDebugFeedCards]) unknown += [line hasPrefix:@"?"];
+  return unknown;
+}
+
+NSString *RFDebugTitle(NSDictionary *record) {
+  NSString *op = record[kRFDebugOp] ?: @"";
+  return @{
+    @"HomeFeedSdui" : @"Home",
+    @"PopularFeedSdui" : @"Popular",
+    @"FollowingFeed" : @"Following",
+    @"FeedPostDetailsByIds" : @"Post details",
+    @"PostInfoById" : @"Comments",
+    @"PdpCommentsAds" : @"Comment ads",
+  }[op] ?: op;
+}
+
+NSString *RFDebugStatus(NSDictionary *record, RFDebugLevel *level) {
+  NSInteger hits = [record[kRFDebugHits] integerValue], misses = [record[kRFDebugMisses] integerValue];
+  RFDebugLevel result = RFDebugLevelNone;
+  NSString *status;
+  if (RFIsRow(record, kRFArticleSafariRow)) {
+    result = misses ? RFDebugLevelBad : RFDebugLevelGood;
+    status = misses ? [NSString stringWithFormat:@"\u2717 %ld missing", (long)misses] : @"\u2713 Ready";
+  } else if (RFIsRow(record, kRFSettingsScrollRow)) {
+    result = misses ? RFDebugLevelBad : hits ? RFDebugLevelGood : RFDebugLevelNone;
+    status = misses ? [@"\u2717 " stringByAppendingFormat:@"%@ stuck", RFPlural(misses, @"drag", @"drags")]
+             : hits ? @"\u2713 Working"
+                    : @"Not checked";
+  } else if (record[kRFDebugUnfiltered]) {
+    result = misses ? RFDebugLevelBad : RFDebugLevelGood;
+    status = misses ? [NSString stringWithFormat:@"\u2717 %ld", (long)misses] : @"\u2713 None";
+  } else if (record[kRFDebugFeedCards]) {
+    NSInteger unknown = RFUnknownCards(record), known = [record[kRFDebugFeedCards] count] - unknown;
+    result = unknown || known ? RFDebugLevelNone : RFDebugLevelGood;
+    status = unknown ? [NSString stringWithFormat:@"%ld to report", (long)unknown]
+             : known ? [NSString stringWithFormat:@"%ld known", (long)known]
+                     : @"\u2713 None";
+  } else if (![record[kRFDebugSeen] boolValue]) {
+    status = @"Not checked";
+  } else if ([record[kRFDebugLastResolved] boolValue]) {
+    result = RFDebugLevelGood;
+    status = @"\u2713 Working";
+  } else if (!misses) {
+    status = @"Reddit error";
+  } else {
+    result = RFDebugLevelBad;
+    status = [record[kRFDebugDiscovered] length] ? @"\u2717 Moved" : @"\u2717 Not found";
+  }
+  if (level) *level = result;
+  return status;
+}
+
+NSString *RFDebugExplanation(NSDictionary *record) {
+  NSInteger hits = [record[kRFDebugHits] integerValue], misses = [record[kRFDebugMisses] integerValue];
+  if (RFIsRow(record, kRFArticleSafariRow))
+    return misses ? @"Reddit has changed, so some article links may open differently."
+                  : @"Articles can open the way you chose in \"Article links\".";
+  if (RFIsRow(record, kRFSettingsScrollRow))
+    return misses ? @"A drag on a RedditFilter page didn't scroll it. Please share the report."
+           : hits ? @"RedditFilter pages scroll when dragged."
+                  : @"Scroll a RedditFilter settings page to check this.";
+  if (record[kRFDebugUnfiltered])
+    return misses ? @"Some of Reddit's requests skipped the filters. Please share the report."
+                  : @"No requests have skipped the filters.";
+  if (record[kRFDebugFeedCards]) {
+    if (RFUnknownCards(record)) return @"RedditFilter doesn't recognise some cards. Please share the report.";
+    return [record[kRFDebugFeedCards] count] ? @"These can be hidden with \"Extra cards\"." : @"Only posts and ads so far.";
+  }
+  if (![record[kRFDebugSeen] boolValue]) return @"Use Reddit for a minute to check this.";
+  if ([record[kRFDebugLastResolved] boolValue]) return @"Reddit's data is where RedditFilter expects it.";
+  if (!misses) return @"Reddit has only sent errors so far.";
+  return [record[kRFDebugDiscovered] length] ? @"Reddit moved this data. RedditFilter is using a fallback."
+                                             : @"RedditFilter couldn't find this data. Please share the report.";
+}
+
+NSString *RFDebugDetails(NSDictionary *record) {
+  NSString *summary = record[kRFDebugSummary];
+  if (summary) return summary;
+  NSArray<NSString *> *unfiltered = record[kRFDebugUnfiltered];
+  if (unfiltered) return [unfiltered componentsJoinedByString:@"\n"];
+  NSArray<NSString *> *cards = record[kRFDebugFeedCards];
+  if (cards) {
+    NSMutableArray<NSString *> *known = [NSMutableArray array], *unknown = [NSMutableArray array];
+    for (NSString *line in cards) [[line hasPrefix:@"?"] ? unknown : known addObject:[line substringFromIndex:2]];
+    NSMutableArray<NSString *> *groups = [NSMutableArray array];
+    if (unknown.count) [groups addObject:[@"Not recognised:\n" stringByAppendingString:[unknown componentsJoinedByString:@"\n"]]];
+    if (known.count) [groups addObject:[@"Can be hidden with \"Extra cards\":\n" stringByAppendingString:[known componentsJoinedByString:@"\n"]]];
+    return [groups componentsJoinedByString:@"\n\n"];
+  }
+  NSInteger errors = [record[kRFDebugErrors] integerValue];
+  NSMutableArray<NSString *> *parts = [NSMutableArray arrayWithObject:[NSString
+      stringWithFormat:@"%@\n%ld found \u00b7 %ld missed%@", record[kRFDebugOp], (long)[record[kRFDebugHits] integerValue],
+                       (long)[record[kRFDebugMisses] integerValue],
+                       errors ? [@" \u00b7 " stringByAppendingString:RFPlural(errors, @"Reddit error", @"Reddit errors")] : @""]];
+  [parts addObject:[@"Expected:\n" stringByAppendingString:record[kRFDebugExpected] ?: @""]];
+  if ([record[kRFDebugDiscovered] length])
+    [parts addObject:[@"Found at:\n" stringByAppendingString:record[kRFDebugDiscovered]]];
+  return [parts componentsJoinedByString:@"\n\n"];
+}
+
+NSArray<NSDictionary *> *RFDebugChecks(NSArray<NSDictionary *> *snapshot, BOOL app) {
+  NSMutableArray *paths = [NSMutableArray array], *lists = [NSMutableArray array], *apps = [NSMutableArray array];
+  for (NSDictionary *record in snapshot)
+    [record[kRFDebugSummary] ? apps : record[kRFDebugUnfiltered] || record[kRFDebugFeedCards] ? lists : paths addObject:record];
+  return app ? apps : [paths arrayByAddingObjectsFromArray:lists];
+}
+
+static double RFDragRoom(double dy, double offset, double top, double bottom) {
+  return dy > 0 ? offset - top : bottom - offset;
+}
+
+BOOL RFDragHasRoom(double dy, double offset, double top, double bottom) {
+  return RFDragRoom(dy, offset, top, bottom) >= 8; // less than this can look like not moving
+}
+
+BOOL RFDragScrolled(double dy, double offset, double top, double bottom, double moved) {
+  double possible = MIN(fabs(dy), RFDragRoom(dy, offset, top, bottom));
+  return (dy > 0 ? -moved : moved) >= MAX(possible / 5, 4);
+}

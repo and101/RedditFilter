@@ -7,6 +7,7 @@
 #import "DebugMenu.h"
 #import "RFBackup.h"
 #import "RFBackupPicker.h"
+#import "RFDiagnosticDetail.h"
 #import "RFScrollDiagnostics.h"
 #import "RFStats.h"
 #import "RFStatsViewController.h"
@@ -55,21 +56,21 @@ static const RFToggleRow kToggleRows[] = {
     {kRedditFilterKeywordCommentReplies, @"Hide replies too", @"Also hide the replies below them",
      @"rpl3/reply,icon_reply", NO, kRedditFilterKeywordComments},
     {kRedditFilterCheckUpdates, @"Check for updates",
-                                       @"Switch on to check daily, or tap to check now",
+                                       @"Check daily, or tap to check now",
                                        @"rpl3/download,rpl3/notifications", NO},
     {kRedditFilterRedgifsDirect, @"Play RedGIFs directly", @"Plays with sound, but can use more data",
      @"rpl3/volumeOn,rpl3/play", NO},
     // Saved as "prefer HD", so the switch is the opposite.
     {kRedditFilterRedgifsHD, @"Prefer SD", @"Uses about a tenth of the data of HD",
      @"rpl3/video,icon_video,icon_play", YES, kRedditFilterRedgifsDirect},
-    {kRedditFilterRedgifsHDWiFiOnly, @"Prefer SD on mobile data", @"And in Low Data Mode; HD on Wi-Fi",
+    {kRedditFilterRedgifsHDWiFiOnly, @"Prefer SD on mobile data", @"Also in Low Data Mode",
      @"rf/wifi", NO, kRedditFilterRedgifsHD},
     {kRedditFilterAutoCollapseAutoMod, @"AutoMod", @"Always collapse AutoMod comments", @"rpl3/mod,icon_mod", NO},
     {kRedditFilterDiagnostics, @"Diagnostics",
                                             @"Check the filters still work",
                                             @"rpl3/bug,icon_bug", NO},
     {kRedditFilterSwipeToCollapse, @"Swipe to collapse",
-     @"Swipe further to collapse the whole thread",
+     @"Swipe further for the whole thread",
      @"rpl3/swipeLeft,rpl3/comment,icon_comment", NO},
     {kRedditFilterSwipeLeftToCollapse, @"Swipe left",
      @"When off, swiping left changes post",
@@ -78,23 +79,23 @@ static const RFToggleRow kToggleRows[] = {
      @"Swiping from the edge still goes back",
      @"rpl3/swipeRight,rpl3/comment,icon_comment", NO, kRedditFilterSwipeToCollapse},
     {kRedditFilterSwipeCollapseHaptics, @"Swipe haptics",
-     @"Vibrate when a swipe reaches its action", @"rpl3/swipeLeft,rpl3/comment,icon_comment", NO},
+     @"Vibrate when a swipe is ready", @"rpl3/swipeLeft,rpl3/comment,icon_comment", NO},
     {kRedditFilterTapToCollapse, @"Tap to collapse too",
      @"Long press collapses the whole thread", @"rpl3/comment,icon_comment", NO,
      kRedditFilterSwipeToCollapse},
     {kRedditFilterKeepFeedPosition, @"Keep feed position", @"Stay where you were on Home",
      @"rpl3/home,icon_home", NO},
-    {kRedditFilterRestoreScreens, @"Reopen community and post", @"Communities, profiles and posts too",
+    {kRedditFilterRestoreScreens, @"Reopen screens", @"Communities, posts and more",
      @"rpl3/comment,icon_comment", NO, kRedditFilterKeepFeedPosition},
-    {kRedditFilterRestoreAfterSwipe, @"Restore after swiping away", @"Not only when iOS closed Reddit",
+    {kRedditFilterRestoreAfterSwipe, @"Restore after swiping away", @"Even if you closed Reddit yourself",
      @"rpl3/swipeUp,rpl3/refresh,icon_refresh", NO, kRedditFilterKeepFeedPosition},
     {kRedditFilterRefreshPill, @"Refresh button", @"Show the new posts button on Home",
      @"rpl3/refresh,icon_refresh", YES},
     {kRedditFilterCleanShareLinks, @"Clean share links", @"Share plain links, not ones tied to you",
      @"rpl3/share,icon_share", NO},
-    {kRedditFilterBlockTrackers, @"Block trackers", @"Stop analytics and ad tracking",
+    {kRedditFilterBlockTrackers, @"Block trackers", @"Block requests to known trackers",
      @"rpl3/hide,rpl3/lock,icon_hide", NO},
-    {kRedditFilterStartOnFollowing, @"Start on Following", @"Open Home on Following, not For You",
+    {kRedditFilterStartOnFollowing, @"Start on Following", @"Open Home on the Following tab",
      @"rpl3/home,icon_home", NO},
     {kRedditFilterSwipePosts, @"Swipe posts", @"Upvote, downvote or save from a feed",
      @"rpl3/swipeLeft,rpl3/upvote,icon_upvote", NO},
@@ -447,7 +448,7 @@ typedef NS_ENUM(NSInteger, RFSection) {
   RFSectionDebug,
   RFSectionAppearance, RFSectionRootFilters, RFSectionDisplay, RFSectionMore, RFSectionFeed,
   RFSectionExperimental, RFSectionRestoreOptions, RFSectionPrivacy, RFSectionHome, RFSectionPostSwipe,
-  RFSectionSwipeHaptics,
+  RFSectionSwipeHaptics, RFSectionFilterChecks, RFSectionAppChecks, RFSectionResetChecks,
 };
 
 // The IPA includes the Safari extension unless it was built without it.
@@ -502,7 +503,10 @@ static NSArray<NSNumber *> *RFSections(id settings) {
       return @[@(RFSectionSwipe), @(RFSectionCollapse), @(RFSectionPostSwipe), @(RFSectionSwipeHaptics)];
     case RFPageRedgifs: return @[@(RFSectionRedgifs)];
     case RFPageBackup: return @[@(RFSectionBackup)];
-    case RFPageDiagnostics: return @[@(RFSectionDebug)];
+    case RFPageDiagnostics:
+      return RFDiagnosticsEnabled()
+                 ? @[@(RFSectionDebug), @(RFSectionFilterChecks), @(RFSectionAppChecks), @(RFSectionResetChecks)]
+                 : @[@(RFSectionDebug)];
     case RFPageAbout: return @[@(RFSectionAbout)];
     case RFPagePrivacy: return @[@(RFSectionPrivacy)];
     case RFPageRoot:
@@ -554,74 +558,97 @@ static NSString *RFHeaderText(id settings, NSInteger section) {
     case RFSectionMore: return @"MORE";
     case RFSectionSwipe: return @"COMMENTS";
     case RFSectionPostSwipe: return @"POSTS";
+    case RFSectionFilterChecks: return @"FILTER CHECKS";
+    case RFSectionAppChecks: return @"APP CHECKS";
     default: return nil;
   }
   return nil;
 }
 
-// A Diagnostics readout row: a plain UIKit cell (it has to keep working when Reddit's own classes change),
-// the same for every row: a 15 pt semibold title over 11 pt monospaced details.
-static UITableViewCell *RFDiagnosticCell(UITableView *tableView, NSString *identifier) {
-  UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:identifier];
-  if (!cell) {
-    cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:identifier];
-    cell.detailTextLabel.numberOfLines = 0;
-    cell.detailTextLabel.font = [UIFont monospacedSystemFontOfSize:11.0 weight:UIFontWeightRegular];
-    cell.textLabel.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightSemibold];
-  }
-  cell.accessoryView = nil;
-  cell.selectionStyle = UITableViewCellSelectionStyleNone;
+// A Diagnostics row: a plain UIKit cell (it has to keep working when Reddit's own classes change), with a
+// check's status at its end and an arrow to its details, or an action in blue.
+static UITableViewCell *RFDiagnosticCell(UITableView *tableView, NSString *title, NSString *detail, UIColor *detailColor,
+                                         BOOL action) {
+  UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"RFDiagnosticCell"]
+                              ?: [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
+                                                        reuseIdentifier:@"RFDiagnosticCell"];
+  UIListContentConfiguration *content =
+      action ? UIListContentConfiguration.subtitleCellConfiguration : UIListContentConfiguration.valueCellConfiguration;
+  content.text = title;
+  content.textProperties.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+  content.textProperties.color = action ? UIColor.systemBlueColor : UIColor.labelColor;
+  content.secondaryText = detail;
+  content.secondaryTextProperties.font =
+      [UIFont preferredFontForTextStyle:action ? UIFontTextStyleFootnote : UIFontTextStyleSubheadline];
+  content.secondaryTextProperties.color = detailColor ?: UIColor.secondaryLabelColor;
+  content.directionalLayoutMargins = NSDirectionalEdgeInsetsMake(11, 20, 11, action ? 20 : 8);
+  content.axesPreservingSuperviewLayoutMargins = UIAxisNeither;
+  cell.contentConfiguration = content;
+  // Otherwise a row over the home indicator or under the bar grows by the safe area, off centre.
+  cell.contentView.insetsLayoutMarginsFromSafeArea = NO;
+  cell.accessoryType = action ? UITableViewCellAccessoryNone : UITableViewCellAccessoryDisclosureIndicator;
+  cell.accessibilityLabel = title;
+  cell.accessibilityValue = detail ? RFDebugSpokenStatus(detail) : nil;
+  cell.accessibilityTraits = UIAccessibilityTraitButton;
+  cell.backgroundColor = UIColor.systemBackgroundColor;
+  RFApplyTheme(cell, @selector(setBackgroundColor:), @selector(bodyColor));
   return cell;
+}
+
+// The checks listed in a section: the snapshot's, then Last closed (no record) at the end of App checks.
+static NSArray<NSDictionary *> *RFSectionChecks(id settings, RFSection section) {
+  return RFDebugChecks(RFDebugSnapshot(settings), section == RFSectionAppChecks);
 }
 
 static NSString *RFFooterText(id settings, NSInteger section) {
   switch (RFSectionAt(settings, section)) {
     case RFSectionStats: return nil;
-    case RFSectionFilters: return @"Turn a switch off to hide that content.";
+    case RFSectionFilters: return @"Turn off what you want to hide.";
     case RFSectionCollapse: return nil;
     case RFSectionSwipeHaptics: return @"For swipes on both posts and comments.";
     case RFSectionPostSwipe:
-      return @"In feeds, swipe a post left to upvote it, or further to downvote it. Swipe right to save it. "
-             @"Swiping again removes the vote or unsaves the post.";
+      return @"In feeds, swipe a post left to upvote or further left to downvote. Swipe right to save. "
+             @"Repeat the same swipe to undo it.";
     case RFSectionFeed:
-      return @"Reddit jumps back to the top of Home after 10 minutes away. This keeps your place in For You, "
-             @"and in Following and Popular while Reddit shows them as feed tabs, even after Reddit closes. "
-             @"Popular and Latest, which Reddit opens from the side menu, keep their place when Reopen "
-             @"community and post reopens them. Pull down to refresh.\n\n"
-             @"Reopened posts start at the top, with a button back to where you were in the comments.";
+      return @"Reddit jumps back to the top of Home after 10 minutes away. \"Keep feed position\" keeps your "
+             @"place in your Home feeds, even after Reddit closes. Pull down to refresh.\n\n"
+             @"Popular and Latest in the side menu keep their place only when \"Reopen screens\" reopens them. "
+             @"Reopened posts start at the top, with a button back to where you were.";
     case RFSectionRestoreOptions:
-      return @"Restore for is how long your place is kept after you leave Reddit.";
+      return @"\"Restore for\" sets how long your place is kept after you leave Reddit.";
     case RFSectionExperimental: return nil;
     case RFSectionSwipe:
-      return @"Turn on both sides to collapse either way. Swiping a collapsed comment or the post itself still "
-             @"changes post or goes back. With swipe to collapse off, a tap collapses comments as usual. "
+      return @"Turn on \"Swipe left\" and \"Swipe right\" to collapse either way. Swiping a collapsed comment or the "
+             @"post itself still changes post or goes back. With \"Swipe to collapse\" off, a tap collapses comments "
+             @"as usual. "
              @"A tap always reopens a collapsed comment.";
     case RFSectionRedgifs:
       return @"Plays RedGIFs' own videos with sound, connecting your device to RedGIFs directly. If RedGIFs "
              @"can't be reached, Reddit's silent version plays. HD plays when a video has no SD version, and "
              @"videos already loaded keep their quality if your network changes.";
     case RFSectionAppearance:
-      return @"Safari opens articles in an in-app sheet that uses your Safari content blockers.";
+      return @"\"Safari\" opens articles in an in-app sheet that uses your Safari content blockers.";
     case RFSectionRootFilters:
     case RFSectionDisplay:
     case RFSectionMore:
+    case RFSectionFilterChecks:
+    case RFSectionAppChecks:
       return nil;
     case RFSectionBackup:
       return @"Backups hold no account details.";
     case RFSectionDebug:
-      if (!RFDiagnosticsEnabled())
-        return @"If posts or ads come back, turn this on, use Reddit for a minute, then add what shows here "
-               @"to your bug report.";
-      return @"✓ found · ✗ not where expected, so RedditFilter tries the usual places. On a ✗ row, Copy gives "
-             @"the new location. Copy JSON gives the response, which can include usernames and post text, and "
-             @"Share report never includes it. Nothing leaves your device unless you copy or share it, and "
-             @"it's cleared when Reddit closes or you turn this off.";
+      return RFDiagnosticsEnabled() ? nil
+                                    : @"If posts or ads come back, turn this on, use Reddit for a minute, then share "
+                                      @"the report.";
+    case RFSectionResetChecks:
+      return @"Use Reddit for a minute, then share the report. Nothing leaves your device unless you copy or share "
+             @"it. Results are cleared when Reddit closes or you turn off \"Diagnostics\".";
     case RFSectionAbout: return @"Based on original work by level3tjg and NicholasBly.";
     case RFSectionHome: return @"Reddit opens Home on the tab you last used. This opens it on Following every time.";
     case RFSectionPrivacy:
       return @"Reddit's share links (…/s/…) are tied to your account, so Reddit can link everyone who opens one back "
-             @"to you. Clean share links shares the plain link instead.\n\nBlock trackers stops analytics, crash "
-             @"reports and ad tracking from leaving your device. Logging in and feeds aren't affected.";
+             @"to you. \"Clean share links\" shares the plain link instead.\n\n\"Block trackers\" stops known "
+             @"analytics, crash report and ad trackers. Reddit's own usage data is still sent. Logging in and feeds aren't affected.";
   }
   return nil;
 }
@@ -752,7 +779,7 @@ static UITableViewCell *RFAboutCell(UITableView *tableView, NSInteger index) {
 
 static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
   NSUInteger count = RFSavedKeywords().count;
-  NSString *subtitle = count == 0   ? @"Hide posts that mention a word or phrase"
+  NSString *subtitle = count == 0   ? @"Hide posts by word, website or flair"
                        : count == 1 ? @"1 keyword"
                                     : [NSString stringWithFormat:@"%lu keywords", (unsigned long)count];
   return RFLinkCell(tableView, @"Keywords", subtitle, @"rpl3/search", @"text.magnifyingglass");
@@ -793,9 +820,9 @@ static void RFShowSafariSetup(UIViewController *controller) {
   UIAlertController *alert = [UIAlertController
       alertControllerWithTitle:@"Open Reddit links here"
                        message:@"Reddit links you open in Safari can open in this app instead.\n\n"
-                               @"1. Open Settings, then Apps, then Safari, then Extensions.\n"
-                               @"2. Tap RedditFilter and turn on Allow Extension.\n"
-                               @"3. Under Permissions, set the Reddit websites to Allow.\n\n"
+                               @"1. Open Settings > Apps > Safari > Extensions.\n"
+                               @"2. Tap RedditFilter and turn on \"Allow Extension\".\n"
+                               @"3. Under Permissions, set the Reddit websites to \"Allow\".\n\n"
                                @"Safari asks before opening each link. Cancel once to stay on the page, "
                                @"or twice to stay on the web until you close that tab."
                 preferredStyle:UIAlertControllerStyleAlert];
@@ -859,11 +886,8 @@ void RFKeywordSettingsChanged(UISwitch *sender, UITableView *table) {
 // Declarations for the Debug section's helpers so the call sites below are typed.
 // (The implementations are added to the class at runtime by Logos below.)
 @interface FeedFilterSettingsViewController (RFSchemaDebug)
-- (UITableViewCell *)debugCellForRow:(NSInteger)row inTableView:(UITableView *)tableView;
-- (void)rfCopyDiscoveredPath:(UIButton *)sender;
-- (void)rfCopyFailedJSON:(UIButton *)sender;
-- (void)rfResetCounters:(UIButton *)sender;
-- (void)rfShareReport:(UIButton *)sender;
+- (void)rfResetChecks;
+- (void)rfShareReportFrom:(UIView *)source;
 @end
 
 // Declarations for the Backup section's helpers so the call sites below are typed.
@@ -927,9 +951,36 @@ static NSString *RFBackupSummaryMessage(RFBackupSummary *summary) {
 // The table's top inset that matches the current Settings header: 20 pt below the navigation bar.
 // -1 when there's no bar to line up with.
 static CGFloat RFSettingsTopInset(UIViewController *settings) {
-  UINavigationBar *bar = settings.navigationController.navigationBar;
+  UINavigationController *navigation = settings.navigationController;
+  UINavigationBar *bar = navigation.navigationBar;
   if (!settings.isViewLoaded || !bar || bar.hidden) return -1;
-  return CGRectGetMaxY([bar convertRect:bar.bounds toView:settings.view]) + 20.0;
+  // Going back to this page, its view isn't in the sheet yet: it'd be measured from the top of the screen.
+  UIView *view = [settings.view isDescendantOfView:navigation.view] ? settings.view : navigation.view;
+  return CGRectGetMaxY([bar convertRect:bar.bounds toView:view]) + 20.0;
+}
+
+// BaseTableViewController sizes the table to the whole window on every layout, not to this sheet. Where they
+// differ in width (the iPhone Duo's closed screen, landscape), putting it back afterwards changes the width
+// twice a layout, and each change drops the measured row heights: scrolling back up then fights the estimates.
+// So this one table only takes its sheet's size: it becomes a subclass of its own class.
+static Class gTableClass;
+static void RFTableSetFrame(UITableView *self, SEL _cmd, CGRect frame) {
+  UIView *page = self.superview;
+  if ([page.nextResponder isKindOfClass:objc_getClass("FeedFilterSettingsViewController")]) frame = page.bounds;
+  struct objc_super superclass = {self, class_getSuperclass(gTableClass)};
+  ((void (*)(struct objc_super *, SEL, CGRect))objc_msgSendSuper)(&superclass, _cmd, frame);
+}
+
+static void RFKeepTableInSheet(UITableView *table) {
+  Class original = object_getClass(table);
+  if (!gTableClass) {
+    gTableClass = objc_allocateClassPair(original, "RFSettingsTableView", 0);
+    if (!gTableClass) return;
+    Method setFrame = class_getInstanceMethod(original, @selector(setFrame:));
+    class_addMethod(gTableClass, @selector(setFrame:), (IMP)RFTableSetFrame, method_getTypeEncoding(setFrame));
+    objc_registerClassPair(gTableClass);
+  }
+  if (class_getSuperclass(gTableClass) == original) object_setClass(table, gTableClass);
 }
 
 %subclass FeedFilterSettingsViewController : BaseTableViewController
@@ -938,6 +989,7 @@ static CGFloat RFSettingsTopInset(UIViewController *settings) {
   %orig;
   self.title = RFPageTitle(RFCurrentPage(self));
   Class toggleCellClass = RFSettingsCell.class;
+  RFKeepTableInSheet(self.tableView);
   [self.tableView registerClass:toggleCellClass forCellReuseIdentifier:kToggleCellID];
   [self.tableView registerClass:toggleCellClass forCellReuseIdentifier:kLinkCellID];
   [self.tableView registerClass:toggleCellClass forCellReuseIdentifier:kRootCellID];
@@ -971,9 +1023,8 @@ static CGFloat RFSettingsTopInset(UIViewController *settings) {
   // In case BaseTableViewController stops using preferredContentInset. On the iPhone Duo's closed
   // screen it lays out on almost every frame while scrolling, so this must never move the list then.
   UITableView *table = self.tableView;
-  // BaseTableViewController sizes the table to the whole window, not this sheet. A sheet that doesn't
-  // start at the window's left edge (in landscape, or centred on a large screen) then has the rows
-  // sticking out past its left side.
+  // In case the table isn't the one kept to this sheet's size (RFKeepTableInSheet): rows would stick out
+  // past the left side of a sheet that doesn't start at the window's edge.
   if (table.superview == self.view && !CGRectEqualToRect(table.frame, self.view.bounds)) table.frame = self.view.bounds;
   CGFloat top = RFSettingsTopInset(self);
   if (top < 0) return;
@@ -1124,7 +1175,10 @@ static CGFloat RFSettingsTopInset(UIViewController *settings) {
     case RFSectionDisplay: return 3;
     case RFSectionMore: return 3 + RFHasSafariExtension();
     case RFSectionBackup: return 2;
-    case RFSectionDebug: return 2 + (RFDiagnosticsEnabled() ? RFDebugSnapshot(self).count + 2 : 0);
+    case RFSectionDebug: return RFDiagnosticsEnabled() ? 2 : 1; // the switch, then Share report
+    case RFSectionFilterChecks: return RFSectionChecks(self, kind).count;
+    case RFSectionAppChecks: return RFSectionChecks(self, kind).count + 1;
+    case RFSectionResetChecks: return 1;
     case RFSectionAbout: return kAboutRowCount + 1;
     default: return 0;
   }
@@ -1158,8 +1212,8 @@ static CGFloat RFSettingsTopInset(UIViewController *settings) {
         NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
         BOOL clean = [defaults boolForKey:kRedditFilterCleanShareLinks], block = [defaults boolForKey:kRedditFilterBlockTrackers];
         subtitle = clean && block ? @"Both on"
-                   : clean        ? @"Clean share links on"
-                   : block        ? @"Block trackers on"
+                   : clean        ? @"Cleaning share links"
+                   : block        ? @"Blocking trackers"
                                   : @"Off";
       }
         icon = @"rpl3/lock,icon_lock"; symbol = @"hand.raised";
@@ -1168,7 +1222,7 @@ static CGFloat RFSettingsTopInset(UIViewController *settings) {
         NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
         BOOL keep = [defaults boolForKey:kRedditFilterKeepFeedPosition];
         subtitle = !keep ? @"Off"
-                   : [defaults boolForKey:kRedditFilterRestoreScreens] ? @"Feed position, community and post"
+                   : [defaults boolForKey:kRedditFilterRestoreScreens] ? @"Feed position and screens"
                                                                        : @"Feed position";
         icon = @"rpl3/lab,rpl3/beaker,rpl3/science"; symbol = @"flask";
         break;
@@ -1196,16 +1250,17 @@ static CGFloat RFSettingsTopInset(UIViewController *settings) {
     cell.userInteractionEnabled = enabled;
     return cell;
   }
-  if (section == RFSectionDebug && indexPath.row == 1) {
-    // How Reddit was last closed (Keep feed position only reopens screens after iOS closed it).
-    UITableViewCell *cell = RFDiagnosticCell(tableView, @"RFLastCloseCell");
-    cell.textLabel.text = @"Last closed";
-    cell.textLabel.textColor = [UIColor labelColor];
-    cell.detailTextLabel.text = RFLastCloseDescription();
-    cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
-    return cell;
+  if (section == RFSectionDebug && tag < 0)
+    return RFDiagnosticCell(tableView, @"Share report", @"Without usernames or post text", nil, YES);
+  if (section == RFSectionResetChecks) return RFDiagnosticCell(tableView, @"Reset results", nil, nil, YES);
+  if (section == RFSectionFilterChecks || section == RFSectionAppChecks) {
+    NSArray<NSDictionary *> *checks = RFSectionChecks(self, section);
+    if (indexPath.row >= (NSInteger)checks.count) // how Reddit was last closed, for Keep feed position
+      return RFDiagnosticCell(tableView, @"Last closed", RFLastCloseStatus(), nil, NO);
+    RFDebugLevel level;
+    NSString *status = RFDebugStatus(checks[indexPath.row], &level);
+    return RFDiagnosticCell(tableView, RFDebugTitle(checks[indexPath.row]), status, RFDebugLevelColor(level), NO);
   }
-  if (section == RFSectionDebug && tag < 0) return [self debugCellForRow:indexPath.row - 2 inTableView:tableView];
   RFSettingsCell *cell = [tableView dequeueReusableCellWithIdentifier:kToggleCellID
                                                                    forIndexPath:indexPath];
   const RFToggleRow *row = RFToggleRowForTag(tag);
@@ -1230,9 +1285,10 @@ static CGFloat RFSettingsTopInset(UIViewController *settings) {
   if (filterOn && [row->key isEqualToString:kRedditFilterPromoted] && RFCleanCachedExperiments())
     RFShowRestartAlert(self);
 
-  // Show or hide the schema paths below the Diagnostics switch.
+  // Show or hide the checks below the Diagnostics switch.
   // (A plain reload: an animated section reload lays the new footer out too wide.)
   if (sender.tag == RFDiagnostics) {
+    RFScrollDiagnosticsAttach(self); // this page is already showing
     RFRefreshSnapshot(self);
     [self.tableView reloadData];
     return;
@@ -1273,6 +1329,21 @@ static CGFloat RFSettingsTopInset(UIViewController *settings) {
   }
   if (RFSectionAt(self, indexPath.section) == RFSectionStats) {
     [self.navigationController pushViewController:[RFStatsViewController new] animated:YES];
+    return;
+  }
+  RFSection section = RFSectionAt(self, indexPath.section);
+  if (section == RFSectionDebug) {
+    if (RFToggleTagAt(self, indexPath) < 0) [self rfShareReportFrom:[tableView cellForRowAtIndexPath:indexPath]];
+    return;
+  }
+  if (section == RFSectionResetChecks) {
+    [self rfResetChecks];
+    return;
+  }
+  if (section == RFSectionFilterChecks || section == RFSectionAppChecks) {
+    NSArray<NSDictionary *> *checks = RFSectionChecks(self, section);
+    NSString *operation = indexPath.row < (NSInteger)checks.count ? checks[indexPath.row][kRFDebugOp] : nil;
+    [self.navigationController pushViewController:[[RFDiagnosticDetail alloc] initWithOperation:operation] animated:YES];
     return;
   }
   if (RFSectionAt(self, indexPath.section) == RFSectionBackup) {
@@ -1327,226 +1398,28 @@ static CGFloat RFSettingsTopInset(UIViewController *settings) {
 
 %new
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
-  RFSection kind = RFSectionAt(self, section);
   NSString *text = RFFooterText(self, section);
-  CGFloat minimum = !text ? (RFCurrentPage(self) == RFPageRoot ? 4.0 : 8.0) : kind == RFSectionDebug ? 76.0 : 48.0;
+  CGFloat minimum = !text ? (RFCurrentPage(self) == RFPageRoot ? 4.0 : 8.0) : 48.0;
   return RFSectionHeight(tableView, text, NO, minimum);
 }
 
-// ---------------------------------------------------------------------------
-// Schema-path debug section.
-//
-// Shown below the Diagnostics switch while it's on. `row` counts from the first
-// schema path (the switch is row 0 of the section).
-// ---------------------------------------------------------------------------
+#pragma mark - Diagnostics
+
 %new
-- (UITableViewCell *)debugCellForRow:(NSInteger)row inTableView:(UITableView *)tableView {
-  static NSString *const kRFDebugCellID = @"RFSchemaDebugCell";
-  
-  // Deliberately a plain UIKit cell, not a Reddit class: the whole point of
-  // this screen is to keep working when Reddit's own classes/schema change.
-  UITableViewCell *cell = RFDiagnosticCell(tableView, kRFDebugCellID);
-
-  NSArray<NSDictionary *> *snapshot = RFDebugSnapshot(self);
-  
-  // Trailing "share" row.
-  if (row == (NSInteger)snapshot.count) {
-    cell.textLabel.textColor = [UIColor systemBlueColor];
-    cell.textLabel.text = @"Share report";
-    cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
-    cell.detailTextLabel.text = @"Copy or send this list, without usernames or post text";
-    UIButton *shareButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [shareButton setTitle:@"Share" forState:UIControlStateNormal];
-    shareButton.titleLabel.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightSemibold];
-    [shareButton addTarget:self action:@selector(rfShareReport:) forControlEvents:UIControlEventTouchUpInside];
-    [shareButton sizeToFit];
-    cell.accessoryView = shareButton;
-    return cell;
-  }
-
-  // Trailing "reset" row.
-  if (row > (NSInteger)snapshot.count) {
-    cell.textLabel.textColor = [UIColor systemBlueColor];
-    cell.textLabel.text = @"Reset counters";
-    cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
-    cell.detailTextLabel.text = @"Clear these results and start checking again";
-    UIButton *resetButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [resetButton setTitle:@"Reset" forState:UIControlStateNormal];
-    resetButton.titleLabel.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightSemibold];
-    [resetButton addTarget:self
-                    action:@selector(rfResetCounters:)
-          forControlEvents:UIControlEventTouchUpInside];
-    [resetButton sizeToFit];
-    cell.accessoryView = resetButton;
-    return cell;
-  }
-
-  NSDictionary *record = snapshot[row];
-  NSString *summary = record[kRFDebugSummary];
-  if (summary) {
-    cell.textLabel.textColor = [UIColor labelColor];
-    cell.textLabel.text = record[kRFDebugOp];
-    cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
-    cell.detailTextLabel.text = summary;
-    return cell;
-  }
-  NSArray<NSString *> *unfiltered = record[kRFDebugUnfiltered];
-  if (unfiltered) {
-    cell.textLabel.textColor = [UIColor labelColor];
-    cell.textLabel.text = record[kRFDebugOp];
-    if (unfiltered.count == 0) {
-      cell.detailTextLabel.text = @"\u2713 None seen";
-      cell.detailTextLabel.textColor = [UIColor systemGreenColor];
-    } else {
-      NSInteger total = [record[kRFDebugMisses] integerValue];
-      cell.detailTextLabel.text = [NSString
-          stringWithFormat:@"\u2717 %ld GraphQL request%@ not filtered\n%@", (long)total,
-                           total == 1 ? @"" : @"s", [unfiltered componentsJoinedByString:@"\n"]];
-      cell.detailTextLabel.textColor = [UIColor systemRedColor];
-    }
-    return cell;
-  }
-  NSArray<NSString *> *feedCards = record[kRFDebugFeedCards];
-  if (feedCards) {
-    cell.textLabel.textColor = [UIColor labelColor];
-    cell.textLabel.text = record[kRFDebugOp];
-    if (feedCards.count == 0) {
-      cell.detailTextLabel.text = @"\u2713 Only posts and ads so far";
-      cell.detailTextLabel.textColor = [UIColor systemGreenColor];
-    } else {
-      NSMutableArray<NSString *> *known = [NSMutableArray array], *unknown = [NSMutableArray array];
-      for (NSString *line in feedCards)
-        [[line hasPrefix:@"?"] ? unknown : known addObject:[line substringFromIndex:2]];
-      NSMutableArray<NSString *> *groups = [NSMutableArray array];
-      if (known.count)
-        [groups addObject:[@"Extra cards can hide:\n" stringByAppendingString:[known componentsJoinedByString:@"\n"]]];
-      if (unknown.count)
-        [groups addObject:[@"Not recognised, worth reporting:\n" stringByAppendingString:[unknown componentsJoinedByString:@"\n"]]];
-      cell.detailTextLabel.text = [groups componentsJoinedByString:@"\n\n"];
-      cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
-    }
-    return cell;
-  }
-  NSString *op = record[kRFDebugOp];
-  NSString *expected = record[kRFDebugExpected];
-  NSString *discovered = record[kRFDebugDiscovered];
-  NSInteger hits = [record[kRFDebugHits] integerValue];
-  NSInteger misses = [record[kRFDebugMisses] integerValue];
-  BOOL seen = [record[kRFDebugSeen] boolValue];
-  BOOL lastResolved = [record[kRFDebugLastResolved] boolValue];
-  NSInteger redditErrors = [record[kRFDebugErrors] integerValue];
-
-  cell.textLabel.textColor = [UIColor labelColor];
-  cell.textLabel.text = op;
-
-  NSString *detail;
-  UIColor *detailColor;
-  if (!seen) {
-    detail = [NSString stringWithFormat:@"Untested\nExpected: %@", expected];
-    detailColor = [UIColor secondaryLabelColor];
-  } else if (lastResolved) {
-    detail = [NSString stringWithFormat:@"\u2713 OK \u00b7 %ld hit%@",
-                                        (long)hits, hits == 1 ? @"" : @"s"];
-    if (misses > 0)
-      detail = [detail stringByAppendingFormat:@" \u00b7 recovered after %ld miss%@",
-                                               (long)misses, misses == 1 ? @"" : @"es"];
-    if (redditErrors > 0)
-      detail = [detail stringByAppendingFormat:@" \u00b7 %ld Reddit error%@", (long)redditErrors,
-                                               redditErrors == 1 ? @"" : @"s"];
-    detailColor = [UIColor systemGreenColor];
-  } else if (misses == 0) {
-    detail = [NSString stringWithFormat:@"Only Reddit errors so far \u00b7 %ld error%@", (long)redditErrors,
-                                        redditErrors == 1 ? @"" : @"s"];
-    detailColor = [UIColor secondaryLabelColor];
-  } else {
-    detail = [NSString stringWithFormat:@"\u2717 Missed \u00b7 %ld miss%@ \u00b7 using fallback",
-                                        (long)misses, misses == 1 ? @"" : @"es"];
-    if (discovered.length) {
-      detail = [detail stringByAppendingFormat:@"\nFound at: %@", discovered];
-      UIButton *copyButton = [UIButton buttonWithType:UIButtonTypeSystem];
-      [copyButton setTitle:@"Copy" forState:UIControlStateNormal];
-      copyButton.titleLabel.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightSemibold];
-      copyButton.tag = row;
-      [copyButton addTarget:self
-                     action:@selector(rfCopyDiscoveredPath:)
-           forControlEvents:UIControlEventTouchUpInside];
-      [copyButton sizeToFit];
-      cell.accessoryView = copyButton;
-    } else {
-      detail = [detail stringByAppendingFormat:@"\nNew path not found\nExpected: %@",
-                                               expected];
-                                               
-      // Show the "Copy JSON" button if we captured a payload
-      NSString *failedJSON = record[kRFDebugFailedJSON];
-      if (failedJSON.length > 0) {
-          detail = [detail stringByAppendingString:@"\nResponse captured (Copy JSON)"];
-          UIButton *copyJsonButton = [UIButton buttonWithType:UIButtonTypeSystem];
-          [copyJsonButton setTitle:@"Copy JSON" forState:UIControlStateNormal];
-          copyJsonButton.titleLabel.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightSemibold];
-          copyJsonButton.tag = row;
-          [copyJsonButton addTarget:self
-                             action:@selector(rfCopyFailedJSON:)
-                   forControlEvents:UIControlEventTouchUpInside];
-          [copyJsonButton sizeToFit];
-          cell.accessoryView = copyJsonButton;
-      }
-    }
-    detailColor = [UIColor systemRedColor];
-  }
-  cell.detailTextLabel.text = detail;
-  cell.detailTextLabel.textColor = detailColor;
-  return cell;
-}
-%new
-- (void)rfCopyDiscoveredPath:(UIButton *)sender {
-  NSArray<NSDictionary *> *snapshot = RFDebugSnapshot(self);
-  if (sender.tag < 0 || sender.tag >= (NSInteger)snapshot.count) return;
-  NSString *discovered = snapshot[sender.tag][kRFDebugDiscovered];
-  if (!discovered.length) return;
-  UIPasteboard.generalPasteboard.string = discovered;
-  [sender setTitle:@"Copied" forState:UIControlStateNormal];
-  [sender sizeToFit];
-  __weak UIButton *weakSender = sender;
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.2 * NSEC_PER_SEC)),
-                 dispatch_get_main_queue(), ^{
-                   [weakSender setTitle:@"Copy" forState:UIControlStateNormal];
-                   [weakSender sizeToFit];
-                 });
-}
-%new
-- (void)rfCopyFailedJSON:(UIButton *)sender {
-  NSArray<NSDictionary *> *snapshot = RFDebugSnapshot(self);
-  if (sender.tag < 0 || sender.tag >= (NSInteger)snapshot.count) return;
-  
-  NSString *failedJSON = snapshot[sender.tag][kRFDebugFailedJSON];
-  if (!failedJSON.length) return;
-  
-  UIPasteboard.generalPasteboard.string = failedJSON;
-  [sender setTitle:@"Copied" forState:UIControlStateNormal];
-  [sender sizeToFit];
-  
-  __weak UIButton *weakSender = sender;
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.2 * NSEC_PER_SEC)),
-                 dispatch_get_main_queue(), ^{
-                   [weakSender setTitle:@"Copy JSON" forState:UIControlStateNormal];
-                   [weakSender sizeToFit];
-                 });
-}
-%new
-- (void)rfShareReport:(UIButton *)sender {
+- (void)rfShareReportFrom:(UIView *)source {
   NSString *reddit = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"unknown";
-  NSString *report = [NSString stringWithFormat:@"RedditFilter %s, Reddit %@, iOS %@\n\n%@", RF_VERSION, reddit,
-                                                UIDevice.currentDevice.systemVersion,
-                                                [[RFSchemaDebug shared] reportText]];
+  NSString *report = [NSString stringWithFormat:@"RedditFilter %s, Reddit %@, iOS %@\n\n%@\nLast closed:\n%@", RF_VERSION,
+                                                reddit, UIDevice.currentDevice.systemVersion,
+                                                [[RFSchemaDebug shared] reportText], RFLastCloseDescription(YES)];
   UIActivityViewController *share = [[UIActivityViewController alloc] initWithActivityItems:@[ report ]
                                                                       applicationActivities:nil];
-  share.popoverPresentationController.sourceView = sender; // needed on iPad
-  share.popoverPresentationController.sourceRect = sender.bounds;
+  share.popoverPresentationController.sourceView = source ?: self.view; // needed on iPad
+  share.popoverPresentationController.sourceRect = (source ?: self.view).bounds;
   [self presentViewController:share animated:YES completion:nil];
 }
 
 %new
-- (void)rfResetCounters:(UIButton *)sender {
+- (void)rfResetChecks {
   [[RFSchemaDebug shared] reset];
   RFRefreshSnapshot(self);
   [self.tableView reloadData];

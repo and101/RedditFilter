@@ -227,13 +227,49 @@ int main(void) {
       return nil;
     };
     NSDictionary *adsError = @{@"data": @{@"postInfoById": @{@"__typename": @"SubredditPost"}}, @"errors": @[@{@"message": @"Internal error"}]};
+    // The Diagnostics page: each check's name, status and details
+    NSString *(^status)(NSString *, RFDebugLevel *) = ^NSString *(NSString *op, RFDebugLevel *level) {
+      for (NSDictionary *row in [[RFSchemaDebug shared] snapshot])
+        if ([row[kRFDebugOp] isEqual:op]) return RFDebugStatus(row, level);
+      return nil;
+    };
+    RFDebugLevel level;
+    NSArray *snapshot = [[RFSchemaDebug shared] snapshot];
+    Check([[RFDebugChecks(snapshot, NO) valueForKey:kRFDebugOp] isEqual:(@[@"HomeFeedSdui", @"PopularFeedSdui", @"FollowingFeed",
+              @"FeedPostDetailsByIds", @"PostInfoById", @"PdpCommentsAds", @"Unfiltered requests", @"Other feed cards"])], @"Filter checks, in order");
+    Check([[RFDebugChecks(snapshot, YES) valueForKey:kRFDebugOp] isEqual:(@[@"Article links", @"Settings scrolling"])], @"App checks");
+    Check([RFDebugTitle(adsRow()) isEqual:@"Comment ads"] && [RFDebugTitle(@{kRFDebugOp: @"New"}) isEqual:@"New"], @"Checks have plain names");
+    Check([status(@"PdpCommentsAds", &level) isEqual:@"Not checked"] && level == RFDebugLevelNone, @"An untested check");
+    Check([status(@"Other feed cards", &level) isEqual:@"1 to report"] && level == RFDebugLevelNone, @"Unknown cards are worth reporting");
+    Check([RFDebugDetails(feedCardsRow()) containsString:@"Not recognised:\nShinyNewCell"], @"Card details group the unknown ones");
+    Check([status(@"Unfiltered requests", &level) isEqual:@"\u2713 None"] && level == RFDebugLevelGood, @"No unfiltered requests");
+    Check([status(@"Article links", &level) isEqual:@"\u2717 4 missing"] && level == RFDebugLevelBad, @"Missing article hooks");
+    Check([status(@"Settings scrolling", &level) isEqual:@"Not checked"] && level == RFDebugLevelNone, @"Scrolling not tried");
+    Check(!RFDragHasRoom(193, -94, -94, -82) && !RFDragHasRoom(268, -74, -74, 900), @"Pulling down at the top moves the sheet");
+    Check(RFDragHasRoom(-97, -94, -94, 86) && !RFDragHasRoom(-97, 86, -94, 86), @"Dragging up needs room below");
+    Check(RFDragHasRoom(350, 91, -94, 91), @"Dragging down from the bottom has room");
+    Check(!RFDragScrolled(350, 91, -94, 91, -9.3) && !RFDragScrolled(350, 91, -94, 91, 3), @"Jitter isn't scrolling");
+    Check(RFDragScrolled(350, 91, -94, 91, -185) && RFDragScrolled(-161, -93, -94, -82, 11), @"Scrolling to an edge is");
+    Check(RFDragScrolled(103, 46, -94, 86, -51) && RFDragScrolled(-250, -94, -94, 86, 114), @"So are ordinary drags");
+    Check(!RFDragScrolled(-250, -94, -94, 86, 0), @"A list that stays put isn't");
+    [[RFSchemaDebug shared] setSettingsScrollState:@"state" drag:NO stuck:NO];
+    Check([status(@"Settings scrolling", NULL) isEqual:@"Not checked"], @"A tap doesn't check scrolling");
+    [[RFSchemaDebug shared] setSettingsScrollState:@"state" drag:YES stuck:NO];
+    Check([status(@"Settings scrolling", &level) isEqual:@"\u2713 Working"] && level == RFDebugLevelGood, @"A drag that scrolled");
+    [[RFSchemaDebug shared] setSettingsScrollState:@"state" drag:YES stuck:YES];
+    Check([status(@"Settings scrolling", &level) isEqual:@"\u2717 1 drag stuck"] && level == RFDebugLevelBad, @"A drag that didn't scroll");
     Filter(adsError, @"PdpCommentsAds", ads);
+    Check([status(@"PdpCommentsAds", &level) isEqual:@"Reddit error"] && level == RFDebugLevelNone, @"A Reddit error's status");
     Check([adsRow()[kRFDebugErrors] integerValue] == 1 && [adsRow()[kRFDebugMisses] integerValue] == 0, @"A Reddit error isn't a miss");
     Check(adsRow()[kRFDebugDiscovered] == nil, @"A Reddit error isn't a new location");
     Check([[[RFSchemaDebug shared] reportText] containsString:@"PdpCommentsAds: only Reddit errors so far, 1 Reddit error"], @"The report says it was an error");
     Filter(Post(@{@"pdpCommentsAds": @{@"adPosts": @[]}}), @"PdpCommentsAds", ads);
     Check([[[RFSchemaDebug shared] reportText] containsString:@"PdpCommentsAds: OK, 1 hits, 0 misses, 1 Reddit error"], @"Errors stay visible after a hit");
+    Check([status(@"PdpCommentsAds", &level) isEqual:@"\u2713 Working"] && level == RFDebugLevelGood, @"A working check");
+    Check([RFDebugDetails(adsRow()) isEqual:@"PdpCommentsAds\n1 found \u00b7 0 missed \u00b7 1 Reddit error\n\nExpected:\ndata.*.pdpCommentsAds"],
+          @"A check's details");
     [[RFSchemaDebug shared] reset];
+    Check([status(@"Settings scrolling", NULL) isEqual:@"Not checked"], @"Reset clears the scrolling check");
     Filter(@{@"data": @{@"postInfoById": @{@"__typename": @"SubredditPost"}}, @"errors": @[]}, @"PdpCommentsAds", ads);
     Check([adsRow()[kRFDebugMisses] integerValue] == 1 && ![adsRow()[kRFDebugDiscovered] isEqual:@"errors"], @"A real miss still counts, and errors is never the new location");
     Filter(Feed(@[newCard, Card(@{@"__typename": @"FeedSurvey"})]), @"HomeFeedSdui", off);
@@ -246,6 +282,12 @@ int main(void) {
     NSString *capturedJSON = nil;
     for (NSDictionary *row in [[RFSchemaDebug shared] snapshot]) capturedJSON = capturedJSON ?: row[kRFDebugFailedJSON];
     Check([capturedJSON containsString:@"secret_user"], @"A failed response is captured for Copy JSON");
+    Check([status(@"HomeFeedSdui", &level) isEqual:@"\u2717 Not found"] && level == RFDebugLevelBad, @"A miss with no new location");
+    for (NSDictionary *row in [[RFSchemaDebug shared] snapshot])
+      Check(![RFDebugDetails(row) containsString:@"secret_user"] && RFDebugExplanation(row).length, @"Details never include captured JSON");
+    [[RFSchemaDebug shared] reset];
+    Filter(@{@"data": @{@"homeV4": @{@"elements": @{@"edges": @[@{@"node": @{@"__typename": @"CellGroup"}}]}}}}, @"HomeFeedSdui", off);
+    Check([status(@"HomeFeedSdui", &level) isEqual:@"\u2717 Moved"] && level == RFDebugLevelBad, @"A miss with a new location");
     Check(![report containsString:@"secret_user"], @"The report never includes captured JSON");
     RFSetDiagnosticsEnabled(NO);
     Check([feedCardsRow()[kRFDebugFeedCards] count] == 0, @"Turning Diagnostics off clears the list");

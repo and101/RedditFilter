@@ -137,8 +137,7 @@ typedef NS_ENUM(NSInteger, RFKeywordSection) { RFKeywordSectionOptions, RFKeywor
 }
 
 - (void)confirmClearAll {
-  NSString *message = [NSString stringWithFormat:@"All %lu keywords will be removed and those posts will show again.",
-                                                 (unsigned long)self.keywords.count];
+  NSString *message = @"Every keyword and rule will be removed. Posts they hid can show again.";
   UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Clear all keywords?"
                                                                  message:message
                                                           preferredStyle:UIAlertControllerStyleActionSheet];
@@ -166,8 +165,8 @@ typedef NS_ENUM(NSInteger, RFKeywordSection) { RFKeywordSectionOptions, RFKeywor
 #pragma mark - Table
 
 - (NSString *)listHeaderText {
-  return self.keywords.count ? [NSString stringWithFormat:@"Hidden keywords (%lu)", (unsigned long)self.keywords.count]
-                             : @"Hidden keywords";
+  return self.keywords.count ? [NSString stringWithFormat:@"Keywords (%lu)", (unsigned long)self.keywords.count]
+                             : @"Keywords";
 }
 
 - (void)refreshListHeader {

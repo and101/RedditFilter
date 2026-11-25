@@ -37,7 +37,10 @@ void RFScreenRestoreFeedPage(NSString *operation, NSURLRequest *request);
 void RFScreenRestoreForgetComments(void);
 
 // How the app was last closed, for Diagnostics: "Closed by iOS", "Swiped away", ...
-NSString *RFLastCloseDescription(void);
+NSString *RFLastCloseStatus(void);
+// The same with what iOS kept, what was left open and what was done at launch. What was left open can name
+// communities, profiles and posts, so a report leaves it out.
+NSString *RFLastCloseDescription(BOOL forReport);
 
 #ifdef __cplusplus
 }

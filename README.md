@@ -47,30 +47,30 @@ To get it, see [Install](#install).
 
 ### Filters
 
-- **Posts and ads**: hide promoted posts, ads in search results and comment ads, recommendations (including the endless **From your feed** list below a post's comments), NSFW posts, the Videos for you carousel, extra cards such as suggested communities, promos and surveys, and the floating new posts button on Home (**Refresh button**). These switches show that content when on, so turn one off to hide it. A For You page left short by hidden posts is topped up from the next page.
-- **Start on Following**: where Home has the For You and Following tabs, open Home on Following every time instead of the tab you last used. The switch is on the Posts and ads page, and only shows for accounts with those tabs.
+- **Posts and ads**: hide promoted posts, ads in search results and comment ads, recommendations (including the endless **From your feed** list below a post's comments), NSFW posts, the **Videos for you** carousel, extra cards such as suggested communities, promos and surveys, and the floating new posts button on Home (**Refresh button**). These switches show that content when on, so turn one off to hide it. A For You page left short by hidden posts is topped up from the next page.
+- **Start on Following**: where Home has the For You and Following tabs, open Home on Following every time instead of the tab you last used. The switch is on the **Posts and ads** page, and only shows for accounts with those tabs.
 - **Keywords**: hide posts that mention a word or phrase. Matching is whole-word and ignores capitals, and it checks a post's full text, not just the title and preview. With **Filter comments too**, comments that mention a keyword are hidden with their replies, or replaced by a placeholder if you want to keep the replies.
 - **Website and flair**: add `site:x.com` to the keywords to hide posts linking to that site, `flair:Meme` to hide a flair everywhere, or `r/gaming flair:Meme` to hide it in one community.
 
 ### Privacy
 
 - **Clean share links**: Reddit's share links (`…/s/…`) are tied to your account, so Reddit can link everyone who opens one back to you. This shares the plain link instead, without tracking.
-- **Block trackers**: stops analytics, crash reports and ad tracking from leaving your device. Logging in and feeds aren't affected.
+- **Block trackers**: stops known analytics, crash report and ad trackers. Reddit's own usage data is still sent. Logging in and feeds aren't affected.
 
 ### Display
 
 - **Appearance**: hide awards and scores on posts and comments, and give each reply level its own colour with **Coloured comment threads**. **Apollo style** colours only each comment's own line.
 - **Article links**: choose how links opened from a post show: **Reddit's viewer**, **Reddit's viewer, full page** (without the votes and comments panel), or **Safari**, an in-app Safari sheet that uses your Safari content blockers. See [Safari article links](#safari-article-links). The Safari option is by [dukevin](https://github.com/dukevin).
 - **Swipe to collapse**: swipe a comment to collapse it and its replies, or swipe further to collapse the whole thread. Choose left, right or both, with optional haptics. **Tap to collapse too** keeps tap and long press, and **AutoMod** always collapses AutoMod comments.
-- **Swipe posts**: in feeds, swipe a post left to upvote it, or further to downvote it, and swipe right to save it. Swiping again removes the vote or unsaves the post. It's on the Swipe gestures page.
+- **Swipe posts**: in feeds, swipe a post left to upvote it, or further to downvote it, and swipe right to save it. Swiping again removes the vote or unsaves the post. It's on the **Swipe gestures** page.
 - **Play RedGIFs directly**: Reddit's copies of RedGIFs videos have no sound, so this plays the originals from RedGIFs instead. **Prefer SD** and **Prefer SD on mobile data** keep data use down. Your device connects to RedGIFs directly, and Reddit's silent version plays if RedGIFs can't be reached.
 
 ### Experimental features
 
 These are new, so they're off by default. They work in any app language.
 
-- **Keep feed position**: stay where you were in For You, and in Following and Popular while Reddit shows them as feed tabs, even after Reddit closes. Popular and Latest, which Reddit opens from the side menu, keep their place when **Reopen community and post** reopens them. Reddit normally jumps back to the top after 10 minutes away. Pull down to refresh.
-- **Reopen community and post**: brings back Popular and Latest from the side menu, the communities, custom feeds, profiles, searches and posts you had open, up to six screens deep, on Home or in the You or Inbox tab. Posts open at the top, with a **Back to where you were** button that scrolls to the comment you were reading, even in replies you had expanded or on a later page of comments. A post you opened at a comment, from the Inbox say, reopens at that comment. If a screen can't be reopened, the ones before it still come back. Communities use their default sort. If you open Reddit from a notification or a link, that screen is shown first, and going back to Home brings back where you were, unless you went further than that screen.
+- **Keep feed position**: stay where you were in For You, and in Following and Popular while Reddit shows them as feed tabs, even after Reddit closes. Popular and Latest, which Reddit opens from the side menu, keep their place when **Reopen screens** reopens them. Reddit normally jumps back to the top after 10 minutes away. Pull down to refresh.
+- **Reopen screens**: brings back Popular and Latest from the side menu, the communities, custom feeds, profiles, searches and posts you had open, up to six screens deep, on Home or in the You or Inbox tab. Posts open at the top, with a **Back to where you were** button that scrolls to the comment you were reading, even in replies you had expanded or on a later page of comments. A post you opened at a comment, from the Inbox say, reopens at that comment. If a screen can't be reopened, the ones before it still come back. Communities use their default sort. If you open Reddit from a notification or a link, that screen is shown first, and going back to Home brings back where you were, unless you went further than that screen.
 - **Restore after swiping away** and **Restore for**: by default, your place only comes back if iOS closed Reddit, for 12 hours. You can also have it back after swiping Reddit away, and keep it for 24 hours or with no limit.
 
 ### More

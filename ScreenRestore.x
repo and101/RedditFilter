@@ -428,12 +428,18 @@ static NSString *RFLastCloseName(void) {
   }
 }
 
-NSString *RFLastCloseDescription(void) {
+NSString *RFLastCloseStatus(void) {
+  return gLastClose == RFLastCloseInForeground ? @"Crashed or stopped"
+         : gLastClose == RFLastCloseByIOS || gLastClose == RFLastCloseSwipedAway ? RFLastCloseName()
+                                                                                 : @"Unknown";
+}
+
+NSString *RFLastCloseDescription(BOOL forReport) {
   // "Closed by iOS · snapshot kept · same session", then one "Label: value" per line.
   NSString *first = gSignals.length ? [NSString stringWithFormat:@"%@ · %@", RFLastCloseName(), gSignals] : RFLastCloseName();
   NSMutableArray *lines = [NSMutableArray arrayWithObject:first];
   NSString *left = [gLastSession[@"left"] isKindOfClass:NSString.class] ? gLastSession[@"left"] : nil;
-  if (left.length) [lines addObject:[@"Left open: " stringByAppendingString:left]];
+  if (left.length && !forReport) [lines addObject:[@"Left open: " stringByAppendingString:left]];
   if (gOutcome.length) [lines addObject:[@"At launch: " stringByAppendingString:gOutcome]];
   return [lines componentsJoinedByString:@"\n"];
 }
@@ -1733,7 +1739,7 @@ static void RFFinishRestore(void) {
 @implementation RFCoverSkip
 + (void)skip:(UIButton *)button {
   if (!gPlan) return;
-  gOutcome = @"skipped (you tapped Skip)";
+  gOutcome = @"skipped (you tapped \"Skip\")";
   RFFinishRestore();
 }
 @end
@@ -2276,9 +2282,9 @@ static NSDictionary *RFUsablePlan(NSDictionary *plan, BOOL *tooOld) {
 }
 
 static void RFPlanRestoreNow(void) {
-  if (!RFFeedCacheEnabled()) return (void)(gOutcome = @"nothing (Keep feed position off)");
+  if (!RFFeedCacheEnabled()) return (void)(gOutcome = @"nothing (\"Keep feed position\" off)");
   if (!RFMayRestore()) return (void)(gOutcome = @"skipped (swiped away)");
-  if (!gRestoreScreens) return (void)(gOutcome = @"feeds only (Reopen community and post off)");
+  if (!gRestoreScreens) return (void)(gOutcome = @"feeds only (\"Reopen screens\" off)");
   BOOL tooOld = NO;
   NSDictionary *plan = RFUsablePlan(RFReadJSON(@"Screens.json"), &tooOld);
   // What was waiting for a return to Home when Reddit was left (only for a Home plan).

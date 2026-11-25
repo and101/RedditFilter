@@ -13,7 +13,7 @@
 // ..."), and how far into it you'd scrolled. After the next launch each feed shows its kept posts from the top when it first
 // loads, and this scrolls it back to that post before it's drawn (the list is hidden until then), so
 // scrolling up goes back through what you'd seen. Popular and Latest from the side menu are the exception:
-// the side menu opens them fresh, so they only come back when Reopen community and post reopens them.
+// the side menu opens them fresh, so they only come back when Reopen screens reopens them.
 #import <QuartzCore/QuartzCore.h>
 #import <UIKit/UIKit.h>
 #import "FeedCache.h"
