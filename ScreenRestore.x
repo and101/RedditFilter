@@ -428,12 +428,18 @@ static NSString *RFLastCloseName(void) {
   }
 }
 
-NSString *RFLastCloseDescription(void) {
+NSString *RFLastCloseStatus(void) {
+  return gLastClose == RFLastCloseInForeground ? @"Crashed or stopped"
+         : gLastClose == RFLastCloseByIOS || gLastClose == RFLastCloseSwipedAway ? RFLastCloseName()
+                                                                                 : @"Unknown";
+}
+
+NSString *RFLastCloseDescription(BOOL forReport) {
   // "Closed by iOS · snapshot kept · same session", then one "Label: value" per line.
   NSString *first = gSignals.length ? [NSString stringWithFormat:@"%@ · %@", RFLastCloseName(), gSignals] : RFLastCloseName();
   NSMutableArray *lines = [NSMutableArray arrayWithObject:first];
   NSString *left = [gLastSession[@"left"] isKindOfClass:NSString.class] ? gLastSession[@"left"] : nil;
-  if (left.length) [lines addObject:[@"Left open: " stringByAppendingString:left]];
+  if (left.length && !forReport) [lines addObject:[@"Left open: " stringByAppendingString:left]];
   if (gOutcome.length) [lines addObject:[@"At launch: " stringByAppendingString:gOutcome]];
   return [lines componentsJoinedByString:@"\n"];
 }

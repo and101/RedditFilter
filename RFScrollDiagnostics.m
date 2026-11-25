@@ -132,7 +132,8 @@ static void RFAddEvent(NSString *format, ...) {
 @implementation RFScrollTouchObserver {
   BOOL _tracking;
   CGPoint _start;
-  CGFloat _startOffset;
+  CGFloat _startOffset, _top, _bottom; // where the list was, and can go
+  BOOL _severalFingers;
   __weak UIScrollView *_list;
   NSArray<UIGestureRecognizer *> *_others;
   NSMutableOrderedSet<NSString *> *_active;
@@ -167,12 +168,17 @@ static void RFAddEvent(NSString *format, ...) {
 }
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-  if (_tracking || !RFDiagnosticsEnabled()) return; // the first finger is enough
+  if (_tracking) _severalFingers = YES; // the first finger is enough
+  if (_tracking || !RFDiagnosticsEnabled()) return;
+  _severalFingers = event.allTouches.count > 1;
   UITouch *touch = touches.anyObject;
   _tracking = YES;
   _start = [touch locationInView:nil];
   _list = RFPageScrollView(self.currentPage);
   _startOffset = _list.contentOffset.y;
+  UIEdgeInsets inset = _list.adjustedContentInset;
+  _top = -inset.top;
+  _bottom = MAX(_top, _list.contentSize.height + inset.bottom - _list.bounds.size.height);
   NSMutableArray *others = [NSMutableArray array];
   for (UIGestureRecognizer *gesture in touch.gestureRecognizers)
     if (gesture != self) [others addObject:gesture];
@@ -196,19 +202,33 @@ static void RFAddEvent(NSString *format, ...) {
   CGFloat dy = end.y - _start.y, dx = end.x - _start.x;
   CGFloat scrolled = _list ? _list.contentOffset.y - _startOffset : 0;
   BOOL drag = fabs(dy) > 40 && fabs(dy) > fabs(dx);
-  BOOL stuck = drag && fabs(scrolled) < 4;
+  // Pulling down at the top drags the sheet, and a second finger can stop the first one's drag.
+  BOOL counts = drag && !cancelled && !_severalFingers && RFDragHasRoom(dy, _startOffset, _top, _bottom);
   NSMutableArray<NSString *> *receivers = [NSMutableArray array];
   for (UIGestureRecognizer *gesture in _others)
     [receivers addObject:[NSString stringWithFormat:@"%@ %@", NSStringFromClass(gesture.class),
                                                     RFGestureStateText(gesture.state)]];
-  if (drag || cancelled)
-    RFAddEvent(@"%@ %@%@ dy %.0f · list moved %.0f · on %@\n  took it: %@\n  got the touch: %@",
-               page.title ?: @"?", cancelled ? @"cancelled " : @"", stuck ? @"DRAG DIDN'T SCROLL" : @"drag", dy,
-               scrolled, _touchedView, _active.count ? [_active.array componentsJoinedByString:@", "] : @"nothing",
-               [receivers componentsJoinedByString:@", "]);
-  else
-    RFAddEvent(@"%@ tap on %@", page.title ?: @"?", _touchedView);
-  [[RFSchemaDebug shared] setSettingsScrollState:RFPageState(page) stuck:stuck];
+  NSString *title = page.title ?: @"?", *view = _touchedView, *state = RFPageState(page);
+  NSString *took = _active.count ? [_active.array componentsJoinedByString:@", "] : @"nothing";
+  NSString *got = [receivers componentsJoinedByString:@", "];
+  if (!drag && !cancelled) {
+    RFAddEvent(@"%@ tap on %@", title, view);
+    [[RFSchemaDebug shared] setSettingsScrollState:state drag:NO stuck:NO];
+  } else {
+    // A flick can start moving the list just after the finger lifts.
+    __weak UIScrollView *weakList = _list;
+    CGFloat startOffset = _startOffset, top = _top, bottom = _bottom;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+      UIScrollView *list = weakList;
+      CGFloat later = list ? list.contentOffset.y - startOffset : scrolled;
+      CGFloat moved = dy > 0 ? MIN(scrolled, later) : MAX(scrolled, later); // the furthest it got, the right way
+      BOOL stuck = counts && !RFDragScrolled(dy, startOffset, top, bottom, moved);
+      RFAddEvent(@"%@ %@%@ dy %.0f · list moved %.0f%@ · on %@\n  took it: %@\n  got the touch: %@", title,
+                 cancelled ? @"cancelled " : @"", stuck ? @"DRAG DIDN'T SCROLL" : @"drag", dy, moved,
+                 counts ? @"" : @" · not counted", view, took, got);
+      [[RFSchemaDebug shared] setSettingsScrollState:state drag:counts stuck:stuck];
+    });
+  }
   self.state = UIGestureRecognizerStateFailed;
 }
 
@@ -247,7 +267,7 @@ void RFScrollDiagnosticsAttach(UIViewController *controller) {
     [host addGestureRecognizer:observer];
   }
   RFAddEvent(@"%@ appeared", controller.title ?: @"?");
-  [[RFSchemaDebug shared] setSettingsScrollState:RFPageState(controller) stuck:NO];
+  [[RFSchemaDebug shared] setSettingsScrollState:RFPageState(controller) drag:NO stuck:NO];
 }
 
 void RFScrollDiagnosticsInsetChanged(UIViewController *controller, CGFloat from, CGFloat to, BOOL resetOffset) {
