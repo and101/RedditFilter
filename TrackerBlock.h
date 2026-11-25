@@ -1,8 +1,8 @@
 // TrackerBlock.h
 //
-// Block trackers: requests to analytics, ad-conversion and crash-report services, and to Reddit's own
-// event logging (RFIsTrackerURL in JSONFilter.h), are answered on the device with an empty "OK", so they
-// never leave it and the app doesn't keep retrying them.
+// Block trackers: requests to analytics, ad-conversion and crash-report services (RFIsTrackerURL in
+// JSONFilter.h) are answered on the device with an empty "OK", so they never leave it and the app doesn't
+// keep retrying them. Reddit's own event logging is left alone: Home needs its "seen" events.
 
 #import <Foundation/Foundation.h>
 

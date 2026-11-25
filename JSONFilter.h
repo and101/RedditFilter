@@ -49,8 +49,9 @@ NSString *RFOperationName(NSURLRequest *request);
 NSString *RFCleanShareURL(NSString *url);
 
 // Block trackers: whether a request goes to an analytics, ad-conversion or crash-report service (AppsFlyer,
-// Firebase, Crashlytics, Google and Facebook ad services) or to Reddit's own event logging. Nothing the app
-// needs to work: logging in, feeds, media and notifications all use other addresses.
+// Firebase, Crashlytics, Google and Facebook ad services). Nothing the app needs to work: logging in, feeds,
+// media and notifications all use other addresses. Reddit's own event logging isn't blocked, as Home relies
+// on its "seen" events not to show the same posts again.
 BOOL RFIsTrackerURL(NSURL *url);
 
 // Clean share links: the answer to the app's CreateShareUrl request, made here instead of by Reddit,

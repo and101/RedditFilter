@@ -53,7 +53,7 @@ To open RedditFilter, long press the sidebar button at the top left of Reddit, o
 ### Privacy
 
 - **Clean share links**: Reddit's share links (`…/s/…`) are tied to your account, so Reddit can link everyone who opens one back to you. This shares the plain link instead, without tracking.
-- **Block trackers**: stops analytics, crash reports, ad tracking and Reddit's usage data from leaving your device. Logging in and feeds aren't affected.
+- **Block trackers**: stops analytics, crash reports and ad tracking from leaving your device. Logging in and feeds aren't affected.
 
 ### Display
 

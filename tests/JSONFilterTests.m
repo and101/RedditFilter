@@ -64,10 +64,9 @@ int main(void) {
     Check(RFIsTrackerURL(U(@"https://app-measurement.com/a")), @"Firebase analytics, older address");
     Check(RFIsTrackerURL(U(@"https://firebaselogging-pa.googleapis.com/v1/firelog/legacy/batchlog")), @"Firebase logging");
     Check(RFIsTrackerURL(U(@"https://firebase-settings.crashlytics.com/spi/v2")), @"Crashlytics");
-    Check(RFIsTrackerURL(U(@"https://gql-fed.reddit.com/v2p")), @"Reddit events");
-    Check(RFIsTrackerURL(U(@"https://cf.gql-fed.reddit.com/v2p")), @"Reddit events on the Cloudflare route");
+    Check(!RFIsTrackerURL(U(@"https://gql-fed.reddit.com/v2p")), @"Keep Reddit events (Home's seen posts)");
+    Check(!RFIsTrackerURL(U(@"https://cf.gql-fed.reddit.com/v2p")), @"Keep Reddit events on the Cloudflare route");
     Check(!RFIsTrackerURL(U(@"https://gql-fed.reddit.com/")), @"Keep GraphQL");
-    Check(!RFIsTrackerURL(U(@"https://www.reddit.com/v2p")), @"Only the API hosts' events");
     Check(!RFIsTrackerURL(U(@"https://firebaseinstallations.googleapis.com/v1/projects")), @"Keep Firebase installations");
     Check(!RFIsTrackerURL(U(@"https://www.recaptcha.net/recaptcha/api.js")), @"Keep reCAPTCHA");
     Check(!RFIsTrackerURL(U(@"https://notappsflyersdk.com/")), @"Whole domains only");

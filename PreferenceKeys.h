@@ -36,5 +36,5 @@
 #define kRedditFilterSafariLinks @"kRedditFilterSafariLinks"
 #define kRedditFilterCheckUpdates @"kRedditFilterCheckUpdates"
 #define kRedditFilterCleanShareLinks @"kRedditFilterCleanShareLinks" // share plain links, not Reddit's /s/ ones
-#define kRedditFilterBlockTrackers @"kRedditFilterBlockTrackers" // answer analytics and event logging on the device
+#define kRedditFilterBlockTrackers @"kRedditFilterBlockTrackers" // answer analytics, ad and crash-report requests on the device
 #define kRedditFilterDiagnostics @"kRedditFilterDiagnostics" // record schema paths for bug reports

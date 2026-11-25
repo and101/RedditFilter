@@ -1195,10 +1195,8 @@ NSData *RFLocalShareURLResponse(NSURLRequest *request) {
 BOOL RFIsTrackerURL(NSURL *url) {
   NSString *host = url.host.lowercaseString;
   if (!host.length) return NO;
-  // Reddit's own event logging: batches of usage events. Only that path, as the same hosts serve the app.
-  if ([url.path hasPrefix:@"/v2p"] && [host hasSuffix:@".reddit.com"] &&
-      ([host hasPrefix:@"gql"] || [host containsString:@".gql"]))
-    return YES;
+  // Reddit's own event logging (gql-fed.reddit.com/v2p) is left alone: its batches carry the "seen" events
+  // (PostViewPost / consume) that Home uses to stop showing posts you've already scrolled past.
   static NSArray *domains;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
