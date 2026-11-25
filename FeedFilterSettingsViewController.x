@@ -621,8 +621,7 @@ static NSString *RFFooterText(id settings, NSInteger section) {
     case RFSectionPrivacy:
       return @"Reddit's share links (…/s/…) are tied to your account, so Reddit can link everyone who opens one back "
              @"to you. Clean share links shares the plain link instead.\n\nBlock trackers stops analytics, crash "
-             @"reports, ad tracking and Reddit's usage data from leaving your device. Logging in and feeds aren't "
-             @"affected.";
+             @"reports and ad tracking from leaving your device. Logging in and feeds aren't affected.";
   }
   return nil;
 }
