@@ -16,6 +16,8 @@
 #import "TrackerBlock.h"
 #import "Redgifs.h"
 #import "SwipeCollapse.h"
+#import "FeedSwipe.h"
+#import "SavedPosts.h"
 
 #pragma mark - Preferences
 
@@ -79,6 +81,7 @@ extern "C" void RFReloadPreferences(void) {
                      [defaults boolForKey:kRedditFilterSwipeCollapseHaptics],
                      [defaults boolForKey:kRedditFilterSwipeLeftToCollapse],
                      [defaults boolForKey:kRedditFilterSwipeRightToCollapse]);
+  RFSetFeedSwipe([defaults boolForKey:kRedditFilterSwipePosts], [defaults boolForKey:kRedditFilterSwipeCollapseHaptics]);
 }
 
 #pragma mark - Helpers shared with the settings screen
@@ -462,6 +465,23 @@ static BOOL RFIsAPIHost(NSString *host) {
     };
   }
 
+  // Swipe posts: which posts are saved, so a right swipe can say "Unsave" (read after the app has the answer).
+  BOOL isPostDetails = [operation isEqualToString:@"FeedPostDetailsByIds"];
+  if (completionHandler && (isPostDetails || [operation isEqualToString:@"UpdatePostSaveState"]) && RFFeedSwipeEnabled()) {
+    void (^appHandler)(NSData *, NSURLResponse *, NSError *) = completionHandler;
+    unsigned long long order = RFSavedPostsNoteRequest(request);
+    completionHandler = ^(NSData *data, NSURLResponse *response, NSError *error) {
+      appHandler(data, response, error);
+      if (!RFIsOK(response, error)) return;
+      if (isPostDetails)
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+          RFSavedPostsNoteDetails(request, data, order);
+        });
+      else
+        RFSavedPostsNoteChange(request, data);
+    };
+  }
+
   if (!completionHandler || !RFPrefsAnyEnabled(prefs) || !RFIsAPIHost(host)) return %orig(request, completionHandler);
 
   if ([operation isEqualToString:@"FeedPostDetailsByIds"]) RFRememberPostDetailsRequest(request);
@@ -674,6 +694,7 @@ BOOL RFCleanCachedExperiments(void) {
     kRedditFilterTapToCollapse : @NO,
     kRedditFilterSwipeLeftToCollapse : @YES,
     kRedditFilterSwipeRightToCollapse : @NO,
+    kRedditFilterSwipePosts : @NO,
     kRedditFilterVideosForYou : @NO,
     kRedditFilterExtraCards : @NO,
     kRedditFilterRefreshPill : @NO,

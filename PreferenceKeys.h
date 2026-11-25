@@ -16,6 +16,7 @@
 #define kRedditFilterTapToCollapse @"kRedditFilterTapToCollapse" // with swipe on, keep tap and long press too
 #define kRedditFilterSwipeLeftToCollapse @"kRedditFilterSwipeLeftToCollapse" // with swipe on, left swipes collapse
 #define kRedditFilterSwipeRightToCollapse @"kRedditFilterSwipeRightToCollapse" // with swipe on, right swipes collapse
+#define kRedditFilterSwipePosts @"kRedditFilterSwipePosts" // swipe posts in feeds to upvote, downvote or save
 #define kRedditFilterVideosForYou @"kRedditFilterVideosForYou"
 #define kRedditFilterExtraCards @"kRedditFilterExtraCards" // hide suggestion, promo and survey cards in feeds
 #define kRedditFilterRefreshPill @"kRedditFilterRefreshPill" // hide the floating "new posts" button on Home

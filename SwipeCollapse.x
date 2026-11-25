@@ -2,6 +2,7 @@
 #import <objc/runtime.h>
 #import "Preferences.h"
 #import "SwipeCollapse.h"
+#import "SwipeGestures.h"
 
 @interface RFFlexStackView : UIView
 - (void)didSingleTap;
@@ -155,7 +156,7 @@ static UIView *RFExpandedHeaderInCard(UIView *card) {
 // a horizontally scrolling view (gallery, wide code block or table), a slider,
 // a web view or a video player. Taps on links and buttons still work because
 // the swipe only begins after the finger moves sideways.
-static BOOL RFTouchBelongsToOwnHorizontalGesture(UIView *view, UIView *card) {
+BOOL RFTouchBelongsToOwnHorizontalGesture(UIView *view, UIView *card) {
   for (UIView *candidate = view; candidate && candidate != card; candidate = candidate.superview) {
     if ([candidate isKindOfClass:UIScrollView.class]) {
       UIScrollView *scroll = (UIScrollView *)candidate;
@@ -338,7 +339,7 @@ static BOOL RFIsPagerPan(UIGestureRecognizer *recognizer) {
 // temporarily disabling scrolling and post paging. This leaves every other
 // gesture entirely to Reddit's existing recognizers. A right swipe also has to
 // hold off going back, which is several pans on the navigation views above.
-static void RFSuppressPagerRecognizersForSwipe(UIView *card, UIPanGestureRecognizer *swipe, BOOL right) {
+void RFSuppressPagerRecognizersForSwipe(UIView *card, UIPanGestureRecognizer *swipe, BOOL right) {
   NSHashTable<UIGestureRecognizer *> *suppressed =
       objc_getAssociatedObject(swipe, kRFSwipeCollapseSuppressedPagersKey);
   if (suppressed) return;
@@ -358,7 +359,7 @@ static void RFSuppressPagerRecognizersForSwipe(UIView *card, UIPanGestureRecogni
   }
 }
 
-static void RFRestorePagerRecognizersForSwipe(UIPanGestureRecognizer *swipe) {
+void RFRestorePagerRecognizersForSwipe(UIPanGestureRecognizer *swipe) {
   NSHashTable<UIGestureRecognizer *> *suppressed =
       objc_getAssociatedObject(swipe, kRFSwipeCollapseSuppressedPagersKey);
   for (UIGestureRecognizer *recognizer in suppressed.allObjects) recognizer.enabled = YES;
@@ -370,7 +371,7 @@ static void RFRestorePagerRecognizersForSwipe(UIPanGestureRecognizer *swipe) {
 // cancelled. If UIKit fails the swipe straight after gestureRecognizerShouldBegin:
 // (another recognizer won), no action is sent, so this check makes sure
 // scrolling and post paging never stay off.
-static void RFRestorePagersIfSwipeNeverBegan(UIPanGestureRecognizer *swipe, NSInteger checksLeft) {
+void RFRestorePagersIfSwipeNeverBegan(UIPanGestureRecognizer *swipe, NSInteger checksLeft) {
   __weak UIPanGestureRecognizer *weakSwipe = swipe;
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 50 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
     UIPanGestureRecognizer *swipe = weakSwipe;

@@ -18,3 +18,7 @@ xcrun --sdk macosx clang -fobjc-arc -framework Foundation -I. \
 xcrun --sdk macosx clang -fobjc-arc -framework Foundation -I. \
   FeedCache.m tests/FeedCacheTests.m -o "$test_dir/FeedCacheTests"
 "$test_dir/FeedCacheTests"
+
+xcrun --sdk macosx clang -fobjc-arc -framework Foundation -I. \
+  SavedPosts.m FeedCache.m tests/SavedPostsTests.m -o "$test_dir/SavedPostsTests"
+"$test_dir/SavedPostsTests"

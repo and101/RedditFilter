@@ -49,6 +49,8 @@ void RFBrowserLoginWithCredentials(NSString *username, NSString *password, void 
 }
 void RFSetColoredComments(BOOL enabled, BOOL apolloStyle) {}
 void RFSetSwipeCollapse(BOOL enabled, BOOL tapToo, BOOL haptics) {}
+void RFSetFeedSwipe(BOOL enabled, BOOL haptics) {}
+BOOL RFFeedSwipeEnabled(void) { return YES; }
 
 static void Check(BOOL condition, NSString *message) {
   if (!condition) { NSLog(@"FAIL: %@", message); exit(1); }

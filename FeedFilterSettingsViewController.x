@@ -33,7 +33,7 @@ typedef NS_ENUM(NSInteger, RFToggleTag) {
   RFAwards, RFScores, RFColoured, RFApollo, RFKeywordComments, RFKeywordReplies,
   RFUpdates, RFDirect, RFSD, RFMobileSD, RFAutoMod, RFDiagnostics,
   RFSwipe, RFLeft, RFRight, RFHaptics, RFTap, RFKeepFeed, RFRestoreScreens, RFRestoreAfterSwipe,
-  RFRefreshPill, RFCleanShare, RFBlockTrackers, RFStartFollowing,
+  RFRefreshPill, RFCleanShare, RFBlockTrackers, RFStartFollowing, RFSwipePosts,
 };
 static const RFToggleRow kToggleRows[] = {
     {kRedditFilterPromoted, @"Promoted", @"Show ads in feeds and comments", @"rpl3/tag,icon_tag", YES},
@@ -78,8 +78,7 @@ static const RFToggleRow kToggleRows[] = {
      @"Swiping from the edge still goes back",
      @"rpl3/swipeRight,rpl3/comment,icon_comment", NO, kRedditFilterSwipeToCollapse},
     {kRedditFilterSwipeCollapseHaptics, @"Swipe haptics",
-     @"Vibrate when a swipe reaches Collapse", @"rpl3/swipeLeft,rpl3/comment,icon_comment", NO,
-     kRedditFilterSwipeToCollapse},
+     @"Vibrate when a swipe reaches its action", @"rpl3/swipeLeft,rpl3/comment,icon_comment", NO},
     {kRedditFilterTapToCollapse, @"Tap to collapse too",
      @"Long press collapses the whole thread", @"rpl3/comment,icon_comment", NO,
      kRedditFilterSwipeToCollapse},
@@ -97,6 +96,8 @@ static const RFToggleRow kToggleRows[] = {
      @"rpl3/hide,rpl3/lock,icon_hide", NO},
     {kRedditFilterStartOnFollowing, @"Start on Following", @"Open Home on Following, not For You",
      @"rpl3/home,icon_home", NO},
+    {kRedditFilterSwipePosts, @"Swipe posts", @"Upvote, downvote or save from a feed",
+     @"rpl3/swipeLeft,rpl3/upvote,icon_upvote", NO},
 };
 static const NSInteger kToggleRowCount = sizeof(kToggleRows) / sizeof(kToggleRows[0]);
 static const NSInteger kAboutUpdateRow = 1;
@@ -445,7 +446,8 @@ typedef NS_ENUM(NSInteger, RFSection) {
   RFSectionAbout,
   RFSectionDebug,
   RFSectionAppearance, RFSectionRootFilters, RFSectionDisplay, RFSectionMore, RFSectionFeed,
-  RFSectionExperimental, RFSectionRestoreOptions, RFSectionPrivacy, RFSectionHome,
+  RFSectionExperimental, RFSectionRestoreOptions, RFSectionPrivacy, RFSectionHome, RFSectionPostSwipe,
+  RFSectionSwipeHaptics,
 };
 
 // The IPA includes the Safari extension unless it was built without it.
@@ -468,7 +470,7 @@ static RFPage RFCurrentPage(id settings) {
   return [objc_getAssociatedObject(settings, &kRFPageKey) integerValue];
 }
 static NSString *RFPageTitle(RFPage page) {
-  return @[@"RedditFilter", @"Posts and ads", @"Appearance", @"Collapsing comments", @"RedGIFs",
+  return @[@"RedditFilter", @"Posts and ads", @"Appearance", @"Swipe gestures", @"RedGIFs",
            @"Backup", @"Diagnostics", @"About", @"Experimental features", @"Privacy"][page];
 }
 static NSArray *RFDebugSnapshot(id settings) {
@@ -496,7 +498,8 @@ static NSArray<NSNumber *> *RFSections(id settings) {
     case RFPagePosts: return RFShowsHomeSection() ? @[@(RFSectionFilters), @(RFSectionHome)] : @[@(RFSectionFilters)];
     case RFPageExperimental: return @[@(RFSectionFeed), @(RFSectionRestoreOptions)];
     case RFPageAppearance: return @[@(RFSectionAppearance)];
-    case RFPageCollapse: return @[@(RFSectionSwipe), @(RFSectionCollapse)];
+    case RFPageCollapse:
+      return @[@(RFSectionSwipe), @(RFSectionCollapse), @(RFSectionPostSwipe), @(RFSectionSwipeHaptics)];
     case RFPageRedgifs: return @[@(RFSectionRedgifs)];
     case RFPageBackup: return @[@(RFSectionBackup)];
     case RFPageDiagnostics: return @[@(RFSectionDebug)];
@@ -512,13 +515,15 @@ static NSArray<NSNumber *> *RFTags(RFSection section) {
   switch (section) {
     case RFSectionFilters: return @[@(RFPromoted), @(RFRecommended), @(RFNSFW), @(RFVideos), @(RFExtraCards), @(RFRefreshPill)];
     case RFSectionAppearance: return @[@(RFAwards), @(RFScores), @(RFColoured), @(RFApollo)]; // then Article links
-    case RFSectionSwipe: return @[@(RFSwipe), @(RFLeft), @(RFRight), @(RFHaptics), @(RFTap)];
+    case RFSectionSwipe: return @[@(RFSwipe), @(RFLeft), @(RFRight), @(RFTap)];
     case RFSectionCollapse: return @[@(RFAutoMod)];
     case RFSectionFeed: return @[@(RFKeepFeed), @(RFRestoreScreens)];
     case RFSectionRestoreOptions: return @[@(RFRestoreAfterSwipe)]; // then the Restore for row
     case RFSectionRedgifs: return @[@(RFDirect), @(RFSD), @(RFMobileSD)];
     case RFSectionPrivacy: return @[@(RFCleanShare), @(RFBlockTrackers)];
     case RFSectionHome: return @[@(RFStartFollowing)];
+    case RFSectionPostSwipe: return @[@(RFSwipePosts)];
+    case RFSectionSwipeHaptics: return @[@(RFHaptics)];
     default: return @[];
   }
 }
@@ -547,6 +552,8 @@ static NSString *RFHeaderText(id settings, NSInteger section) {
     case RFSectionDisplay: return @"DISPLAY";
     case RFSectionExperimental: return @"EXPERIMENTAL";
     case RFSectionMore: return @"MORE";
+    case RFSectionSwipe: return @"COMMENTS";
+    case RFSectionPostSwipe: return @"POSTS";
     default: return nil;
   }
   return nil;
@@ -572,6 +579,10 @@ static NSString *RFFooterText(id settings, NSInteger section) {
     case RFSectionStats: return nil;
     case RFSectionFilters: return @"Turn a switch off to hide that content.";
     case RFSectionCollapse: return nil;
+    case RFSectionSwipeHaptics: return @"For swipes on both posts and comments.";
+    case RFSectionPostSwipe:
+      return @"In feeds, swipe a post left to upvote it, or further to downvote it. Swipe right to save it. "
+             @"Swiping again removes the vote or unsaves the post.";
     case RFSectionFeed:
       return @"Reddit jumps back to the top of Home after 10 minutes away. This keeps your place in For You, "
              @"and in Following and Popular while Reddit shows them as feed tabs, even after Reddit closes. "
@@ -762,17 +773,15 @@ static UITableViewCell *RFStatsCell(UITableView *tableView) {
   return cell;
 }
 
-// Opens the Swipe to collapse page, and says what that page is set to.
+// Opens the Swipe gestures page, and says which swipes are on.
 static UITableViewCell *RFSwipeCell(UITableView *tableView) {
   NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
-  NSString *subtitle = @"Swipe off"; // AutoMod on this page can still be on
-  if ([defaults boolForKey:kRedditFilterSwipeToCollapse]) {
-    BOOL right = [defaults boolForKey:kRedditFilterSwipeRightToCollapse];
-    subtitle = !right ? @"Swipe left"
-               : [defaults boolForKey:kRedditFilterSwipeLeftToCollapse] ? @"Swipe left or right"
-                                                                        : @"Swipe right";
-  }
-  return RFLinkCell(tableView, @"Collapsing comments", subtitle, @"rpl3/swipeLeft,rpl3/comment,icon_comment", nil);
+  BOOL comments = [defaults boolForKey:kRedditFilterSwipeToCollapse], posts = [defaults boolForKey:kRedditFilterSwipePosts];
+  NSString *subtitle = comments && posts ? @"Posts and comments"
+                       : comments        ? @"Comments"
+                       : posts           ? @"Posts"
+                                         : @"Off"; // AutoMod on this page can still be on
+  return RFLinkCell(tableView, @"Swipe gestures", subtitle, @"rpl3/swipeLeft,rpl3/comment,icon_comment", nil);
 }
 
 static UITableViewCell *RFSafariCell(UITableView *tableView) {

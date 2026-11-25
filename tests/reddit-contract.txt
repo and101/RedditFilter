@@ -89,6 +89,17 @@ SliceKit.FlexStackView
 _TtC21PDP_CommentSheet_Impl16CommentSliceView
 _TtC63Components_CommentTreeItem_CommentTreeItemPresentation_Internal24CommentTreeItemSliceView
 _TtC24RedditSliceKit_RPLSlices17RichTextSliceView
+# Swipe posts (FeedSwipe.x): the post card, its vote buttons, its ⋯ buttons and the ⋯ menu; its title and
+# the save request, for "Unsave"
+_TtC14FeedKit_Slices18FeedStackSliceView
+_TtC26RPLComponents_VoteControls13RPLVoteButton
+rpl3/overflowHorizontal
+ShareOverflowBottomSheet_Impl
+_TtC8PanModal30PanModalPresentationController
+reddit_post__promoted_post__overflow_button
+reddit_feed__post__classic_view_post_title
+reddit_feed__post__title_text
+UpdatePostSaveState
 # Ad-leaking experiments, removed from GetAllExperimentVariants and the cached ExperimentVariants
 GetAllExperimentVariants
 experimentVariants
