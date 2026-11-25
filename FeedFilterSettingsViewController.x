@@ -608,7 +608,7 @@ static NSString *RFFooterText(id settings, NSInteger section) {
     case RFSectionSwipeHaptics: return @"For swipes on both posts and comments.";
     case RFSectionPostSwipe:
       return @"In feeds, swipe a post left to upvote or further left to downvote. Swipe right to save. "
-             @"Repeat the same swipe to undo it.";
+             @"Repeat the same swipe to undo it. Profiles keep Reddit's own swipes.";
     case RFSectionFeed:
       return @"Reddit jumps back to the top of Home after 10 minutes away. \"Keep feed position\" keeps your "
              @"place in your Home feeds, even after Reddit closes. Pull down to refresh.\n\n"

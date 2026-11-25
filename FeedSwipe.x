@@ -430,6 +430,16 @@ static RFPostSwipeAction RFFeedSwipeActionForStage(NSInteger stage, BOOL right) 
   return stage >= 2 ? RFPostSwipeDownvote : RFPostSwipeUpvote;
 }
 
+// Whether the card is on a profile (yours or someone else's), where sideways swipes change tab or go back.
+static BOOL RFCardIsOnProfile(UIView *card) {
+  static Class profile;
+  if (!profile) profile = NSClassFromString(@"Profiles.ProfileCoreStackViewController");
+  if (!profile) return NO;
+  for (UIResponder *responder = card; responder; responder = responder.nextResponder)
+    if ([responder isKindOfClass:profile]) return YES;
+  return NO;
+}
+
 @interface RFFeedSwipeHandler : NSObject <UIGestureRecognizerDelegate>
 + (instancetype)shared;
 - (void)handleSwipe:(UIPanGestureRecognizer *)swipe;
@@ -449,7 +459,7 @@ static RFPostSwipeAction RFFeedSwipeActionForStage(NSInteger stage, BOOL right) 
   UIView *card = recognizer.view;
   CGFloat startX = [touch locationInView:nil].x;
   // Touches at the screen's left edge go back or open the side menu, without waiting for this swipe.
-  if (startX < kRFFeedSwipeBackEdgeWidth) return NO;
+  if (startX < kRFFeedSwipeBackEdgeWidth || RFCardIsOnProfile(card)) return NO;
   objc_setAssociatedObject(recognizer, kRFFeedSwipeStartXKey, @(startX), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
   return !RFTouchBelongsToOwnHorizontalGesture(touch.view, card);
 }

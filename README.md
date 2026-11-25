@@ -62,7 +62,7 @@ To get it, see [Install](#install).
 - **Appearance**: hide awards and scores on posts and comments, and give each reply level its own colour with **Coloured comment threads**. **Apollo style** colours only each comment's own line.
 - **Article links**: choose how links opened from a post show: **Reddit's viewer**, **Reddit's viewer, full page** (without the votes and comments panel), or **Safari**, an in-app Safari sheet that uses your Safari content blockers. See [Safari article links](#safari-article-links). The Safari option is by [dukevin](https://github.com/dukevin).
 - **Swipe to collapse**: swipe a comment to collapse it and its replies, or swipe further to collapse the whole thread. Choose left, right or both, with optional haptics. **Tap to collapse too** keeps tap and long press, and **AutoMod** always collapses AutoMod comments.
-- **Swipe posts**: in feeds, swipe a post left to upvote it, or further to downvote it, and swipe right to save it. Swiping again removes the vote or unsaves the post. It's on the **Swipe gestures** page.
+- **Swipe posts**: in feeds, swipe a post left to upvote it, or further to downvote it, and swipe right to save it. Swiping again removes the vote or unsaves the post. Profiles keep Reddit's own swipes. It's on the **Swipe gestures** page.
 - **Play RedGIFs directly**: Reddit's copies of RedGIFs videos have no sound, so this plays the originals from RedGIFs instead. **Prefer SD** and **Prefer SD on mobile data** keep data use down. Your device connects to RedGIFs directly, and Reddit's silent version plays if RedGIFs can't be reached.
 
 ### Experimental features
