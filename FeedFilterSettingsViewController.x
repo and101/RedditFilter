@@ -951,9 +951,36 @@ static NSString *RFBackupSummaryMessage(RFBackupSummary *summary) {
 // The table's top inset that matches the current Settings header: 20 pt below the navigation bar.
 // -1 when there's no bar to line up with.
 static CGFloat RFSettingsTopInset(UIViewController *settings) {
-  UINavigationBar *bar = settings.navigationController.navigationBar;
+  UINavigationController *navigation = settings.navigationController;
+  UINavigationBar *bar = navigation.navigationBar;
   if (!settings.isViewLoaded || !bar || bar.hidden) return -1;
-  return CGRectGetMaxY([bar convertRect:bar.bounds toView:settings.view]) + 20.0;
+  // Going back to this page, its view isn't in the sheet yet: it'd be measured from the top of the screen.
+  UIView *view = [settings.view isDescendantOfView:navigation.view] ? settings.view : navigation.view;
+  return CGRectGetMaxY([bar convertRect:bar.bounds toView:view]) + 20.0;
+}
+
+// BaseTableViewController sizes the table to the whole window on every layout, not to this sheet. Where they
+// differ in width (the iPhone Duo's closed screen, landscape), putting it back afterwards changes the width
+// twice a layout, and each change drops the measured row heights: scrolling back up then fights the estimates.
+// So this one table only takes its sheet's size: it becomes a subclass of its own class.
+static Class gTableClass;
+static void RFTableSetFrame(UITableView *self, SEL _cmd, CGRect frame) {
+  UIView *page = self.superview;
+  if ([page.nextResponder isKindOfClass:objc_getClass("FeedFilterSettingsViewController")]) frame = page.bounds;
+  struct objc_super superclass = {self, class_getSuperclass(gTableClass)};
+  ((void (*)(struct objc_super *, SEL, CGRect))objc_msgSendSuper)(&superclass, _cmd, frame);
+}
+
+static void RFKeepTableInSheet(UITableView *table) {
+  Class original = object_getClass(table);
+  if (!gTableClass) {
+    gTableClass = objc_allocateClassPair(original, "RFSettingsTableView", 0);
+    if (!gTableClass) return;
+    Method setFrame = class_getInstanceMethod(original, @selector(setFrame:));
+    class_addMethod(gTableClass, @selector(setFrame:), (IMP)RFTableSetFrame, method_getTypeEncoding(setFrame));
+    objc_registerClassPair(gTableClass);
+  }
+  if (class_getSuperclass(gTableClass) == original) object_setClass(table, gTableClass);
 }
 
 %subclass FeedFilterSettingsViewController : BaseTableViewController
@@ -962,6 +989,7 @@ static CGFloat RFSettingsTopInset(UIViewController *settings) {
   %orig;
   self.title = RFPageTitle(RFCurrentPage(self));
   Class toggleCellClass = RFSettingsCell.class;
+  RFKeepTableInSheet(self.tableView);
   [self.tableView registerClass:toggleCellClass forCellReuseIdentifier:kToggleCellID];
   [self.tableView registerClass:toggleCellClass forCellReuseIdentifier:kLinkCellID];
   [self.tableView registerClass:toggleCellClass forCellReuseIdentifier:kRootCellID];
@@ -995,9 +1023,8 @@ static CGFloat RFSettingsTopInset(UIViewController *settings) {
   // In case BaseTableViewController stops using preferredContentInset. On the iPhone Duo's closed
   // screen it lays out on almost every frame while scrolling, so this must never move the list then.
   UITableView *table = self.tableView;
-  // BaseTableViewController sizes the table to the whole window, not this sheet. A sheet that doesn't
-  // start at the window's left edge (in landscape, or centred on a large screen) then has the rows
-  // sticking out past its left side.
+  // In case the table isn't the one kept to this sheet's size (RFKeepTableInSheet): rows would stick out
+  // past the left side of a sheet that doesn't start at the window's edge.
   if (table.superview == self.view && !CGRectEqualToRect(table.frame, self.view.bounds)) table.frame = self.view.bounds;
   CGFloat top = RFSettingsTopInset(self);
   if (top < 0) return;
