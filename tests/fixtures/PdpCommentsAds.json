@@ -1,0 +1,610 @@
+{
+ "data": {
+  "postInfoById": {
+   "__typename": "SubredditPost",
+   "pdpCommentsAds": {
+    "__typename": "PdpAds",
+    "adPosts": [
+     {
+      "__typename": "AdPost",
+      "adEvents": [
+       {
+        "__typename": "AdEvent",
+        "encryptedTrackingId": null,
+        "type": "IMPRESSION",
+        "url": "https://example.com/"
+       },
+       {
+        "__typename": "AdEvent",
+        "encryptedTrackingId": null,
+        "type": "VIDEO_VIEWABLE_IMPRESSION",
+        "url": "https://example.com/"
+       }
+      ],
+      "adSupplementaryTextRichtext": null,
+      "adTakeover": null,
+      "adUrl": {
+       "__typename": "AdURL",
+       "adBrowserDestination": "text",
+       "isMmpLink": false,
+       "isPrefetchEligible": false,
+       "url": "https://example.com/"
+      },
+      "adUserTargeting": {
+       "__typename": "AdUserTargeting",
+       "adTransparencyEncodedData": "text"
+      },
+      "additionalEventMetadata": [],
+      "adsCorrelationId": "text",
+      "appStoreInfo": null,
+      "associatedComment": null,
+      "authorFlair": null,
+      "authorInfo": {
+       "__typename": "Redditor",
+       "accountType": "text",
+       "displayName": "text",
+       "id": "t2_41",
+       "isBlocked": false,
+       "isCakeDayNow": false,
+       "profile": {
+        "__typename": "Profile",
+        "isNsfw": false,
+        "styles": {
+         "__typename": "ProfileStyles",
+         "legacyIcon": {
+          "__typename": "MediaSource",
+          "url": "https://example.com/"
+         },
+         "legacyPrimaryColor": null
+        }
+       },
+       "snoovatarIcon": null
+      },
+      "authorOnlyInfo": null,
+      "awardings": [],
+      "callToAction": "text",
+      "campaign": {
+       "__typename": "AdCampaign",
+       "id": "id42"
+      },
+      "commentCount": 1,
+      "content": null,
+      "createdAt": "text",
+      "crowdControlLevel": "text",
+      "discussionType": "text",
+      "distinguishedAs": null,
+      "domain": "text",
+      "editedAt": null,
+      "encryptedTrackingPayload": "text",
+      "excludedExperiments": null,
+      "flair": null,
+      "gallery": null,
+      "id": "t3_43",
+      "impressionId": "text",
+      "isArchived": false,
+      "isBlank": false,
+      "isCommercialCommunication": false,
+      "isContestMode": false,
+      "isCreatedFromAdsUi": true,
+      "isCrosspostable": false,
+      "isCrowdControlFilterEnabled": false,
+      "isFollowed": false,
+      "isGildable": false,
+      "isHidden": false,
+      "isInAppBrowserOverride": false,
+      "isLocked": true,
+      "isNsfw": false,
+      "isOriginalContent": false,
+      "isOwnPost": false,
+      "isPdpAutoplayAllowed": false,
+      "isSaved": false,
+      "isScoreHidden": true,
+      "isSelfPost": false,
+      "isSpoiler": false,
+      "isStickied": false,
+      "isSurveyAd": false,
+      "isThumbnailEnabled": true,
+      "isTranslatable": false,
+      "isTranslated": false,
+      "languageCode": "text",
+      "liveCommentsWebsocket": "text",
+      "llmPostSuggestions": null,
+      "location": null,
+      "media": {
+       "__typename": "Media",
+       "animated": null,
+       "download": null,
+       "obfuscated": null,
+       "packagedMedia": {
+        "__typename": "PackagedMedia",
+        "muxedMp4s": null
+       },
+       "previewMediaId": "text",
+       "still": {
+        "__typename": "StillMedia",
+        "large": {
+         "__typename": "MediaSource",
+         "dimensions": {
+          "__typename": "Dimensions",
+          "height": 1,
+          "width": 1
+         },
+         "url": "https://example.com/"
+        },
+        "medium": {
+         "__typename": "MediaSource",
+         "dimensions": {
+          "__typename": "Dimensions",
+          "height": 1,
+          "width": 1
+         },
+         "url": "https://example.com/"
+        },
+        "small": {
+         "__typename": "MediaSource",
+         "dimensions": {
+          "__typename": "Dimensions",
+          "height": 1,
+          "width": 1
+         },
+         "url": "https://example.com/"
+        },
+        "source": {
+         "__typename": "MediaSource",
+         "dimensions": {
+          "__typename": "Dimensions",
+          "height": 1,
+          "width": 1
+         },
+         "url": "https://example.com/"
+        },
+        "xlarge": {
+         "__typename": "MediaSource",
+         "dimensions": {
+          "__typename": "Dimensions",
+          "height": 1,
+          "width": 1
+         },
+         "url": "https://example.com/"
+        },
+        "xxlarge": {
+         "__typename": "MediaSource",
+         "dimensions": {
+          "__typename": "Dimensions",
+          "height": 1,
+          "width": 1
+         },
+         "url": "https://example.com/"
+        },
+        "xxxlarge": {
+         "__typename": "MediaSource",
+         "dimensions": {
+          "__typename": "Dimensions",
+          "height": 1,
+          "width": 1
+         },
+         "url": "https://example.com/"
+        }
+       },
+       "streaming": {
+        "__typename": "StreamingMedia",
+        "dimensions": {
+         "__typename": "Dimensions",
+         "height": 1,
+         "width": 1
+        },
+        "duration": 1,
+        "hlsUrl": "https://example.com/",
+        "isGif": false,
+        "scrubberMediaUrl": "https://example.com/"
+       },
+       "typeHint": "text",
+       "video": null
+      },
+      "moderationInfo": null,
+      "outboundLink": {
+       "__typename": "OutboundLink",
+       "expiresAt": null,
+       "url": "https://example.com/"
+      },
+      "overlayData": null,
+      "permalink": "text",
+      "plaCards": null,
+      "placement": {
+       "__typename": "AdPlacement",
+       "slot": "text"
+      },
+      "poll": null,
+      "postEventInfo": null,
+      "profile": {
+       "__typename": "Profile",
+       "allowedPostTypes": [
+        "text",
+        "text"
+       ],
+       "authorFlairSettings": {
+        "__typename": "AuthorFlairSettings",
+        "isEnabled": true,
+        "isSelfAssignable": false
+       },
+       "createdAt": "text",
+       "description": null,
+       "id": "t5_44",
+       "isChatPostCreationAllowed": false,
+       "isContributor": false,
+       "isCrosspostDestination": false,
+       "isCrosspostSource": true,
+       "isDefaultBanner": true,
+       "isDefaultIcon": false,
+       "isEmojisEnabled": false,
+       "isNsfw": false,
+       "isPredictionAllowed": false,
+       "isPredictionsTournamentAllowed": false,
+       "isQuarantined": false,
+       "isSubscribed": false,
+       "isUserBanned": false,
+       "modPermissions": null,
+       "name": "text",
+       "postFlairSettings": {
+        "__typename": "PostFlairSettings",
+        "isEnabled": true,
+        "isSelfAssignable": false
+       },
+       "publicDescriptionText": null,
+       "redditorInfo": {
+        "__typename": "Redditor",
+        "attributes": {
+         "__typename": "RedditorAttributes",
+         "redditHandleInfo": {
+          "__typename": "RedditorHandleInfo",
+          "displayName": "text",
+          "prefixedUsername": "text",
+          "username": "text"
+         },
+         "redditorType": "text"
+        },
+        "displayName": "text"
+       },
+       "stickyPosts": [],
+       "styles": {
+        "__typename": "ProfileStyles",
+        "icon": "https://example.com/",
+        "legacyBannerBackgroundImage": null,
+        "legacyIcon": {
+         "__typename": "MediaSource",
+         "dimensions": {
+          "__typename": "Dimensions",
+          "height": 1,
+          "width": 1
+         },
+         "url": "https://example.com/"
+        },
+        "legacyPrimaryColor": null
+       },
+       "submitText": "",
+       "subscribersCount": 1,
+       "suggestedCommentSort": "text",
+       "title": ""
+      },
+      "promoLayout": null,
+      "promotedCommunityPost": null,
+      "removedByCategory": null,
+      "score": null,
+      "skAdNetworkData": null,
+      "subcaption": null,
+      "subcaptionStrikethrough": null,
+      "suggestedCommentSort": "text",
+      "thumbnail": {
+       "__typename": "MediaSource",
+       "dimensions": {
+        "__typename": "Dimensions",
+        "height": 1,
+        "width": 1
+       },
+       "url": "https://example.com/"
+      },
+      "title": "text",
+      "translatedLanguage": null,
+      "upvoteRatio": 1,
+      "url": "https://example.com/",
+      "voteState": "text"
+     },
+     {
+      "__typename": "AdPost",
+      "adEvents": [
+       {
+        "__typename": "AdEvent",
+        "encryptedTrackingId": null,
+        "type": "IMPRESSION",
+        "url": "https://example.com/"
+       },
+       {
+        "__typename": "AdEvent",
+        "encryptedTrackingId": null,
+        "type": "VIDEO_VIEWABLE_IMPRESSION",
+        "url": "https://example.com/"
+       }
+      ],
+      "adSupplementaryTextRichtext": null,
+      "adTakeover": null,
+      "adUrl": {
+       "__typename": "AdURL",
+       "adBrowserDestination": "text",
+       "isMmpLink": false,
+       "isPrefetchEligible": false,
+       "url": "https://example.com/"
+      },
+      "adUserTargeting": {
+       "__typename": "AdUserTargeting",
+       "adTransparencyEncodedData": "text"
+      },
+      "additionalEventMetadata": [],
+      "adsCorrelationId": "text",
+      "appStoreInfo": null,
+      "associatedComment": {
+       "__typename": "Comment",
+       "id": "t1_45"
+      },
+      "authorFlair": null,
+      "authorInfo": {
+       "__typename": "Redditor",
+       "accountType": "text",
+       "displayName": "text",
+       "id": "t2_46",
+       "isBlocked": false,
+       "isCakeDayNow": false,
+       "profile": {
+        "__typename": "Profile",
+        "isNsfw": false,
+        "styles": {
+         "__typename": "ProfileStyles",
+         "legacyIcon": {
+          "__typename": "MediaSource",
+          "url": "https://example.com/"
+         },
+         "legacyPrimaryColor": null
+        }
+       },
+       "snoovatarIcon": null
+      },
+      "authorOnlyInfo": null,
+      "awardings": [],
+      "callToAction": "text",
+      "campaign": {
+       "__typename": "AdCampaign",
+       "id": "id47"
+      },
+      "commentCount": 1,
+      "content": null,
+      "createdAt": "text",
+      "crowdControlLevel": "text",
+      "discussionType": "text",
+      "distinguishedAs": null,
+      "domain": "text",
+      "editedAt": null,
+      "encryptedTrackingPayload": "text",
+      "excludedExperiments": null,
+      "flair": null,
+      "gallery": null,
+      "id": "t3_48",
+      "impressionId": "text",
+      "isArchived": false,
+      "isBlank": false,
+      "isCommercialCommunication": false,
+      "isContestMode": false,
+      "isCreatedFromAdsUi": true,
+      "isCrosspostable": false,
+      "isCrowdControlFilterEnabled": false,
+      "isFollowed": false,
+      "isGildable": false,
+      "isHidden": false,
+      "isInAppBrowserOverride": false,
+      "isLocked": true,
+      "isNsfw": false,
+      "isOriginalContent": false,
+      "isOwnPost": false,
+      "isPdpAutoplayAllowed": false,
+      "isSaved": false,
+      "isScoreHidden": true,
+      "isSelfPost": false,
+      "isSpoiler": false,
+      "isStickied": false,
+      "isSurveyAd": false,
+      "isThumbnailEnabled": true,
+      "isTranslatable": false,
+      "isTranslated": false,
+      "languageCode": "text",
+      "liveCommentsWebsocket": "text",
+      "llmPostSuggestions": null,
+      "location": null,
+      "media": {
+       "__typename": "Media",
+       "animated": null,
+       "download": null,
+       "obfuscated": null,
+       "packagedMedia": null,
+       "previewMediaId": "text",
+       "still": {
+        "__typename": "StillMedia",
+        "large": {
+         "__typename": "MediaSource",
+         "dimensions": {
+          "__typename": "Dimensions",
+          "height": 1,
+          "width": 1
+         },
+         "url": "https://example.com/"
+        },
+        "medium": {
+         "__typename": "MediaSource",
+         "dimensions": {
+          "__typename": "Dimensions",
+          "height": 1,
+          "width": 1
+         },
+         "url": "https://example.com/"
+        },
+        "small": {
+         "__typename": "MediaSource",
+         "dimensions": {
+          "__typename": "Dimensions",
+          "height": 1,
+          "width": 1
+         },
+         "url": "https://example.com/"
+        },
+        "source": {
+         "__typename": "MediaSource",
+         "dimensions": {
+          "__typename": "Dimensions",
+          "height": 1,
+          "width": 1
+         },
+         "url": "https://example.com/"
+        },
+        "xlarge": {
+         "__typename": "MediaSource",
+         "dimensions": {
+          "__typename": "Dimensions",
+          "height": 1,
+          "width": 1
+         },
+         "url": "https://example.com/"
+        },
+        "xxlarge": {
+         "__typename": "MediaSource",
+         "dimensions": {
+          "__typename": "Dimensions",
+          "height": 1,
+          "width": 1
+         },
+         "url": "https://example.com/"
+        },
+        "xxxlarge": {
+         "__typename": "MediaSource",
+         "dimensions": {
+          "__typename": "Dimensions",
+          "height": 1,
+          "width": 1
+         },
+         "url": "https://example.com/"
+        }
+       },
+       "streaming": null,
+       "typeHint": "text",
+       "video": null
+      },
+      "moderationInfo": null,
+      "outboundLink": {
+       "__typename": "OutboundLink",
+       "expiresAt": null,
+       "url": "https://example.com/"
+      },
+      "overlayData": null,
+      "permalink": "text",
+      "plaCards": null,
+      "placement": {
+       "__typename": "AdPlacement",
+       "slot": "text"
+      },
+      "poll": null,
+      "postEventInfo": null,
+      "profile": {
+       "__typename": "Profile",
+       "allowedPostTypes": [
+        "text",
+        "text"
+       ],
+       "authorFlairSettings": {
+        "__typename": "AuthorFlairSettings",
+        "isEnabled": true,
+        "isSelfAssignable": false
+       },
+       "createdAt": "text",
+       "description": null,
+       "id": "t5_49",
+       "isChatPostCreationAllowed": false,
+       "isContributor": false,
+       "isCrosspostDestination": false,
+       "isCrosspostSource": true,
+       "isDefaultBanner": true,
+       "isDefaultIcon": true,
+       "isEmojisEnabled": false,
+       "isNsfw": false,
+       "isPredictionAllowed": false,
+       "isPredictionsTournamentAllowed": false,
+       "isQuarantined": false,
+       "isSubscribed": false,
+       "isUserBanned": false,
+       "modPermissions": null,
+       "name": "text",
+       "postFlairSettings": {
+        "__typename": "PostFlairSettings",
+        "isEnabled": true,
+        "isSelfAssignable": false
+       },
+       "publicDescriptionText": null,
+       "redditorInfo": {
+        "__typename": "Redditor",
+        "attributes": {
+         "__typename": "RedditorAttributes",
+         "redditHandleInfo": {
+          "__typename": "RedditorHandleInfo",
+          "displayName": "text",
+          "prefixedUsername": "text",
+          "username": "text"
+         },
+         "redditorType": "text"
+        },
+        "displayName": "text"
+       },
+       "stickyPosts": [],
+       "styles": {
+        "__typename": "ProfileStyles",
+        "icon": "https://example.com/",
+        "legacyBannerBackgroundImage": null,
+        "legacyIcon": {
+         "__typename": "MediaSource",
+         "dimensions": {
+          "__typename": "Dimensions",
+          "height": 1,
+          "width": 1
+         },
+         "url": "https://example.com/"
+        },
+        "legacyPrimaryColor": null
+       },
+       "submitText": "",
+       "subscribersCount": 1,
+       "suggestedCommentSort": "text",
+       "title": ""
+      },
+      "promoLayout": null,
+      "promotedCommunityPost": null,
+      "removedByCategory": null,
+      "score": null,
+      "skAdNetworkData": null,
+      "subcaption": null,
+      "subcaptionStrikethrough": null,
+      "suggestedCommentSort": "text",
+      "thumbnail": {
+       "__typename": "MediaSource",
+       "dimensions": {
+        "__typename": "Dimensions",
+        "height": 1,
+        "width": 1
+       },
+       "url": "https://example.com/"
+      },
+      "title": "text",
+      "translatedLanguage": null,
+      "upvoteRatio": 1,
+      "url": "https://example.com/",
+      "voteState": "text"
+     }
+    ],
+    "nextCommentsPageAdEligibility": "text"
+   }
+  }
+ }
+}

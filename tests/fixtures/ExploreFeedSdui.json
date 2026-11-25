@@ -1,0 +1,213 @@
+{
+ "data": {
+  "exploreFeedV1": {
+   "__typename": "SDExploreFeed",
+   "elements": {
+    "__typename": "FeedElementConnection",
+    "dist": 1,
+    "pageInfo": {
+     "__typename": "PageInfo",
+     "hasNextPage": false,
+     "endCursor": ""
+    },
+    "edges": [
+     {
+      "__typename": "FeedElementEdge",
+      "node": {
+       "__typename": "TopicGroupFeedElement",
+       "id": "id132",
+       "title": null,
+       "schemeName": "text",
+       "displayStyle": "text",
+       "topics": [
+        {
+         "__typename": "TaxonomyTopic",
+         "id": "id133",
+         "displayName": "text"
+        },
+        {
+         "__typename": "TaxonomyTopic",
+         "id": "id134",
+         "displayName": "text"
+        }
+       ]
+      }
+     },
+     {
+      "__typename": "FeedElementEdge",
+      "node": {
+       "__typename": "CarouselCommunityRecommendationsFeedUnit",
+       "id": "id135",
+       "model": "text",
+       "version": "text",
+       "title": "text",
+       "isVertical": false,
+       "intro": null,
+       "destination": {
+        "__typename": "UnavailableDestination",
+        "reason": "text"
+       },
+       "communityRecommendations": [
+        {
+         "__typename": "CarouselCommunityRecommendation",
+         "recommendationSource": "text",
+         "subreddit": {
+          "__typename": "Subreddit",
+          "id": "t5_136",
+          "name": "text",
+          "publicDescriptionText": "text",
+          "isSubscribed": false,
+          "styles": {
+           "__typename": "SubredditStyles",
+           "icon": "https://example.com/",
+           "legacyIcon": {
+            "__typename": "MediaSource",
+            "url": "https://example.com/"
+           },
+           "primaryColor": "text"
+          },
+          "subscribersCount": 1,
+          "taxonomy": {
+           "__typename": "Taxonomy",
+           "generatedDescription": "text"
+          },
+          "communityStats": {
+           "__typename": "SubredditStats",
+           "weeklyActiveUsersCount": 1
+          }
+         }
+        },
+        {
+         "__typename": "CarouselCommunityRecommendation",
+         "recommendationSource": "text",
+         "subreddit": {
+          "__typename": "Subreddit",
+          "id": "t5_137",
+          "name": "text",
+          "publicDescriptionText": "text",
+          "isSubscribed": false,
+          "styles": {
+           "__typename": "SubredditStyles",
+           "icon": "https://example.com/",
+           "legacyIcon": null,
+           "primaryColor": null
+          },
+          "subscribersCount": 1,
+          "taxonomy": {
+           "__typename": "Taxonomy",
+           "generatedDescription": ""
+          },
+          "communityStats": {
+           "__typename": "SubredditStats",
+           "weeklyActiveUsersCount": 1
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "__typename": "FeedElementEdge",
+      "node": {
+       "__typename": "CarouselCommunityRecommendationsFeedUnit",
+       "id": "id138",
+       "model": null,
+       "version": null,
+       "title": "text",
+       "isVertical": false,
+       "intro": null,
+       "destination": {
+        "__typename": "TopicDestination",
+        "topic": {
+         "__typename": "TaxonomyTopic",
+         "id": "id139",
+         "displayName": "text"
+        },
+        "schemeName": "text"
+       },
+       "communityRecommendations": [
+        {
+         "__typename": "CarouselCommunityRecommendation",
+         "recommendationSource": "text",
+         "subreddit": {
+          "__typename": "Subreddit",
+          "id": "t5_140",
+          "name": "text",
+          "publicDescriptionText": "text",
+          "isSubscribed": false,
+          "styles": {
+           "__typename": "SubredditStyles",
+           "icon": "https://example.com/",
+           "legacyIcon": null,
+           "primaryColor": null
+          },
+          "subscribersCount": 1,
+          "taxonomy": {
+           "__typename": "Taxonomy",
+           "generatedDescription": ""
+          },
+          "communityStats": {
+           "__typename": "SubredditStats",
+           "weeklyActiveUsersCount": 1
+          }
+         }
+        },
+        {
+         "__typename": "CarouselCommunityRecommendation",
+         "recommendationSource": "text",
+         "subreddit": {
+          "__typename": "Subreddit",
+          "id": "t5_141",
+          "name": "text",
+          "publicDescriptionText": null,
+          "isSubscribed": false,
+          "styles": {
+           "__typename": "SubredditStyles",
+           "icon": "https://example.com/",
+           "legacyIcon": null,
+           "primaryColor": null
+          },
+          "subscribersCount": 1,
+          "taxonomy": {
+           "__typename": "Taxonomy",
+           "generatedDescription": ""
+          },
+          "communityStats": {
+           "__typename": "SubredditStats",
+           "weeklyActiveUsersCount": 1
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "__typename": "FeedElementEdge",
+      "node": {
+       "__typename": "TaxonomyTopicsFeedElement",
+       "id": "id142",
+       "title": "text",
+       "schemeName": "text",
+       "topics": [
+        {
+         "__typename": "TaxonomyTopic",
+         "id": "id143",
+         "displayName": "text"
+        },
+        {
+         "__typename": "TaxonomyTopic",
+         "id": "id144",
+         "displayName": "text"
+        }
+       ]
+      }
+     }
+    ],
+    "prefetchContext": {
+     "__typename": "PrefetchContext",
+     "prefetchDistance": 1
+    }
+   }
+  }
+ }
+}

@@ -4,8 +4,9 @@
 #
 # 1. Everything in tests/reddit-contract.txt is still in the app.
 # 2. Compares the parts that can let content past the filter with tests/reddit-baseline.txt: Reddit
-#    server addresses, URLSession calls, networking experiments and ad types/fields. Anything new
-#    or gone is listed for review. --update saves this build as the new baseline once reviewed.
+#    server addresses, URLSession calls, networking experiments, ad types/fields, the places they're
+#    asked for and the fields of feed and search cards. Anything new or gone is listed for review.
+#    --update saves this build as the new baseline once reviewed.
 # 3. Runs tests/run.sh, then tests/run-sim.sh with every GraphQL/OAuth address found, so the real
 #    network hook is checked against each one (needs a booted simulator; skipped otherwise).
 set -eu
@@ -62,10 +63,7 @@ done <tests/reddit-contract.txt
   echo "[network-experiments]"
   grep -xE 'ios_[a-z0-9_]*(graphql|gql|uri|host|cloudflare|endpoint|transport|http3|quic|network|url_session|multipath|preconnect)[a-z0-9_]*' "$work/strings" | sort -u
   grep -xE '[a-z0-9_]*(gql|graphql)[a-z0-9_]*' "$work/strings" | grep -v '^ios_' | sort -u
-  echo "[ad-schema]"
-  grep -E '^(fragment|query|subscription) ' "$work/strings" >"$work/graphql" || true
-  grep -oE 'on [A-Z][A-Za-z]*(Ad|Ads|Promoted|Sponsor)[A-Za-z]* ' "$work/graphql" | sed 's/^on //; s/ $//' | sort -u
-  grep -oE '\b[a-z][A-Za-z]*(Ads|AdPosts|AdPayload|Promoted[A-Za-z]*)\b' "$work/graphql" | sort -u
+  python3 tests/graphql-ads.py "$work/strings"
 } >"$work/baseline"
 
 if [ "$update" = "--update" ]; then
@@ -74,7 +72,7 @@ if [ "$update" = "--update" ]; then
 else
   section_of() { sed -n "/^\[$2\]/,/^\[/p" "$1" | grep -v '^\['; }
   base=$(head -1 tests/reddit-baseline.txt | sed 's/^# //; s/\. Regenerate.*//')
-  for section in hosts url-session network-experiments ad-schema; do
+  for section in hosts url-session network-experiments ad-schema ad-locations feed-fields; do
     changes=$(diff <(section_of tests/reddit-baseline.txt $section) <(section_of "$work/baseline" $section) |
       sed -n 's/^< /  - /p; s/^> /  + /p' || true)
     [ -z "$changes" ] && continue
@@ -83,6 +81,8 @@ else
       url-session) why="requests made through a call the hook doesn't cover are never filtered" ;;
       network-experiments) why="an experiment can move some users onto a different address or client" ;;
       ad-schema) why="a new ad type or field may need filtering in JSONFilter.m" ;;
+      ad-locations) why="an ad asked for somewhere new may be somewhere the filter doesn't look" ;;
+      feed-fields) why="Reddit drops the page if a card RedditFilter emptied or made lacks a field its query asks for" ;;
     esac
     echo
     echo "REVIEW $section, changed since $base ($why):"

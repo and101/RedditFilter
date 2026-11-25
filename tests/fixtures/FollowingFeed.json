@@ -1,0 +1,96 @@
+{
+ "data": {
+  "homeV3": {
+   "__typename": "SDHomeFeed",
+   "elements": {
+    "__typename": "FeedElementConnection",
+    "dist": null,
+    "edges": [
+     {
+      "__typename": "FeedElementEdge",
+      "node": {
+       "__typename": "CarouselCommunityRecommendationsFeedUnit",
+       "communityRecommendations": [
+        {
+         "__typename": "CarouselCommunityRecommendation",
+         "recommendationSource": "text",
+         "subreddit": {
+          "__typename": "Subreddit",
+          "communityStats": {
+           "__typename": "SubredditStats",
+           "weeklyActiveUsersCount": 1
+          },
+          "id": "t5_1",
+          "isSubscribed": false,
+          "name": "text",
+          "publicDescriptionText": "text",
+          "styles": {
+           "__typename": "SubredditStyles",
+           "icon": "https://example.com/",
+           "legacyIcon": {
+            "__typename": "MediaSource",
+            "url": "https://example.com/"
+           },
+           "primaryColor": "text"
+          },
+          "subscribersCount": 1,
+          "taxonomy": {
+           "__typename": "Taxonomy",
+           "generatedDescription": ""
+          }
+         }
+        },
+        {
+         "__typename": "CarouselCommunityRecommendation",
+         "recommendationSource": "text",
+         "subreddit": {
+          "__typename": "Subreddit",
+          "communityStats": {
+           "__typename": "SubredditStats",
+           "weeklyActiveUsersCount": 1
+          },
+          "id": "t5_2",
+          "isSubscribed": false,
+          "name": "text",
+          "publicDescriptionText": "text",
+          "styles": {
+           "__typename": "SubredditStyles",
+           "icon": "https://example.com/",
+           "legacyIcon": null,
+           "primaryColor": null
+          },
+          "subscribersCount": 1,
+          "taxonomy": {
+           "__typename": "Taxonomy",
+           "generatedDescription": ""
+          }
+         }
+        }
+       ],
+       "destination": null,
+       "id": "id3",
+       "intro": {
+        "__typename": "CommunityRecommendationsIntro",
+        "subtitle": "text",
+        "title": "text"
+       },
+       "isVertical": true,
+       "model": "text",
+       "title": "text",
+       "version": "text"
+      }
+     }
+    ],
+    "pageInfo": {
+     "__typename": "PageInfo",
+     "endCursor": "",
+     "hasNextPage": false
+    },
+    "prefetchContext": {
+     "__typename": "PrefetchContext",
+     "prefetchDistance": 1
+    }
+   }
+  }
+ }
+}

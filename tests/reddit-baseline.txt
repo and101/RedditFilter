@@ -108,18 +108,395 @@ invalid_gql_origin
 is_ignored_graphql_error
 search_graphql_resolver_v2
 [ad-schema]
+AdBrandLiftStudyCell
+AdCampaign
+AdCampaignCreation
+AdEvent
+AdFreeFormCell
+AdGalleryCell
+AdGalleryPage
+AdLlmPostSuggestionsCell
+AdMetadataCell
+AdPayload
+AdPayloadGalleryItem
+AdPost
 AdPromotedCommunityPostCell
-AutomationAddressCondition
+AdSpotlightVideoCell
+AdSupplementaryTextCell
+AdURL
+AdUserTargeting
 ConversationAdFeedUnit
-NotificationSettingsLayoutAdminNotificationRow
 SKAdNetworkData
 SKAdNetworkSignature
 SearchAdPost
-SearchAdjustNSFWSettingsBehavior
-SearchScopeAdjuster
-SearchScopeAdjusterBehavior
-SearchScopeAdjusterChipScopeBehaviors
-SearchScopeAdjusterChipScopePresentation
-adPromotedCommunityPostCellFragment
-conversationAdPromotedCommunityPostFragment
-includeSearchAds
+ad
+adAccountId
+adBrowserDestination
+adEligibility
+adEvents
+adInstanceId
+adLinkUrl
+adNetworkData
+adNetworkId
+adNetworkVersion
+adPayload
+adSupplementaryTextRichtext
+adTakeover
+adTransparencyEncodedData
+adUrl
+adUserTargeting
+adsConfig
+adsCorrelationId
+adsOffRedditPreferences
+galleryPageAdEvents
+isAdPersonalizationAllowed
+isAdPost
+isBlankAd
+isCreatedFromAdsUi
+isSurveyAd
+isThirdPartyInfoAdPersonalizationAllowed
+promotedCommunityPost
+searchAdPostBehaviors
+skAdNetworkData
+[ad-locations]
+cellGroupFragment on CellGroup: adPayload
+cellGroupInnerFragment on CellGroup: adPayload
+cellInfoFragment on CellInfo: ...adBrandLiftStudyCellFragment
+cellInfoFragment on CellInfo: ...adFreeFormCellFragment
+cellInfoFragment on CellInfo: ...adGalleryCellFragment
+cellInfoFragment on CellInfo: ...adLlmPostSuggestionsCellFragment
+cellInfoFragment on CellInfo: ...adMetadataCellFragment
+cellInfoFragment on CellInfo: ...adPromotedCommunityPostCellFragment
+cellInfoFragment on CellInfo: ...adSpotlightVideoCellFragment
+cellInfoFragment on CellInfo: ...adSupplementaryTextCellFragment
+collectionsHeroCardFragment on CollectionsHeroCard: adEvents
+collectionsHeroCardFragment on CollectionsHeroCard: adUrl
+compactPostPreviewPostFragment on Post: <ProfilePost> > adSupplementaryTextRichtext
+compactPostPreviewPostFragment on Post: isCreatedFromAdsUi
+conversationAdInCommentAdFragment on Post: <AdPost>
+conversationAdPlaCardsFragment on Post: <AdPost>
+conversationAdPostContentFragment on Post: <AdPost>
+conversationAdPostContentFragment on Post: <ProfilePost> > adSupplementaryTextRichtext
+conversationAdPostContentFragment on Post: <ProfilePost> > promotedCommunityPost
+conversationAdPostContentFragment on Post: isCreatedFromAdsUi
+conversationAdPostGalleryItemFragment on PostGalleryItem: adEvents
+conversationAdPostGalleryItemFragment on PostGalleryItem: adUrl
+conversationAdPromotedCommunityPostFragment on SubredditPost: isCreatedFromAdsUi
+customPostDevvitFragment on DevvitPost: installation > app > adsConfig
+identityPreferencesFragment on IdentityPreferences: adsOffRedditPreferences
+identityPreferencesFragment on IdentityPreferences: isAdPersonalizationAllowed
+identityPreferencesFragment on IdentityPreferences: isThirdPartyInfoAdPersonalizationAllowed
+legacyVideoCellFragment on LegacyVideoCell: isAdPost
+plaCardsFragment on Post: <AdPost>
+postBasicInfoFragment on PostInfo: <AdPost>
+postContentFragment on Post: <AdPost>
+postContentFragment on Post: <ProfilePost> > adSupplementaryTextRichtext
+postContentFragment on Post: <ProfilePost> > promotedCommunityPost
+postContentFragment on Post: isCreatedFromAdsUi
+postDetailCommentNodeFragment on CommentInfo: postInfo > <AdPost> @skip(if:$fetchForestLevelPostInfo)
+postDetailCommentsContentFragment on CommentForest: adEligibility @include(if:$fetchAdEligibility)
+postDetailCommentsContentFragment on CommentForest: trees > node > postInfo > <AdPost>
+postDetailContentFragment on Post: <AdPost>
+postDetailContentFragment on Post: <ProfilePost> > adSupplementaryTextRichtext
+postDetailContentFragment on Post: isCreatedFromAdsUi
+postGalleryItemFragment on PostGalleryItem: adEvents
+postGalleryItemFragment on PostGalleryItem: adUrl
+postInfoFragment on PostInfo: <AdPost>
+promotedCommunityPostFragment on SubredditPost: isCreatedFromAdsUi
+searchComponentFragment on SearchComponent: ...searchAdPostFragment @include(if:$includeSearchAds)
+searchListFragment on SearchListComponent: children > ...searchAdPostFragment @include(if:$includeSearchAds)
+searchSubredditDetailFragment on Post: <AdPost>
+searchSubredditDetailFragment on Post: crosspostRoot > post > <AdPost>
+subredditDetailFragment on Post: <AdPost>
+subredditDetailFragment on Post: crosspostRoot > post > <AdPost>
+videoSubredditDetailFragment on Post: <AdPost>
+youtubeCellFragment on YoutubeCell: isAdPost
+[feed-fields]
+CellGroup cellGroupFragment: adPayload
+CellGroup cellGroupFragment: adPayload > ...adPayloadFragment
+CellGroup cellGroupFragment: aiDisclosure
+CellGroup cellGroupFragment: aiDisclosure > bottomSheetContent
+CellGroup cellGroupFragment: aiDisclosure > uiTreatment
+CellGroup cellGroupFragment: cells
+CellGroup cellGroupFragment: cells > ...cellInfoFragment
+CellGroup cellGroupFragment: cells > ...crosspostCellInfoFragment
+CellGroup cellGroupFragment: groupId
+CellGroup cellGroupFragment: id
+CellGroup cellGroupFragment: rankingDebugMetadata > ...rankingDebugMetadataFragment @include(if:$includeRankingMetadata)
+CellGroup cellGroupFragment: rankingDebugMetadata @include(if:$includeRankingMetadata)
+CellGroup cellGroupFragment: recommendationContext
+CellGroup cellGroupFragment: recommendationContext > ...recommendationContextFragment
+CellGroup cellGroupInnerFragment: adPayload
+CellGroup cellGroupInnerFragment: adPayload > ...adPayloadFragment
+CellGroup cellGroupInnerFragment: aiDisclosure > bottomSheetContent @include(if:$includeFeedAIInfo)
+CellGroup cellGroupInnerFragment: aiDisclosure > uiTreatment @include(if:$includeFeedAIInfo)
+CellGroup cellGroupInnerFragment: aiDisclosure @include(if:$includeFeedAIInfo)
+CellGroup cellGroupInnerFragment: cells
+CellGroup cellGroupInnerFragment: cells > ...cellInfoFragment
+CellGroup cellGroupInnerFragment: groupId
+CellGroup cellGroupInnerFragment: id
+CellGroup cellGroupInnerFragment: recommendationContext
+CellGroup cellGroupInnerFragment: recommendationContext > ...recommendationContextFragment
+CellInfo cellInfoFragment: ...actionCellFragment
+CellInfo cellInfoFragment: ...adBrandLiftStudyCellFragment
+CellInfo cellInfoFragment: ...adFreeFormCellFragment
+CellInfo cellInfoFragment: ...adGalleryCellFragment
+CellInfo cellInfoFragment: ...adLlmPostSuggestionsCellFragment
+CellInfo cellInfoFragment: ...adMetadataCellFragment
+CellInfo cellInfoFragment: ...adPromotedCommunityPostCellFragment
+CellInfo cellInfoFragment: ...adSpotlightVideoCellFragment
+CellInfo cellInfoFragment: ...adSupplementaryTextCellFragment
+CellInfo cellInfoFragment: ...amaStatusCellFragment
+CellInfo cellInfoFragment: ...appInstallCallToActionCellFragment
+CellInfo cellInfoFragment: ...callToActionCellFragment
+CellInfo cellInfoFragment: ...classicCellFragment
+CellInfo cellInfoFragment: ...classicMetadataCellFragment
+CellInfo cellInfoFragment: ...classicThumbnailCellFragment
+CellInfo cellInfoFragment: ...commentCallToActionCellFragment @include(if:$includeCommentCTA)
+CellInfo cellInfoFragment: ...communityRecommendationsUnitCellFragment
+CellInfo cellInfoFragment: ...customPostCellFragment
+CellInfo cellInfoFragment: ...emptyContentCellFragment
+CellInfo cellInfoFragment: ...feedSurveyCellFragment
+CellInfo cellInfoFragment: ...flairCellFragment
+CellInfo cellInfoFragment: ...fullViewVideoCellFragment
+CellInfo cellInfoFragment: ...galleryCellFragment
+CellInfo cellInfoFragment: ...galleryWithLinkFooterCellFragment
+CellInfo cellInfoFragment: ...imageCellFragment
+CellInfo cellInfoFragment: ...indicatorsCellFragment
+CellInfo cellInfoFragment: ...legacyVideoCellFragment
+CellInfo cellInfoFragment: ...linkCellFragment
+CellInfo cellInfoFragment: ...marginCellFragment
+CellInfo cellInfoFragment: ...merchandisingUnitCellFragment
+CellInfo cellInfoFragment: ...metadataCellFragment
+CellInfo cellInfoFragment: ...metricCellFragment
+CellInfo cellInfoFragment: ...moderatorActionCellFragment
+CellInfo cellInfoFragment: ...newsMetadataCellFragment
+CellInfo cellInfoFragment: ...newsProfileMetadataCellFragment
+CellInfo cellInfoFragment: ...nudgeCrossPostCellFragment @include(if:$includeProfileFeedElements)
+CellInfo cellInfoFragment: ...pinnedPostHeadersCell
+CellInfo cellInfoFragment: ...pinnedPostTitleCell
+CellInfo cellInfoFragment: ...pinnedPostTitleWithThumbnailCell
+CellInfo cellInfoFragment: ...pollPostComponentFragment @include(if:$includePollsInFeeds)
+CellInfo cellInfoFragment: ...postRecoveryElementCellFragment @include(if:$includeProfileFeedElements)
+CellInfo cellInfoFragment: ...postStatsCellFragment @include(if:$includePostStatsCell)
+CellInfo cellInfoFragment: ...postStatsUnavailableCellFragment @include(if:$includePostStatsCell)
+CellInfo cellInfoFragment: ...previewTextCellFragment
+CellInfo cellInfoFragment: ...recommendationContextCellFragment
+CellInfo cellInfoFragment: ...richtextRecommendationContextCellFragment
+CellInfo cellInfoFragment: ...titleCellFragment
+CellInfo cellInfoFragment: ...titleWithThumbnailCellFragment
+CellInfo cellInfoFragment: ...titleWithThumbnailCollapsedCellFragment
+CellInfo cellInfoFragment: ...youtubeCellFragment
+CellInfo crosspostCellInfoFragment: ...crosspostCellFragment
+ConversationAdFeedUnit conversationAdFeedUnitFragment: ad
+ConversationAdFeedUnit conversationAdFeedUnitFragment: ad > ...conversationAdFragment
+ConversationAdFeedUnit conversationAdFeedUnitFragment: id
+ConversationAdFeedUnit conversationAdFeedUnitFragment: telemetryInfo
+ConversationAdFeedUnit conversationAdFeedUnitFragment: telemetryInfo > nextCommentIDs
+ConversationAdFeedUnit conversationAdFeedUnitFragment: telemetryInfo > previousCommentIDs
+CrossPostCell crosspostCellFragment: id
+CrossPostCell crosspostCellFragment: innerPost
+CrossPostCell crosspostCellFragment: innerPost > ...cellGroupInnerFragment
+CrossPostCell crosspostCellFragment: innerPostType @include(if:$includeRepostInnerPostType)
+FeedElement feedElementFragment: ...amaCarouselFeedUnitFragment
+FeedElement feedElementFragment: <CardPostCommunityRecommendationsFeedUnit> > ...cardPostCommunityRecommendationsFeedUnitFragment @include(if:$includeCommunityRecommendations)
+FeedElement feedElementFragment: <CardPostCommunityRecommendationsFeedUnit> @include(if:$includeCommunityRecommendations)
+FeedElement feedElementFragment: <CarouselCommunityRecommendationsFeedUnit> > ...carouselCommunityRecommendationsFeedUnitFragment @include(if:$includeCarouselCommunityRecommendations)
+FeedElement feedElementFragment: <CarouselCommunityRecommendationsFeedUnit> @include(if:$includeCarouselCommunityRecommendations)
+FeedElement feedElementFragment: <CellGroup>
+FeedElement feedElementFragment: <CellGroup> > ...cellGroupFragment
+FeedElement feedElementFragment: <CompactPostCommunityRecommendationsFeedUnit> > ...compactPostCommunityRecommendationsFeedUnitFragment @include(if:$includeCommunityRecommendations)
+FeedElement feedElementFragment: <CompactPostCommunityRecommendationsFeedUnit> @include(if:$includeCommunityRecommendations)
+FeedElement feedElementFragment: <ContentForwardCommunityRecommendationsFeedUnit> > ...contentForwardCommunityRecommendationsFeedUnitFragment @include(if:$includeContentForwardCommunityRecommendations)
+FeedElement feedElementFragment: <ContentForwardCommunityRecommendationsFeedUnit> @include(if:$includeContentForwardCommunityRecommendations)
+FeedElement feedElementFragment: <ListStyleCommunityRecommendationsFeedUnit> > ...listStyleCommunityRecommendationsFeedUnitFragment @include(if:$includeCommunityRecommendations)
+FeedElement feedElementFragment: <ListStyleCommunityRecommendationsFeedUnit> @include(if:$includeCommunityRecommendations)
+FeedElement feedElementFragment: <OnboardingEntrypointFeedUnit> > ...onboardingEntrypointFeedUnitFragment @include(if:$includeOnboardingFeedUnit)
+FeedElement feedElementFragment: <OnboardingEntrypointFeedUnit> @include(if:$includeOnboardingFeedUnit)
+FeedElement feedElementFragment: <PostCarousel>
+FeedElement feedElementFragment: <PostCarousel> > ...PostCarouselFragment @include(if:$includePostCarousel)
+FeedElement feedElementFragment: <PostCarousel> > ...VideoRecommendationsCarouselFragment @include(if:$includeVideoRecommendationsCarousel)
+FeedElement feedElementFragment: <PostCarousel> > type
+FeedElement feedElementFragment: <PostPreviewComponent> > ...postPreviewComponentFragment @include(if:$includePostPreviewComponent)
+FeedElement feedElementFragment: <PostPreviewComponent> @include(if:$includePostPreviewComponent)
+FeedElement feedElementFragment: <ProfileFeedUpsellUnit> > ...profileFeedUpsellUnitFragment @include(if:$includeProfileFeedUpsellUnit)
+FeedElement feedElementFragment: <ProfileFeedUpsellUnit> @include(if:$includeProfileFeedUpsellUnit)
+FeedElement feedElementFragment: <ProfileVisibilityBannerUnit>
+FeedElement feedElementFragment: <ProfileVisibilityBannerUnit> > ...profileVisibilityBannerUnitFragment
+FeedElement feedElementFragment: <ProfilesNoContentBannerUnit> > ...profilesNoContentBannerUnitFragment @include(if:$includeProfileFeedElements)
+FeedElement feedElementFragment: <ProfilesNoContentBannerUnit> @include(if:$includeProfileFeedElements)
+FeedElement feedElementFragment: <RankedCommunityFeedElement> > ...rankedCommunityFeedElementFragment @include(if:$includeRankedCommunityFeedElement)
+FeedElement feedElementFragment: <RankedCommunityFeedElement> @include(if:$includeRankedCommunityFeedElement)
+FeedElement feedElementFragment: <SearchTrendingFeedUnit> > ...searchTrendingFeedUnitFragment @include(if:$includeSearchTrendingFeedUnit)
+FeedElement feedElementFragment: <SearchTrendingFeedUnit> @include(if:$includeSearchTrendingFeedUnit)
+FeedElement feedElementFragment: <TaxonomyTopicsFeedElement> > ...taxonomyTopicsFeedElementFragment @include(if:$includeTaxonomyTopicsFeedElement)
+FeedElement feedElementFragment: <TaxonomyTopicsFeedElement> @include(if:$includeTaxonomyTopicsFeedElement)
+FeedElement feedElementFragment: <TopicGroupFeedElement> > ...topicGroupFeedElementFragment @include(if:$includeTopicGroupFeedElement)
+FeedElement feedElementFragment: <TopicGroupFeedElement> @include(if:$includeTopicGroupFeedElement)
+FeedElement feedElementFragment: id
+FeedElement postPerspectivesComponentFragment: ...feedElementFragment
+FeedElement postPerspectivesComponentFragment: <CommentPreviewFeedUnit>
+FeedElement postPerspectivesComponentFragment: <CommentPreviewFeedUnit> > ...commentPreviewFeedUnitFragment
+FeedElement postPerspectivesComponentFragment: <CompactPostPreviewComponent>
+FeedElement postPerspectivesComponentFragment: <CompactPostPreviewComponent> > post
+FeedElement postPerspectivesComponentFragment: <CompactPostPreviewComponent> > post > ...ppuCompactPostFragment
+FeedElementConnection feedElementConnectionFragment: edges
+FeedElementConnection feedElementConnectionFragment: edges > node
+FeedElementConnection feedElementConnectionFragment: edges > node > ...postFragment
+FeedElementConnection feedElementConnectionFragment: edges > node > ...postRecommendationFragment
+FeedElementConnection feedElementConnectionFragment: pageInfo
+FeedElementConnection feedElementConnectionFragment: pageInfo > ...pageInfoFragment
+FeedElementConnection feedElementsFragment: ...feedPageFragment
+FeedElementConnection feedElementsFragment: dist
+FeedElementConnection feedElementsFragment: edges
+FeedElementConnection feedElementsFragment: edges > ...feedElementEdgeFragment
+FeedElementConnection feedElementsFragment: pageInfo
+FeedElementConnection feedElementsFragment: pageInfo > ...pageInfoFragment
+FeedElementConnection feedElementsFragment: prefetchContext
+FeedElementConnection feedElementsFragment: prefetchContext > prefetchDistance
+FeedElementConnection feedPageFragment: dist
+FeedElementConnection feedPageFragment: edges
+FeedElementConnection feedPageFragment: edges > node
+FeedElementConnection feedPageFragment: edges > node > id
+FeedElementConnection feedPageFragment: pageInfo
+FeedElementConnection feedPageFragment: pageInfo > ...pageInfoFragment
+FeedElementConnection feedPageFragment: prefetchContext
+FeedElementConnection feedPageFragment: prefetchContext > prefetchDistance
+FeedElementConnection feedPageFragment: rankingDebugMetadata > ...rankingDebugMetadataFragment @include(if:$includeRankingMetadata)
+FeedElementConnection feedPageFragment: rankingDebugMetadata @include(if:$includeRankingMetadata)
+FeedElementConnection gamesFeedElementsFragment: ...feedElementsFragment
+FeedElementConnection gamesFeedElementsFragment: edges
+FeedElementConnection gamesFeedElementsFragment: edges > node
+FeedElementConnection gamesFeedElementsFragment: edges > node > <CellGroup>
+FeedElementConnection gamesFeedElementsFragment: edges > node > <CellGroup> > cells
+FeedElementConnection gamesFeedElementsFragment: edges > node > <CellGroup> > cells > <CustomPostCell>
+FeedElementConnection gamesFeedElementsFragment: edges > node > <CellGroup> > cells > <CustomPostCell> > ...recentGamePostFragment @include(if:$includeRecentGames)
+FeedElementConnection gamesFeedElementsFragment: edges > node > <DevvitDailyCollectionFeedElement>
+FeedElementConnection gamesFeedElementsFragment: edges > node > <DevvitDailyCollectionFeedElement> > ...devvitDailyCollectionFeedElementFragment @include(if:$includeDailyHabit)
+FeedElementConnection gamesFeedElementsFragment: edges > node > <DevvitRecentlyPlayedFeedElement>
+FeedElementConnection gamesFeedElementsFragment: edges > node > <DevvitRecentlyPlayedFeedElement> > ...devvitRecentlyPlayedFeedElementFragment @include(if:$includeRecentGames)
+FeedElementConnection optimizedFeedElementConnectionFragment: edges
+FeedElementConnection optimizedFeedElementConnectionFragment: edges > node
+FeedElementConnection optimizedFeedElementConnectionFragment: edges > node > ...optimizedPostFragment
+FeedElementConnection optimizedFeedElementConnectionFragment: pageInfo
+FeedElementConnection optimizedFeedElementConnectionFragment: pageInfo > ...pageInfoFragment
+FeedElementEdge feedElementEdgeFragment: node
+FeedElementEdge feedElementEdgeFragment: node > ...feedElementFragment
+PostPreviewComponent postPreviewComponentFragment: id
+PostPreviewComponent postPreviewComponentFragment: post
+PostPreviewComponent postPreviewComponentFragment: post > ...postPreviewAIInfoFragment @include(if:$includeFeedAIInfo)
+PostPreviewComponent postPreviewComponentFragment: post > ...postPreviewAwardInfoFragment
+PostPreviewComponent postPreviewComponentFragment: post > ...postPreviewContentFragment @include(if:$includePostPreviewContent)
+PostPreviewComponent postPreviewComponentFragment: post > ...postPreviewFlairInfoFragment
+PostPreviewComponent postPreviewComponentFragment: post > ...postPreviewModerationInfoFragment
+PostPreviewComponent postPreviewComponentFragment: post > ...postPreviewShareInfoFragment
+PostPreviewComponent postPreviewComponentFragment: post > ...postPreviewStatusIndicatorsFragment
+PostPreviewComponent postPreviewComponentFragment: post > ...postPreviewTrendInfoFragment @include(if:$includePostPreviewTrend)
+PostPreviewComponent postPreviewComponentFragment: post > ...postPreviewVoteInfoFragment
+PostPreviewComponent postPreviewComponentFragment: post > <Post>
+PostPreviewComponent postPreviewComponentFragment: post > <Post> > ...postPreviewActionHandlerInfoFragment
+PostPreviewComponent postPreviewComponentFragment: post > <Post> > ...postPreviewAuthorInfoFragment
+PostPreviewComponent postPreviewComponentFragment: post > <Post> > ...postPreviewEventInfoFragment
+PostPreviewComponent postPreviewComponentFragment: post > <Post> > ...postPreviewTranslationInfoFragment
+PostPreviewComponent postPreviewComponentFragment: post > <Post> > content
+PostPreviewComponent postPreviewComponentFragment: post > <Post> > content > markdown
+PostPreviewComponent postPreviewComponentFragment: post > <Post> > content > previewText=preview
+PostPreviewComponent postPreviewComponentFragment: post > <Post> > content > richtext
+PostPreviewComponent postPreviewComponentFragment: post > <ProfilePost>
+PostPreviewComponent postPreviewComponentFragment: post > <ProfilePost> > ...postPreviewProfileInfoFragment
+PostPreviewComponent postPreviewComponentFragment: post > <SubredditPost>
+PostPreviewComponent postPreviewComponentFragment: post > <SubredditPost> > ...postPreviewCommentCtaInfoFragment @include(if:$includeCommentCTA)
+PostPreviewComponent postPreviewComponentFragment: post > <SubredditPost> > ...postPreviewSubredditInfoFragment
+PostPreviewComponent postPreviewComponentFragment: post > createdAt
+PostPreviewComponent postPreviewComponentFragment: post > crosspostCount @include(if:$includeRepostCount)
+PostPreviewComponent postPreviewComponentFragment: post > isVisited
+PostPreviewComponent postPreviewComponentFragment: post > title
+PostPreviewComponent postPreviewComponentFragment: rankingDebugMetadata > ...rankingDebugMetadataFragment @include(if:$includeRankingMetadata)
+PostPreviewComponent postPreviewComponentFragment: rankingDebugMetadata @include(if:$includeRankingMetadata)
+SearchAdPost searchAdPostFragment: id
+SearchAdPost searchAdPostFragment: post
+SearchAdPost searchAdPostFragment: post > ...searchAdPostAdPostFragment
+SearchAdPost searchAdPostFragment: searchAdPostBehaviors=behaviors
+SearchAdPost searchAdPostFragment: searchAdPostBehaviors=behaviors > default
+SearchAdPost searchAdPostFragment: searchAdPostBehaviors=behaviors > default > id
+SearchAdPost searchAdPostFragment: searchAdPostBehaviors=behaviors > default > telemetry
+SearchAdPost searchAdPostFragment: searchAdPostBehaviors=behaviors > default > telemetry > ...searchElementTelemetryFragment
+SearchAdPost searchAdPostFragment: telemetry
+SearchAdPost searchAdPostFragment: telemetry > ...searchElementTelemetryFragment
+SearchComponent searchComponentFragment: ...searchAdPostFragment @include(if:$includeSearchAds)
+SearchComponent searchComponentFragment: ...searchAnswersPreviewFragment
+SearchComponent searchComponentFragment: ...searchAnswersStreamingPreviewFragment
+SearchComponent searchComponentFragment: ...searchBannerFragment
+SearchComponent searchComponentFragment: ...searchContributorInspirationPromptFragment @include(if:$includeContributorInspirationFragment)
+SearchComponent searchComponentFragment: ...searchErrorMessageFragment
+SearchComponent searchComponentFragment: ...searchFeaturedCommentsPostFragment
+SearchComponent searchComponentFragment: ...searchGridFragment
+SearchComponent searchComponentFragment: ...searchInFeedSurveyUnitFragment
+SearchComponent searchComponentFragment: ...searchListFragment
+SearchComponent searchComponentFragment: ...searchLocalizedResultsFragment
+SearchComponent searchComponentFragment: ...searchRowComponentFragment
+SearchComponent searchComponentFragment: ...searchScopeSwitcherFragment
+SearchComponent searchComponentFragment: ...searchSpellCorrectionAppliedFragment
+SearchComponent searchComponentFragment: ...searchSpellcheckFragment
+SearchComponent searchComponentFragment: ...searchSportsScoreFragment
+SearchGridComponent searchGridFragment: behaviors
+SearchGridComponent searchGridFragment: behaviors > header
+SearchGridComponent searchGridFragment: behaviors > header > ...searchFilterBehaviorFragment
+SearchGridComponent searchGridFragment: children
+SearchGridComponent searchGridFragment: children > ...searchMediaPostComponentFragment
+SearchGridComponent searchGridFragment: id
+SearchGridComponent searchGridFragment: presentation
+SearchGridComponent searchGridFragment: presentation > <SearchGridComponentDefaultPresentation>
+SearchGridComponent searchGridFragment: presentation > <SearchGridComponentDefaultPresentation> > isDefaultPresentation
+SearchGridComponent searchGridFragment: presentation > <SearchGridComponentHeaderPresentation>
+SearchGridComponent searchGridFragment: presentation > <SearchGridComponentHeaderPresentation> > ctaText
+SearchGridComponent searchGridFragment: presentation > <SearchGridComponentHeaderPresentation> > headerText
+SearchListComponent searchListFragment: behaviors
+SearchListComponent searchListFragment: behaviors > header
+SearchListComponent searchListFragment: behaviors > header > ...searchFilterBehaviorFragment
+SearchListComponent searchListFragment: children
+SearchListComponent searchListFragment: children > ...searchAdPostFragment @include(if:$includeSearchAds)
+SearchListComponent searchListFragment: children > ...searchAuthorComponentFragment
+SearchListComponent searchListFragment: children > ...searchCommentComponentFragment
+SearchListComponent searchListFragment: children > ...searchCommunityComponentFragment
+SearchListComponent searchListFragment: children > ...searchCrosspostComponentFragment
+SearchListComponent searchListFragment: children > ...searchCrosspostWithContentPreviewComponentFragment
+SearchListComponent searchListFragment: children > ...searchPostComponentFragment
+SearchListComponent searchListFragment: children > ...searchPostWithContentPreviewComponentFragment
+SearchListComponent searchListFragment: children > ...searchTrendingPostComponentFragment
+SearchListComponent searchListFragment: presentation
+SearchListComponent searchListFragment: presentation > <SearchListComponentDefaultPresentation>
+SearchListComponent searchListFragment: presentation > <SearchListComponentDefaultPresentation> > isDefaultPresentation
+SearchListComponent searchListFragment: presentation > <SearchListComponentHeaderPresentation>
+SearchListComponent searchListFragment: presentation > <SearchListComponentHeaderPresentation> > headerText
+SearchListComponent searchListFragment: presentation > <SearchListComponentHeaderPresentation> > trailingIconIndicator
+SearchMainConnection searchMainSectionFragment: edges
+SearchMainConnection searchMainSectionFragment: edges > node
+SearchMainConnection searchMainSectionFragment: edges > node > ...searchComponentFragment
+SearchMainConnection searchMainSectionFragment: pageInfo
+SearchMainConnection searchMainSectionFragment: pageInfo > endCursor
+SearchMainConnection searchMainSectionFragment: pageInfo > hasNextPage
+SearchPost searchPostComponentFragment: behaviors
+SearchPost searchPostComponentFragment: behaviors > community
+SearchPost searchPostComponentFragment: behaviors > community > ...searchPostBehaviorFragment
+SearchPost searchPostComponentFragment: behaviors > default
+SearchPost searchPostComponentFragment: behaviors > default > ...searchPostBehaviorFragment
+SearchPost searchPostComponentFragment: behaviors > profile
+SearchPost searchPostComponentFragment: behaviors > profile > ...searchPostBehaviorFragment
+SearchPost searchPostComponentFragment: behaviors > thumbnail
+SearchPost searchPostComponentFragment: behaviors > thumbnail > ...searchPostBehaviorFragment
+SearchPost searchPostComponentFragment: id
+SearchPost searchPostComponentFragment: post
+SearchPost searchPostComponentFragment: post > ...postModelFragment
+SearchPost searchPostComponentFragment: presentation
+SearchPost searchPostComponentFragment: presentation > <SearchFeedPostPresentation>
+SearchPost searchPostComponentFragment: presentation > <SearchFeedPostPresentation> > cellGroup
+SearchPost searchPostComponentFragment: presentation > <SearchFeedPostPresentation> > cellGroup > ...cellGroupFragment
+SearchPost searchPostComponentFragment: presentation > <SearchPostCardPresentation>
+SearchPost searchPostComponentFragment: presentation > <SearchPostCardPresentation> > displayTags
+SearchPost searchPostComponentFragment: presentation > <SearchPostCardPresentation> > mediaAspectRatio
+SearchPost searchPostComponentFragment: presentation > <SearchPostCardPresentation> > mediaAspectRatio > ...searchMediaAspectRatioFragment
+SearchPost searchPostComponentFragment: presentation > <SearchPostDefaultPresentation>
+SearchPost searchPostComponentFragment: presentation > <SearchPostDefaultPresentation> > displayTags
+SearchPost searchPostComponentFragment: telemetry
+SearchPost searchPostComponentFragment: telemetry > ...searchElementTelemetryFragment

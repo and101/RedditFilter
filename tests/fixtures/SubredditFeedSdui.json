@@ -1,0 +1,421 @@
+{
+ "data": {
+  "subredditV3": {
+   "__typename": "SDSubredditFeed",
+   "elements": {
+    "__typename": "FeedElementConnection",
+    "dist": 1,
+    "edges": [
+     {
+      "__typename": "FeedElementEdge",
+      "node": {
+       "__typename": "CellGroup",
+       "adPayload": null,
+       "aiDisclosure": null,
+       "cells": [
+        {
+         "__typename": "ClassicCell",
+         "flairCell": null,
+         "id": "id100",
+         "indicatorsCell": null,
+         "metadataCell": {
+          "__typename": "ClassicMetadataCell",
+          "color": {
+           "__typename": "NativeCellColor",
+           "name": "text"
+          },
+          "createdAt": "text",
+          "detailsLink": "text",
+          "iconPath": "https://example.com/",
+          "id": "id101",
+          "statusIndicators": [
+           "text"
+          ],
+          "subredditName": "text"
+         },
+         "previewTextCell": {
+          "__typename": "PreviewTextCell",
+          "id": "id102",
+          "isRead": false,
+          "numberOfLines": 1,
+          "text": "text"
+         },
+         "thumbnailCell": {
+          "__typename": "ClassicThumbnailCell",
+          "attributionDomain": null,
+          "authorInfo": null,
+          "id": "id103",
+          "image": null,
+          "isVideo": false,
+          "path": "https://example.com/",
+          "size": "text"
+         },
+         "titleCell": {
+          "__typename": "TitleCell",
+          "id": "id104",
+          "isVisited": false,
+          "title": "text"
+         }
+        },
+        {
+         "__typename": "ActionCell",
+         "commentCount": 1,
+         "id": "id105",
+         "isCrosspostable": false,
+         "isInteractionDisabled": false,
+         "isModeratable": false,
+         "isScoreHidden": false,
+         "isTranslatable": false,
+         "isTranslated": false,
+         "repostCount": null,
+         "score": 1,
+         "shareCount": 1,
+         "shareImagePath": null,
+         "translatedLanguage": null,
+         "voteState": "text"
+        },
+        {
+         "__typename": "MarginCell",
+         "color": {
+          "__typename": "NativeCellColor",
+          "name": "text"
+         },
+         "height": 1,
+         "id": "id106"
+        }
+       ],
+       "groupId": "t3_107",
+       "id": "id108",
+       "recommendationContext": null
+      }
+     },
+     {
+      "__typename": "FeedElementEdge",
+      "node": {
+       "__typename": "CellGroup",
+       "adPayload": null,
+       "aiDisclosure": null,
+       "cells": [
+        {
+         "__typename": "ClassicCell",
+         "flairCell": {
+          "__typename": "FlairCell",
+          "flair": {
+           "__typename": "PostFlair",
+           "richtext": null,
+           "template": {
+            "__typename": "FlairTemplate",
+            "backgroundColor": "text",
+            "textColor": "text",
+            "type": "text"
+           },
+           "text": "text",
+           "textColor": "text",
+           "type": "text"
+          },
+          "id": "id109"
+         },
+         "id": "id110",
+         "indicatorsCell": {
+          "__typename": "IndicatorsCell",
+          "appCategories": null,
+          "id": "id111",
+          "indicators": [
+           "SPOILER"
+          ],
+          "isShowDevPlatformPrivacyLink": false
+         },
+         "metadataCell": {
+          "__typename": "ClassicMetadataCell",
+          "color": {
+           "__typename": "NativeCellColor",
+           "name": "text"
+          },
+          "createdAt": "text",
+          "detailsLink": "text",
+          "iconPath": "https://example.com/",
+          "id": "id112",
+          "statusIndicators": [
+           "text"
+          ],
+          "subredditName": "text"
+         },
+         "previewTextCell": null,
+         "thumbnailCell": {
+          "__typename": "ClassicThumbnailCell",
+          "attributionDomain": null,
+          "authorInfo": null,
+          "id": "id113",
+          "image": null,
+          "isVideo": false,
+          "path": "https://example.com/",
+          "size": "text"
+         },
+         "titleCell": {
+          "__typename": "TitleCell",
+          "id": "id114",
+          "isVisited": false,
+          "title": "text"
+         }
+        },
+        {
+         "__typename": "ActionCell",
+         "commentCount": 1,
+         "id": "id115",
+         "isCrosspostable": false,
+         "isInteractionDisabled": false,
+         "isModeratable": false,
+         "isScoreHidden": false,
+         "isTranslatable": false,
+         "isTranslated": false,
+         "repostCount": null,
+         "score": 1,
+         "shareCount": 1,
+         "shareImagePath": null,
+         "translatedLanguage": null,
+         "voteState": "text"
+        },
+        {
+         "__typename": "MarginCell",
+         "color": {
+          "__typename": "NativeCellColor",
+          "name": "text"
+         },
+         "height": 1,
+         "id": "id116"
+        }
+       ],
+       "groupId": "t3_117",
+       "id": "id118",
+       "recommendationContext": null
+      }
+     },
+     {
+      "__typename": "FeedElementEdge",
+      "node": {
+       "__typename": "CellGroup",
+       "adPayload": {
+        "__typename": "AdPayload",
+        "adEvents": [
+         {
+          "__typename": "AdEvent",
+          "encryptedTrackingId": null,
+          "type": "IMPRESSION",
+          "url": "https://example.com/"
+         },
+         {
+          "__typename": "AdEvent",
+          "encryptedTrackingId": null,
+          "type": "VIDEO_VIEWABLE_IMPRESSION",
+          "url": "https://example.com/"
+         }
+        ],
+        "adInstanceId": "text",
+        "adLinkUrl": null,
+        "adNetworkData": null,
+        "adTakeover": null,
+        "adUrl": {
+         "__typename": "AdURL",
+         "adBrowserDestination": "text",
+         "isMmpLink": false,
+         "isPrefetchEligible": false,
+         "url": null
+        },
+        "adUserTargeting": {
+         "__typename": "AdUserTargeting",
+         "adTransparencyEncodedData": "text"
+        },
+        "additionalEventMetadata": [],
+        "adsCorrelationId": "text",
+        "appStoreData": null,
+        "callToAction": null,
+        "campaign": {
+         "__typename": "AdCampaign",
+         "id": "id119"
+        },
+        "collectionsHeroCard": null,
+        "domain": null,
+        "encryptedTrackingPayload": "text",
+        "excludedExperiments": null,
+        "gallery": null,
+        "galleryLayout": null,
+        "hasCsa": false,
+        "impressionId": "text",
+        "isBlankAd": false,
+        "isCreatedFromAdsUi": true,
+        "isInAppBrowserOverride": false,
+        "isSurveyAd": false,
+        "isVideo": false,
+        "overlayData": null,
+        "promoLayout": "text"
+       },
+       "aiDisclosure": null,
+       "cells": [
+        {
+         "__typename": "ClassicCell",
+         "flairCell": null,
+         "id": "id120",
+         "indicatorsCell": null,
+         "metadataCell": {
+          "__typename": "ClassicMetadataCell",
+          "color": {
+           "__typename": "NativeCellColor",
+           "name": "text"
+          },
+          "createdAt": "text",
+          "detailsLink": "text",
+          "iconPath": "https://example.com/",
+          "id": "id121",
+          "statusIndicators": [],
+          "subredditName": "text"
+         },
+         "previewTextCell": {
+          "__typename": "PreviewTextCell",
+          "id": "id122",
+          "isRead": false,
+          "numberOfLines": 1,
+          "text": "text"
+         },
+         "thumbnailCell": {
+          "__typename": "ClassicThumbnailCell",
+          "attributionDomain": null,
+          "authorInfo": null,
+          "id": "id123",
+          "image": {
+           "__typename": "CellMediaSource",
+           "isObfuscated": false,
+           "obfuscatedPath": null,
+           "path": "https://example.com/",
+           "size": {
+            "__typename": "Dimensions",
+            "height": 1,
+            "width": 1
+           }
+          },
+          "isVideo": false,
+          "path": "https://example.com/",
+          "size": "text"
+         },
+         "titleCell": {
+          "__typename": "TitleCell",
+          "id": "id124",
+          "isVisited": false,
+          "title": "text"
+         }
+        },
+        {
+         "__typename": "ActionCell",
+         "commentCount": 1,
+         "id": "id125",
+         "isCrosspostable": false,
+         "isInteractionDisabled": false,
+         "isModeratable": false,
+         "isScoreHidden": true,
+         "isTranslatable": false,
+         "isTranslated": false,
+         "repostCount": null,
+         "score": 1,
+         "shareCount": null,
+         "shareImagePath": "https://example.com/",
+         "translatedLanguage": null,
+         "voteState": "text"
+        },
+        {
+         "__typename": "MarginCell",
+         "color": {
+          "__typename": "NativeCellColor",
+          "name": "text"
+         },
+         "height": 1,
+         "id": "id126"
+        }
+       ],
+       "groupId": "t3_127",
+       "id": "id128",
+       "recommendationContext": null
+      }
+     },
+     {
+      "__typename": "FeedElementEdge",
+      "node": {
+       "__typename": "CarouselCommunityRecommendationsFeedUnit",
+       "communityRecommendations": [
+        {
+         "__typename": "CarouselCommunityRecommendation",
+         "recommendationSource": "text",
+         "subreddit": {
+          "__typename": "Subreddit",
+          "communityStats": {
+           "__typename": "SubredditStats",
+           "weeklyActiveUsersCount": 1
+          },
+          "id": "t5_129",
+          "isSubscribed": false,
+          "name": "text",
+          "publicDescriptionText": "text",
+          "styles": {
+           "__typename": "SubredditStyles",
+           "icon": "https://example.com/",
+           "legacyIcon": null,
+           "primaryColor": "text"
+          },
+          "subscribersCount": 1,
+          "taxonomy": {
+           "__typename": "Taxonomy",
+           "generatedDescription": "text"
+          }
+         }
+        },
+        {
+         "__typename": "CarouselCommunityRecommendation",
+         "recommendationSource": "text",
+         "subreddit": {
+          "__typename": "Subreddit",
+          "communityStats": {
+           "__typename": "SubredditStats",
+           "weeklyActiveUsersCount": 1
+          },
+          "id": "t5_130",
+          "isSubscribed": false,
+          "name": "text",
+          "publicDescriptionText": "text",
+          "styles": {
+           "__typename": "SubredditStyles",
+           "icon": "https://example.com/",
+           "legacyIcon": null,
+           "primaryColor": null
+          },
+          "subscribersCount": 1,
+          "taxonomy": {
+           "__typename": "Taxonomy",
+           "generatedDescription": "text"
+          }
+         }
+        }
+       ],
+       "destination": {
+        "__typename": "UnavailableDestination",
+        "reason": "text"
+       },
+       "id": "id131",
+       "intro": null,
+       "isVertical": false,
+       "model": "text",
+       "title": "text",
+       "version": "text"
+      }
+     }
+    ],
+    "pageInfo": {
+     "__typename": "PageInfo",
+     "endCursor": "text",
+     "hasNextPage": true
+    },
+    "prefetchContext": {
+     "__typename": "PrefetchContext",
+     "prefetchDistance": 1
+    }
+   }
+  }
+ }
+}
