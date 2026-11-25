@@ -56,6 +56,16 @@ int main(void) {
     Check([searchEdges[0][@"node"][@"id"] isEqual:@"sp"], @"Keep search results");
     Check([searchEdges[1][@"node"][@"children"][@"edges"] count] == 0, @"Remove nested search ads");
     Check([Filter(search, @"SearchDynamic", off) isEqual:search], @"Promoted off leaves search ads");
+    // Reddit 2026.46 puts most results, ads included, in a list's children.
+    NSDictionary *searchList = @{@"data": @{@"search": @{@"dynamic": @{@"components": @{@"main": @{@"edges": @[
+        @{@"node": @{@"__typename": @"SearchListComponent", @"presentation": @{@"isDefaultPresentation": @NO},
+                     @"children": @[searchPost[@"node"], searchAd[@"node"], @{@"__typename": @"SearchCommunity", @"id": @"sc"}]}},
+        @{@"node": @{@"__typename": @"SearchRowComponent", @"children": @[@{@"__typename": @"SearchChip", @"id": @"chip"}]}}]}}}}}};
+    NSArray *lists = Filter(searchList, @"SearchDynamic", ads)[@"data"][@"search"][@"dynamic"][@"components"][@"main"][@"edges"];
+    Check([[lists[0][@"node"][@"children"] valueForKey:@"id"] isEqual:@[@"sp", @"sc"]], @"Remove ads from a search list, keep the rest in order");
+    Check([lists[0][@"node"][@"presentation"] isEqual:@{@"isDefaultPresentation": @NO}], @"Keep the search list itself");
+    Check([lists[1] isEqual:searchList[@"data"][@"search"][@"dynamic"][@"components"][@"main"][@"edges"][1]], @"Keep other search lists");
+    Check([Filter(searchList, @"SearchDynamic", off) isEqual:searchList], @"Promoted off leaves ads in a search list");
 
     // Block trackers.
     NSURL *(^U)(NSString *) = ^(NSString *s) { return [NSURL URLWithString:s]; };

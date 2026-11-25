@@ -22,3 +22,8 @@ xcrun --sdk macosx clang -fobjc-arc -framework Foundation -I. \
 xcrun --sdk macosx clang -fobjc-arc -framework Foundation -I. \
   SavedPosts.m FeedCache.m tests/SavedPostsTests.m -o "$test_dir/SavedPostsTests"
 "$test_dir/SavedPostsTests"
+
+# Real responses, made small and anonymous. The number is how many ads they hold.
+replay_log="$test_dir/replay.log"
+tests/replay.sh tests/fixtures 9 >"$replay_log" || { cat "$replay_log"; exit 1; }
+tail -1 "$replay_log"

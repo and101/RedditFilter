@@ -1,0 +1,492 @@
+{
+ "data": {
+  "newsV3": {
+   "__typename": "SDNewsFeed",
+   "elements": {
+    "__typename": "FeedElementConnection",
+    "dist": 1,
+    "pageInfo": {
+     "__typename": "PageInfo",
+     "hasNextPage": true,
+     "endCursor": "text"
+    },
+    "edges": [
+     {
+      "__typename": "FeedElementEdge",
+      "node": {
+       "__typename": "CellGroup",
+       "id": "id145",
+       "cells": [
+        {
+         "__typename": "ClassicCell",
+         "id": "id146",
+         "titleCell": {
+          "__typename": "TitleCell",
+          "id": "id147",
+          "title": "text",
+          "isVisited": false
+         },
+         "previewTextCell": {
+          "__typename": "PreviewTextCell",
+          "id": "id148",
+          "text": "text",
+          "numberOfLines": 1,
+          "isRead": false
+         },
+         "indicatorsCell": null,
+         "metadataCell": {
+          "__typename": "ClassicMetadataCell",
+          "id": "id149",
+          "createdAt": "text",
+          "subredditName": "text",
+          "color": {
+           "__typename": "NativeCellColor",
+           "name": "text"
+          },
+          "iconPath": "https://example.com/",
+          "detailsLink": "text",
+          "statusIndicators": []
+         },
+         "thumbnailCell": {
+          "__typename": "ClassicThumbnailCell",
+          "id": "id150",
+          "image": {
+           "__typename": "CellMediaSource",
+           "path": "https://example.com/",
+           "isObfuscated": false,
+           "obfuscatedPath": null,
+           "size": {
+            "__typename": "Dimensions",
+            "width": 1,
+            "height": 1
+           }
+          },
+          "isVideo": false,
+          "attributionDomain": null,
+          "size": "text",
+          "path": "https://example.com/",
+          "authorInfo": null
+         },
+         "flairCell": null
+        },
+        {
+         "__typename": "ActionCell",
+         "id": "id151",
+         "isScoreHidden": true,
+         "isModeratable": false,
+         "commentCount": 1,
+         "shareImagePath": "https://example.com/",
+         "score": 1,
+         "voteState": "text",
+         "shareCount": null,
+         "isTranslatable": false,
+         "isTranslated": false,
+         "translatedLanguage": null,
+         "isInteractionDisabled": false,
+         "repostCount": null,
+         "isCrosspostable": false
+        },
+        {
+         "__typename": "MarginCell",
+         "id": "id152",
+         "height": 1,
+         "color": {
+          "__typename": "NativeCellColor",
+          "name": "text"
+         }
+        }
+       ],
+       "groupId": "t3_153",
+       "adPayload": {
+        "__typename": "AdPayload",
+        "isBlankAd": false,
+        "isSurveyAd": false,
+        "isVideo": false,
+        "impressionId": "text",
+        "adLinkUrl": null,
+        "adUrl": {
+         "__typename": "AdURL",
+         "url": null,
+         "isMmpLink": false,
+         "adBrowserDestination": "text",
+         "isPrefetchEligible": false
+        },
+        "adEvents": [
+         {
+          "__typename": "AdEvent",
+          "type": "IMPRESSION",
+          "url": "https://example.com/",
+          "encryptedTrackingId": null
+         },
+         {
+          "__typename": "AdEvent",
+          "type": "VIDEO_VIEWABLE_IMPRESSION",
+          "url": "https://example.com/",
+          "encryptedTrackingId": null
+         }
+        ],
+        "encryptedTrackingPayload": "text",
+        "additionalEventMetadata": [],
+        "adsCorrelationId": "text",
+        "excludedExperiments": null,
+        "adNetworkData": null,
+        "appStoreData": null,
+        "promoLayout": "text",
+        "adInstanceId": "text",
+        "gallery": null,
+        "domain": null,
+        "isCreatedFromAdsUi": true,
+        "callToAction": null,
+        "campaign": {
+         "__typename": "AdCampaign",
+         "id": "id154"
+        },
+        "isInAppBrowserOverride": false,
+        "adUserTargeting": {
+         "__typename": "AdUserTargeting",
+         "adTransparencyEncodedData": "text"
+        },
+        "overlayData": null,
+        "adTakeover": null,
+        "galleryLayout": null,
+        "hasCsa": false,
+        "collectionsHeroCard": null
+       },
+       "aiDisclosure": null,
+       "recommendationContext": null
+      }
+     },
+     {
+      "__typename": "FeedElementEdge",
+      "node": {
+       "__typename": "CellGroup",
+       "id": "id155",
+       "cells": [
+        {
+         "__typename": "ClassicCell",
+         "id": "id156",
+         "titleCell": {
+          "__typename": "TitleCell",
+          "id": "id157",
+          "title": "text",
+          "isVisited": false
+         },
+         "previewTextCell": null,
+         "indicatorsCell": null,
+         "metadataCell": {
+          "__typename": "ClassicMetadataCell",
+          "id": "id158",
+          "createdAt": "text",
+          "subredditName": "text",
+          "color": {
+           "__typename": "CustomCellColor",
+           "rgbaColor": "text"
+          },
+          "iconPath": "https://example.com/",
+          "detailsLink": "text",
+          "statusIndicators": []
+         },
+         "thumbnailCell": {
+          "__typename": "ClassicThumbnailCell",
+          "id": "id159",
+          "image": {
+           "__typename": "CellMediaSource",
+           "path": "https://example.com/",
+           "isObfuscated": false,
+           "obfuscatedPath": null,
+           "size": {
+            "__typename": "Dimensions",
+            "width": 1,
+            "height": 1
+           }
+          },
+          "isVideo": false,
+          "attributionDomain": "text",
+          "size": "text",
+          "path": "https://example.com/",
+          "authorInfo": {
+           "__typename": "Redditor",
+           "profileExemptedExperiments": []
+          }
+         },
+         "flairCell": null
+        },
+        {
+         "__typename": "ActionCell",
+         "id": "id160",
+         "isScoreHidden": false,
+         "isModeratable": false,
+         "commentCount": 1,
+         "shareImagePath": "https://example.com/",
+         "score": 1,
+         "voteState": "text",
+         "shareCount": 1,
+         "isTranslatable": false,
+         "isTranslated": false,
+         "translatedLanguage": null,
+         "isInteractionDisabled": false,
+         "repostCount": 1,
+         "isCrosspostable": false
+        },
+        {
+         "__typename": "MarginCell",
+         "id": "id161",
+         "height": 1,
+         "color": {
+          "__typename": "NativeCellColor",
+          "name": "text"
+         }
+        }
+       ],
+       "groupId": "t3_162",
+       "adPayload": null,
+       "aiDisclosure": null,
+       "recommendationContext": null
+      }
+     },
+     {
+      "__typename": "FeedElementEdge",
+      "node": {
+       "__typename": "CellGroup",
+       "id": "id163",
+       "cells": [
+        {
+         "__typename": "ClassicCell",
+         "id": "id164",
+         "titleCell": {
+          "__typename": "TitleCell",
+          "id": "id165",
+          "title": "text",
+          "isVisited": false
+         },
+         "previewTextCell": null,
+         "indicatorsCell": null,
+         "metadataCell": {
+          "__typename": "ClassicMetadataCell",
+          "id": "id166",
+          "createdAt": "text",
+          "subredditName": "text",
+          "color": {
+           "__typename": "CustomCellColor",
+           "rgbaColor": "text"
+          },
+          "iconPath": "https://example.com/",
+          "detailsLink": "text",
+          "statusIndicators": []
+         },
+         "thumbnailCell": {
+          "__typename": "ClassicThumbnailCell",
+          "id": "id167",
+          "image": {
+           "__typename": "CellMediaSource",
+           "path": "https://example.com/",
+           "isObfuscated": false,
+           "obfuscatedPath": null,
+           "size": {
+            "__typename": "Dimensions",
+            "width": 1,
+            "height": 1
+           }
+          },
+          "isVideo": false,
+          "attributionDomain": "text",
+          "size": "text",
+          "path": "https://example.com/",
+          "authorInfo": {
+           "__typename": "Redditor",
+           "profileExemptedExperiments": []
+          }
+         },
+         "flairCell": null
+        },
+        {
+         "__typename": "ActionCell",
+         "id": "id168",
+         "isScoreHidden": false,
+         "isModeratable": false,
+         "commentCount": 1,
+         "shareImagePath": "https://example.com/",
+         "score": 1,
+         "voteState": "text",
+         "shareCount": 1,
+         "isTranslatable": false,
+         "isTranslated": false,
+         "translatedLanguage": null,
+         "isInteractionDisabled": false,
+         "repostCount": 1,
+         "isCrosspostable": false
+        },
+        {
+         "__typename": "MarginCell",
+         "id": "id169",
+         "height": 1,
+         "color": {
+          "__typename": "NativeCellColor",
+          "name": "text"
+         }
+        }
+       ],
+       "groupId": "t3_170",
+       "adPayload": null,
+       "aiDisclosure": null,
+       "recommendationContext": null
+      }
+     },
+     {
+      "__typename": "FeedElementEdge",
+      "node": {
+       "__typename": "CellGroup",
+       "id": "id171",
+       "cells": [
+        {
+         "__typename": "ClassicCell",
+         "id": "id172",
+         "titleCell": {
+          "__typename": "TitleCell",
+          "id": "id173",
+          "title": "text",
+          "isVisited": false
+         },
+         "previewTextCell": null,
+         "indicatorsCell": null,
+         "metadataCell": {
+          "__typename": "ClassicMetadataCell",
+          "id": "id174",
+          "createdAt": "text",
+          "subredditName": "text",
+          "color": {
+           "__typename": "NativeCellColor",
+           "name": "text"
+          },
+          "iconPath": "https://example.com/",
+          "detailsLink": "text",
+          "statusIndicators": []
+         },
+         "thumbnailCell": {
+          "__typename": "ClassicThumbnailCell",
+          "id": "id175",
+          "image": {
+           "__typename": "CellMediaSource",
+           "path": "https://example.com/",
+           "isObfuscated": false,
+           "obfuscatedPath": null,
+           "size": {
+            "__typename": "Dimensions",
+            "width": 1,
+            "height": 1
+           }
+          },
+          "isVideo": false,
+          "attributionDomain": null,
+          "size": "text",
+          "path": "https://example.com/",
+          "authorInfo": null
+         },
+         "flairCell": null
+        },
+        {
+         "__typename": "CallToActionCell",
+         "id": "id176",
+         "callToAction": "text",
+         "caption": null,
+         "outboundUrl": "https://example.com/",
+         "displayAddress": "text",
+         "subcaption": "text",
+         "subcaptionStrikethrough": null
+        },
+        {
+         "__typename": "ActionCell",
+         "id": "id177",
+         "isScoreHidden": true,
+         "isModeratable": false,
+         "commentCount": 1,
+         "shareImagePath": "https://example.com/",
+         "score": 1,
+         "voteState": "text",
+         "shareCount": null,
+         "isTranslatable": false,
+         "isTranslated": false,
+         "translatedLanguage": null,
+         "isInteractionDisabled": false,
+         "repostCount": null,
+         "isCrosspostable": false
+        },
+        {
+         "__typename": "MarginCell",
+         "id": "id178",
+         "height": 1,
+         "color": {
+          "__typename": "NativeCellColor",
+          "name": "text"
+         }
+        }
+       ],
+       "groupId": "t3_179",
+       "adPayload": {
+        "__typename": "AdPayload",
+        "isBlankAd": false,
+        "isSurveyAd": false,
+        "isVideo": false,
+        "impressionId": "text",
+        "adLinkUrl": "https://example.com/",
+        "adUrl": {
+         "__typename": "AdURL",
+         "url": "https://example.com/",
+         "isMmpLink": false,
+         "adBrowserDestination": "text",
+         "isPrefetchEligible": false
+        },
+        "adEvents": [
+         {
+          "__typename": "AdEvent",
+          "type": "IMPRESSION",
+          "url": "https://example.com/",
+          "encryptedTrackingId": null
+         },
+         {
+          "__typename": "AdEvent",
+          "type": "VIDEO_VIEWABLE_IMPRESSION",
+          "url": "https://example.com/",
+          "encryptedTrackingId": null
+         }
+        ],
+        "encryptedTrackingPayload": "text",
+        "additionalEventMetadata": [],
+        "adsCorrelationId": "text",
+        "excludedExperiments": null,
+        "adNetworkData": null,
+        "appStoreData": null,
+        "promoLayout": null,
+        "adInstanceId": "text",
+        "gallery": null,
+        "domain": "text",
+        "isCreatedFromAdsUi": true,
+        "callToAction": "text",
+        "campaign": {
+         "__typename": "AdCampaign",
+         "id": "id180"
+        },
+        "isInAppBrowserOverride": false,
+        "adUserTargeting": {
+         "__typename": "AdUserTargeting",
+         "adTransparencyEncodedData": "text"
+        },
+        "overlayData": null,
+        "adTakeover": null,
+        "galleryLayout": null,
+        "hasCsa": false,
+        "collectionsHeroCard": null
+       },
+       "aiDisclosure": null,
+       "recommendationContext": null
+      }
+     }
+    ],
+    "prefetchContext": {
+     "__typename": "PrefetchContext",
+     "prefetchDistance": 1
+    }
+   }
+  }
+ }
+}

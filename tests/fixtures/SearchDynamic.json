@@ -1,0 +1,2333 @@
+{
+ "data": {
+  "search": {
+   "__typename": "Search",
+   "dynamic": {
+    "__typename": "DynamicSearch",
+    "components": {
+     "__typename": "SearchResultsMainLayout",
+     "appliedState": {
+      "__typename": "SearchAppliedState",
+      "filters": [
+       {
+        "__typename": "AppliedFilter",
+        "key": "text",
+        "value": "text"
+       },
+       {
+        "__typename": "AppliedFilter",
+        "key": "text",
+        "value": "text"
+       }
+      ],
+      "options": [
+       {
+        "__typename": "AppliedFilter",
+        "key": "text",
+        "value": "text"
+       }
+      ],
+      "pane": "text",
+      "query": "text"
+     },
+     "main": {
+      "__typename": "SearchMainConnection",
+      "edges": [
+       {
+        "__typename": "SearchMainEdge",
+        "node": {
+         "__typename": "SearchListComponent",
+         "behaviors": {
+          "__typename": "SearchListComponentBehaviors",
+          "header": null
+         },
+         "children": [
+          {
+           "__typename": "SearchPost",
+           "behaviors": {
+            "__typename": "SearchPostBehaviors",
+            "community": {
+             "__typename": "SearchCommunityNavigationBehavior",
+             "communityAnchorSource": null,
+             "id": "t5_75",
+             "name": "text",
+             "telemetry": {
+              "__typename": "SearchElementTelemetry",
+              "events": [
+               {
+                "__typename": "SearchTelemetryEvent",
+                "action": "text",
+                "noun": "text",
+                "source": "text",
+                "trigger": "text",
+                "triggerConfiguration": null
+               }
+              ],
+              "trackingContext": {
+               "__typename": "SearchTelemetryTrackingContext",
+               "actionInfo": {
+                "__typename": "SearchTelemetryTrackingContextActionInfo",
+                "paneName": "text",
+                "position": 1,
+                "reason": null,
+                "relativePosition": 1,
+                "type": "community"
+               },
+               "answers": null,
+               "comment": null,
+               "discoveryUnit": null,
+               "metaSearch": null,
+               "post": {
+                "__typename": "SearchTelemetryTrackingContextPost",
+                "id": "t3_76",
+                "isNsfw": false,
+                "isSpoiler": false,
+                "title": "text",
+                "type": "TEXT"
+               },
+               "profile": {
+                "__typename": "SearchTelemetryTrackingContextProfile",
+                "id": "t2_77",
+                "name": "text",
+                "verificationStatus": null
+               },
+               "search": {
+                "__typename": "SearchTelemetryTrackingContextSearch",
+                "isNsfw": true,
+                "originElement": null,
+                "query": "text",
+                "queryID": "text",
+                "range": null,
+                "safeSearch": "text",
+                "scope": {
+                 "__typename": "SearchScope",
+                 "id": null,
+                 "name": null,
+                 "path": "text",
+                 "type": "GLOBAL"
+                },
+                "snippet": null,
+                "snippetId": null,
+                "sort": null,
+                "structureType": "text"
+               },
+               "subreddit": {
+                "__typename": "SearchTelemetryTrackingContextSubreddit",
+                "id": "t5_75",
+                "isNsfw": false,
+                "isQuarantined": false,
+                "name": "text"
+               }
+              }
+             },
+             "url": "text"
+            },
+            "default": {
+             "__typename": "SearchPDPNavigationBehavior",
+             "id": "t3_76",
+             "pdpNavigationTarget": "text",
+             "telemetry": {
+              "__typename": "SearchElementTelemetry",
+              "events": [
+               {
+                "__typename": "SearchTelemetryEvent",
+                "action": "text",
+                "noun": "text",
+                "source": "text",
+                "trigger": "text",
+                "triggerConfiguration": null
+               }
+              ],
+              "trackingContext": {
+               "__typename": "SearchTelemetryTrackingContext",
+               "actionInfo": {
+                "__typename": "SearchTelemetryTrackingContextActionInfo",
+                "paneName": "text",
+                "position": 1,
+                "reason": null,
+                "relativePosition": 1,
+                "type": "post"
+               },
+               "answers": null,
+               "comment": null,
+               "discoveryUnit": null,
+               "metaSearch": null,
+               "post": {
+                "__typename": "SearchTelemetryTrackingContextPost",
+                "id": "t3_76",
+                "isNsfw": false,
+                "isSpoiler": false,
+                "title": "text",
+                "type": "TEXT"
+               },
+               "profile": {
+                "__typename": "SearchTelemetryTrackingContextProfile",
+                "id": "t2_77",
+                "name": "text",
+                "verificationStatus": null
+               },
+               "search": {
+                "__typename": "SearchTelemetryTrackingContextSearch",
+                "isNsfw": true,
+                "originElement": null,
+                "query": "text",
+                "queryID": "text",
+                "range": null,
+                "safeSearch": "text",
+                "scope": {
+                 "__typename": "SearchScope",
+                 "id": null,
+                 "name": null,
+                 "path": "text",
+                 "type": "GLOBAL"
+                },
+                "snippet": null,
+                "snippetId": null,
+                "sort": null,
+                "structureType": "text"
+               },
+               "subreddit": {
+                "__typename": "SearchTelemetryTrackingContextSubreddit",
+                "id": "t5_75",
+                "isNsfw": false,
+                "isQuarantined": false,
+                "name": "text"
+               }
+              }
+             },
+             "url": "text"
+            },
+            "profile": {
+             "__typename": "SearchProfileNavigationBehavior",
+             "id": "t5_78",
+             "name": "text",
+             "profileNavigationTarget": "text",
+             "telemetry": {
+              "__typename": "SearchElementTelemetry",
+              "events": [
+               {
+                "__typename": "SearchTelemetryEvent",
+                "action": "text",
+                "noun": "text",
+                "source": "text",
+                "trigger": "text",
+                "triggerConfiguration": null
+               }
+              ],
+              "trackingContext": {
+               "__typename": "SearchTelemetryTrackingContext",
+               "actionInfo": {
+                "__typename": "SearchTelemetryTrackingContextActionInfo",
+                "paneName": "text",
+                "position": 1,
+                "reason": null,
+                "relativePosition": 1,
+                "type": "profile"
+               },
+               "answers": null,
+               "comment": null,
+               "discoveryUnit": null,
+               "metaSearch": null,
+               "post": {
+                "__typename": "SearchTelemetryTrackingContextPost",
+                "id": "t3_76",
+                "isNsfw": false,
+                "isSpoiler": false,
+                "title": "text",
+                "type": "TEXT"
+               },
+               "profile": {
+                "__typename": "SearchTelemetryTrackingContextProfile",
+                "id": "t2_77",
+                "name": "text",
+                "verificationStatus": null
+               },
+               "search": {
+                "__typename": "SearchTelemetryTrackingContextSearch",
+                "isNsfw": true,
+                "originElement": null,
+                "query": "text",
+                "queryID": "text",
+                "range": null,
+                "safeSearch": "text",
+                "scope": {
+                 "__typename": "SearchScope",
+                 "id": null,
+                 "name": null,
+                 "path": "text",
+                 "type": "GLOBAL"
+                },
+                "snippet": null,
+                "snippetId": null,
+                "sort": null,
+                "structureType": "text"
+               },
+               "subreddit": {
+                "__typename": "SearchTelemetryTrackingContextSubreddit",
+                "id": "t5_75",
+                "isNsfw": false,
+                "isQuarantined": false,
+                "name": "text"
+               }
+              }
+             },
+             "url": "text"
+            },
+            "thumbnail": {
+             "__typename": "SearchPDPNavigationBehavior",
+             "id": "t3_76",
+             "pdpNavigationTarget": "text",
+             "telemetry": {
+              "__typename": "SearchElementTelemetry",
+              "events": [
+               {
+                "__typename": "SearchTelemetryEvent",
+                "action": "text",
+                "noun": "text",
+                "source": "text",
+                "trigger": "text",
+                "triggerConfiguration": null
+               }
+              ],
+              "trackingContext": {
+               "__typename": "SearchTelemetryTrackingContext",
+               "actionInfo": {
+                "__typename": "SearchTelemetryTrackingContextActionInfo",
+                "paneName": "text",
+                "position": 1,
+                "reason": null,
+                "relativePosition": 1,
+                "type": "thumbnail"
+               },
+               "answers": null,
+               "comment": null,
+               "discoveryUnit": null,
+               "metaSearch": null,
+               "post": {
+                "__typename": "SearchTelemetryTrackingContextPost",
+                "id": "t3_76",
+                "isNsfw": false,
+                "isSpoiler": false,
+                "title": "text",
+                "type": "TEXT"
+               },
+               "profile": {
+                "__typename": "SearchTelemetryTrackingContextProfile",
+                "id": "t2_77",
+                "name": "text",
+                "verificationStatus": null
+               },
+               "search": {
+                "__typename": "SearchTelemetryTrackingContextSearch",
+                "isNsfw": true,
+                "originElement": null,
+                "query": "text",
+                "queryID": "text",
+                "range": null,
+                "safeSearch": "text",
+                "scope": {
+                 "__typename": "SearchScope",
+                 "id": null,
+                 "name": null,
+                 "path": "text",
+                 "type": "GLOBAL"
+                },
+                "snippet": null,
+                "snippetId": null,
+                "sort": null,
+                "structureType": "text"
+               },
+               "subreddit": {
+                "__typename": "SearchTelemetryTrackingContextSubreddit",
+                "id": "t5_75",
+                "isNsfw": false,
+                "isQuarantined": false,
+                "name": "text"
+               }
+              }
+             },
+             "url": "text"
+            }
+           },
+           "id": "t3_76",
+           "post": {
+            "__typename": "SubredditPost",
+            "authorInfo": {
+             "__typename": "Redditor",
+             "attributes": {
+              "__typename": "RedditorAttributes",
+              "redditHandleInfo": {
+               "__typename": "RedditorHandleInfo",
+               "displayName": "text",
+               "prefixedUsername": "text",
+               "username": "text"
+              },
+              "redditorType": "text",
+              "verificationStatus": "text"
+             },
+             "displayName": "text",
+             "id": "t2_77",
+             "isBlocked": false,
+             "profile": {
+              "__typename": "Profile",
+              "isNsfw": true,
+              "styles": {
+               "__typename": "ProfileStyles",
+               "icon": "https://example.com/",
+               "legacyIcon": {
+                "__typename": "MediaSource",
+                "url": "https://example.com/"
+               },
+               "legacyPrimaryColor": null
+              }
+             },
+             "snoovatarIcon": null
+            },
+            "awardings": [],
+            "commentCount": 1,
+            "content": {
+             "__typename": "Content",
+             "markdown": "text",
+             "preview": "text",
+             "richtext": "text",
+             "richtextMedia": [],
+             "translationInfo": {
+              "__typename": "TranslationInfo",
+              "isTranslated": false,
+              "translatedLanguage": null
+             }
+            },
+            "createdAt": "text",
+            "crosspostRoot": null,
+            "devvit": null,
+            "discussionType": "text",
+            "flair": {
+             "__typename": "PostFlair",
+             "richtext": "text",
+             "template": {
+              "__typename": "FlairTemplate",
+              "allowableContent": "text",
+              "backgroundRGBA": "text",
+              "id": "id79",
+              "isEditable": false,
+              "isModOnly": false,
+              "maxEmojis": 1,
+              "richtext": "text",
+              "text": "text",
+              "textColor": "text",
+              "type": "richtext"
+             },
+             "text": "text",
+             "textColor": "text",
+             "type": "richtext"
+            },
+            "gallery": null,
+            "id": "t3_76",
+            "isGildable": true,
+            "isNsfw": false,
+            "isScoreHidden": false,
+            "isSelfPost": true,
+            "isSpoiler": false,
+            "isThumbnailEnabled": false,
+            "isTranslatable": false,
+            "isTranslated": false,
+            "media": null,
+            "outboundLink": {
+             "__typename": "OutboundLink",
+             "url": "https://example.com/"
+            },
+            "permalink": "text",
+            "score": 1,
+            "subreddit": {
+             "__typename": "Subreddit",
+             "id": "t5_75",
+             "isNsfw": false,
+             "isQuarantined": false,
+             "name": "text",
+             "path": "text",
+             "prefixedName": "text",
+             "styles": {
+              "__typename": "SubredditStyles",
+              "icon": "https://example.com/",
+              "legacyIcon": null
+             }
+            },
+            "suggestedCommentSort": "text",
+            "thumbnail": null,
+            "title": "text",
+            "translatedLanguage": null,
+            "url": "https://example.com/"
+           },
+           "presentation": {
+            "__typename": "SearchPostDefaultPresentation",
+            "displayTags": []
+           },
+           "telemetry": {
+            "__typename": "SearchElementTelemetry",
+            "events": [
+             {
+              "__typename": "SearchTelemetryEvent",
+              "action": "text",
+              "noun": "text",
+              "source": "text",
+              "trigger": "text",
+              "triggerConfiguration": null
+             },
+             {
+              "__typename": "SearchTelemetryEvent",
+              "action": "text",
+              "noun": "text",
+              "source": "text",
+              "trigger": "text",
+              "triggerConfiguration": null
+             }
+            ],
+            "trackingContext": {
+             "__typename": "SearchTelemetryTrackingContext",
+             "actionInfo": {
+              "__typename": "SearchTelemetryTrackingContextActionInfo",
+              "paneName": "text",
+              "position": 1,
+              "reason": null,
+              "relativePosition": 1,
+              "type": null
+             },
+             "answers": null,
+             "comment": null,
+             "discoveryUnit": null,
+             "metaSearch": null,
+             "post": {
+              "__typename": "SearchTelemetryTrackingContextPost",
+              "id": "t3_76",
+              "isNsfw": false,
+              "isSpoiler": false,
+              "title": "text",
+              "type": "TEXT"
+             },
+             "profile": {
+              "__typename": "SearchTelemetryTrackingContextProfile",
+              "id": "t2_77",
+              "name": "text",
+              "verificationStatus": null
+             },
+             "search": {
+              "__typename": "SearchTelemetryTrackingContextSearch",
+              "isNsfw": true,
+              "originElement": null,
+              "query": "text",
+              "queryID": "text",
+              "range": null,
+              "safeSearch": "text",
+              "scope": {
+               "__typename": "SearchScope",
+               "id": null,
+               "name": null,
+               "path": "text",
+               "type": "GLOBAL"
+              },
+              "snippet": null,
+              "snippetId": null,
+              "sort": null,
+              "structureType": "text"
+             },
+             "subreddit": {
+              "__typename": "SearchTelemetryTrackingContextSubreddit",
+              "id": "t5_75",
+              "isNsfw": false,
+              "isQuarantined": false,
+              "name": "text"
+             }
+            }
+           }
+          },
+          {
+           "__typename": "SearchAdPost",
+           "id": "t3_80",
+           "post": {
+            "__typename": "AdPost",
+            "adEvents": [
+             {
+              "__typename": "AdEvent",
+              "encryptedTrackingId": null,
+              "type": "IMPRESSION",
+              "url": "https://example.com/"
+             },
+             {
+              "__typename": "AdEvent",
+              "encryptedTrackingId": null,
+              "type": "VIDEO_VIEWABLE_IMPRESSION",
+              "url": "https://example.com/"
+             }
+            ],
+            "adSupplementaryTextRichtext": null,
+            "adUrl": {
+             "__typename": "AdURL",
+             "adBrowserDestination": "text",
+             "isMmpLink": false,
+             "isPrefetchEligible": false,
+             "url": "https://example.com/"
+            },
+            "adUserTargeting": {
+             "__typename": "AdUserTargeting",
+             "adTransparencyEncodedData": "text"
+            },
+            "additionalEventMetadata": [],
+            "adsCorrelationId": "text",
+            "appStoreInfo": null,
+            "authorInfo": {
+             "__typename": "Redditor",
+             "attributes": {
+              "__typename": "RedditorAttributes",
+              "redditHandleInfo": {
+               "__typename": "RedditorHandleInfo",
+               "displayName": "text",
+               "prefixedUsername": "text",
+               "username": "text"
+              },
+              "redditorType": "text",
+              "verificationStatus": "text"
+             },
+             "displayName": "text",
+             "id": "t2_81",
+             "isBlocked": false,
+             "profile": {
+              "__typename": "Profile",
+              "isNsfw": false,
+              "styles": {
+               "__typename": "ProfileStyles",
+               "icon": "https://example.com/",
+               "legacyIcon": {
+                "__typename": "MediaSource",
+                "url": "https://example.com/"
+               },
+               "legacyPrimaryColor": null
+              }
+             },
+             "snoovatarIcon": null
+            },
+            "awardings": [],
+            "callToAction": "text",
+            "campaign": {
+             "__typename": "AdCampaign",
+             "id": "id82"
+            },
+            "commentCount": 1,
+            "content": null,
+            "createdAt": "text",
+            "discussionType": "text",
+            "domain": "text",
+            "encryptedTrackingPayload": "text",
+            "excludedExperiments": null,
+            "flair": null,
+            "gallery": null,
+            "id": "t3_80",
+            "impressionId": "text",
+            "isBlank": false,
+            "isGildable": false,
+            "isInAppBrowserOverride": false,
+            "isNsfw": false,
+            "isSaved": false,
+            "isScoreHidden": true,
+            "isSelfPost": false,
+            "isSpoiler": false,
+            "isSurveyAd": false,
+            "isThumbnailEnabled": true,
+            "isTranslatable": false,
+            "isTranslated": false,
+            "media": {
+             "__typename": "Media",
+             "animated": null,
+             "download": null,
+             "obfuscated": null,
+             "packagedMedia": {
+              "__typename": "PackagedMedia",
+              "muxedMp4s": null,
+              "playbackMp4s": null
+             },
+             "previewMediaId": "text",
+             "still": {
+              "__typename": "StillMedia",
+              "large": {
+               "__typename": "MediaSource",
+               "dimensions": {
+                "__typename": "Dimensions",
+                "height": 1,
+                "width": 1
+               },
+               "url": "https://example.com/"
+              },
+              "medium": {
+               "__typename": "MediaSource",
+               "dimensions": {
+                "__typename": "Dimensions",
+                "height": 1,
+                "width": 1
+               },
+               "url": "https://example.com/"
+              },
+              "small": {
+               "__typename": "MediaSource",
+               "dimensions": {
+                "__typename": "Dimensions",
+                "height": 1,
+                "width": 1
+               },
+               "url": "https://example.com/"
+              },
+              "source": {
+               "__typename": "MediaSource",
+               "dimensions": {
+                "__typename": "Dimensions",
+                "height": 1,
+                "width": 1
+               },
+               "url": "https://example.com/"
+              },
+              "xlarge": {
+               "__typename": "MediaSource",
+               "dimensions": {
+                "__typename": "Dimensions",
+                "height": 1,
+                "width": 1
+               },
+               "url": "https://example.com/"
+              },
+              "xxlarge": {
+               "__typename": "MediaSource",
+               "dimensions": {
+                "__typename": "Dimensions",
+                "height": 1,
+                "width": 1
+               },
+               "url": "https://example.com/"
+              },
+              "xxxlarge": {
+               "__typename": "MediaSource",
+               "dimensions": {
+                "__typename": "Dimensions",
+                "height": 1,
+                "width": 1
+               },
+               "url": "https://example.com/"
+              }
+             },
+             "streaming": {
+              "__typename": "StreamingMedia",
+              "dimensions": {
+               "__typename": "Dimensions",
+               "height": 1,
+               "width": 1
+              },
+              "duration": 1,
+              "hlsUrl": "https://example.com/",
+              "isGif": false,
+              "scrubberMediaUrl": "https://example.com/"
+             },
+             "typeHint": "text",
+             "video": null
+            },
+            "outboundLink": {
+             "__typename": "OutboundLink",
+             "url": "https://example.com/"
+            },
+            "overlayData": null,
+            "permalink": "text",
+            "placement": {
+             "__typename": "AdPlacement",
+             "placement": "text"
+            },
+            "profile": {
+             "__typename": "Profile",
+             "id": "t5_83",
+             "redditorInfo": {
+              "__typename": "Redditor",
+              "displayName": "text"
+             }
+            },
+            "promoLayout": null,
+            "score": null,
+            "skAdNetworkData": null,
+            "subcaption": null,
+            "subcaptionStrikethrough": null,
+            "suggestedCommentSort": "text",
+            "thumbnail": {
+             "__typename": "MediaSource",
+             "dimensions": {
+              "__typename": "Dimensions",
+              "height": 1,
+              "width": 1
+             },
+             "url": "https://example.com/"
+            },
+            "title": "text",
+            "translatedLanguage": null,
+            "url": "https://example.com/"
+           },
+           "searchAdPostBehaviors": {
+            "__typename": "SearchAdPostBehaviors",
+            "default": {
+             "__typename": "SearchAdPostBehavior",
+             "id": "id84",
+             "telemetry": {
+              "__typename": "SearchElementTelemetry",
+              "events": [
+               {
+                "__typename": "SearchTelemetryEvent",
+                "action": "text",
+                "noun": "text",
+                "source": "text",
+                "trigger": "text",
+                "triggerConfiguration": null
+               }
+              ],
+              "trackingContext": {
+               "__typename": "SearchTelemetryTrackingContext",
+               "actionInfo": {
+                "__typename": "SearchTelemetryTrackingContextActionInfo",
+                "paneName": "text",
+                "position": 1,
+                "reason": null,
+                "relativePosition": 1,
+                "type": "ad_post"
+               },
+               "answers": null,
+               "comment": null,
+               "discoveryUnit": null,
+               "metaSearch": null,
+               "post": {
+                "__typename": "SearchTelemetryTrackingContextPost",
+                "id": "t3_80",
+                "isNsfw": false,
+                "isSpoiler": false,
+                "title": "text",
+                "type": null
+               },
+               "profile": null,
+               "search": {
+                "__typename": "SearchTelemetryTrackingContextSearch",
+                "isNsfw": true,
+                "originElement": null,
+                "query": "text",
+                "queryID": "text",
+                "range": null,
+                "safeSearch": "text",
+                "scope": {
+                 "__typename": "SearchScope",
+                 "id": null,
+                 "name": null,
+                 "path": "text",
+                 "type": "GLOBAL"
+                },
+                "snippet": null,
+                "snippetId": null,
+                "sort": null,
+                "structureType": "text"
+               },
+               "subreddit": null
+              }
+             }
+            }
+           },
+           "telemetry": {
+            "__typename": "SearchElementTelemetry",
+            "events": [
+             {
+              "__typename": "SearchTelemetryEvent",
+              "action": "text",
+              "noun": "text",
+              "source": "text",
+              "trigger": "text",
+              "triggerConfiguration": null
+             },
+             {
+              "__typename": "SearchTelemetryEvent",
+              "action": "text",
+              "noun": "text",
+              "source": "text",
+              "trigger": "text",
+              "triggerConfiguration": null
+             }
+            ],
+            "trackingContext": {
+             "__typename": "SearchTelemetryTrackingContext",
+             "actionInfo": {
+              "__typename": "SearchTelemetryTrackingContextActionInfo",
+              "paneName": "text",
+              "position": 1,
+              "reason": null,
+              "relativePosition": 1,
+              "type": "ad_post"
+             },
+             "answers": null,
+             "comment": null,
+             "discoveryUnit": null,
+             "metaSearch": null,
+             "post": {
+              "__typename": "SearchTelemetryTrackingContextPost",
+              "id": "t3_80",
+              "isNsfw": false,
+              "isSpoiler": false,
+              "title": "text",
+              "type": null
+             },
+             "profile": null,
+             "search": {
+              "__typename": "SearchTelemetryTrackingContextSearch",
+              "isNsfw": true,
+              "originElement": null,
+              "query": "text",
+              "queryID": "text",
+              "range": null,
+              "safeSearch": "text",
+              "scope": {
+               "__typename": "SearchScope",
+               "id": null,
+               "name": null,
+               "path": "text",
+               "type": "GLOBAL"
+              },
+              "snippet": null,
+              "snippetId": null,
+              "sort": null,
+              "structureType": "text"
+             },
+             "subreddit": null
+            }
+           }
+          },
+          {
+           "__typename": "SearchPost",
+           "behaviors": {
+            "__typename": "SearchPostBehaviors",
+            "community": {
+             "__typename": "SearchCommunityNavigationBehavior",
+             "communityAnchorSource": null,
+             "id": "t5_85",
+             "name": "text",
+             "telemetry": {
+              "__typename": "SearchElementTelemetry",
+              "events": [
+               {
+                "__typename": "SearchTelemetryEvent",
+                "action": "text",
+                "noun": "text",
+                "source": "text",
+                "trigger": "text",
+                "triggerConfiguration": null
+               }
+              ],
+              "trackingContext": {
+               "__typename": "SearchTelemetryTrackingContext",
+               "actionInfo": {
+                "__typename": "SearchTelemetryTrackingContextActionInfo",
+                "paneName": "text",
+                "position": 1,
+                "reason": null,
+                "relativePosition": 1,
+                "type": "community"
+               },
+               "answers": null,
+               "comment": null,
+               "discoveryUnit": null,
+               "metaSearch": null,
+               "post": {
+                "__typename": "SearchTelemetryTrackingContextPost",
+                "id": "t3_86",
+                "isNsfw": false,
+                "isSpoiler": false,
+                "title": "text",
+                "type": "TEXT"
+               },
+               "profile": {
+                "__typename": "SearchTelemetryTrackingContextProfile",
+                "id": "t2_87",
+                "name": "text",
+                "verificationStatus": null
+               },
+               "search": {
+                "__typename": "SearchTelemetryTrackingContextSearch",
+                "isNsfw": true,
+                "originElement": null,
+                "query": "text",
+                "queryID": "text",
+                "range": null,
+                "safeSearch": "text",
+                "scope": {
+                 "__typename": "SearchScope",
+                 "id": null,
+                 "name": null,
+                 "path": "text",
+                 "type": "GLOBAL"
+                },
+                "snippet": null,
+                "snippetId": null,
+                "sort": null,
+                "structureType": "text"
+               },
+               "subreddit": {
+                "__typename": "SearchTelemetryTrackingContextSubreddit",
+                "id": "t5_85",
+                "isNsfw": false,
+                "isQuarantined": false,
+                "name": "text"
+               }
+              }
+             },
+             "url": "text"
+            },
+            "default": {
+             "__typename": "SearchPDPNavigationBehavior",
+             "id": "t3_86",
+             "pdpNavigationTarget": "text",
+             "telemetry": {
+              "__typename": "SearchElementTelemetry",
+              "events": [
+               {
+                "__typename": "SearchTelemetryEvent",
+                "action": "text",
+                "noun": "text",
+                "source": "text",
+                "trigger": "text",
+                "triggerConfiguration": null
+               }
+              ],
+              "trackingContext": {
+               "__typename": "SearchTelemetryTrackingContext",
+               "actionInfo": {
+                "__typename": "SearchTelemetryTrackingContextActionInfo",
+                "paneName": "text",
+                "position": 1,
+                "reason": null,
+                "relativePosition": 1,
+                "type": "post"
+               },
+               "answers": null,
+               "comment": null,
+               "discoveryUnit": null,
+               "metaSearch": null,
+               "post": {
+                "__typename": "SearchTelemetryTrackingContextPost",
+                "id": "t3_86",
+                "isNsfw": false,
+                "isSpoiler": false,
+                "title": "text",
+                "type": "TEXT"
+               },
+               "profile": {
+                "__typename": "SearchTelemetryTrackingContextProfile",
+                "id": "t2_87",
+                "name": "text",
+                "verificationStatus": null
+               },
+               "search": {
+                "__typename": "SearchTelemetryTrackingContextSearch",
+                "isNsfw": true,
+                "originElement": null,
+                "query": "text",
+                "queryID": "text",
+                "range": null,
+                "safeSearch": "text",
+                "scope": {
+                 "__typename": "SearchScope",
+                 "id": null,
+                 "name": null,
+                 "path": "text",
+                 "type": "GLOBAL"
+                },
+                "snippet": null,
+                "snippetId": null,
+                "sort": null,
+                "structureType": "text"
+               },
+               "subreddit": {
+                "__typename": "SearchTelemetryTrackingContextSubreddit",
+                "id": "t5_85",
+                "isNsfw": false,
+                "isQuarantined": false,
+                "name": "text"
+               }
+              }
+             },
+             "url": "text"
+            },
+            "profile": {
+             "__typename": "SearchProfileNavigationBehavior",
+             "id": "t5_88",
+             "name": "text",
+             "profileNavigationTarget": "text",
+             "telemetry": {
+              "__typename": "SearchElementTelemetry",
+              "events": [
+               {
+                "__typename": "SearchTelemetryEvent",
+                "action": "text",
+                "noun": "text",
+                "source": "text",
+                "trigger": "text",
+                "triggerConfiguration": null
+               }
+              ],
+              "trackingContext": {
+               "__typename": "SearchTelemetryTrackingContext",
+               "actionInfo": {
+                "__typename": "SearchTelemetryTrackingContextActionInfo",
+                "paneName": "text",
+                "position": 1,
+                "reason": null,
+                "relativePosition": 1,
+                "type": "profile"
+               },
+               "answers": null,
+               "comment": null,
+               "discoveryUnit": null,
+               "metaSearch": null,
+               "post": {
+                "__typename": "SearchTelemetryTrackingContextPost",
+                "id": "t3_86",
+                "isNsfw": false,
+                "isSpoiler": false,
+                "title": "text",
+                "type": "TEXT"
+               },
+               "profile": {
+                "__typename": "SearchTelemetryTrackingContextProfile",
+                "id": "t2_87",
+                "name": "text",
+                "verificationStatus": null
+               },
+               "search": {
+                "__typename": "SearchTelemetryTrackingContextSearch",
+                "isNsfw": true,
+                "originElement": null,
+                "query": "text",
+                "queryID": "text",
+                "range": null,
+                "safeSearch": "text",
+                "scope": {
+                 "__typename": "SearchScope",
+                 "id": null,
+                 "name": null,
+                 "path": "text",
+                 "type": "GLOBAL"
+                },
+                "snippet": null,
+                "snippetId": null,
+                "sort": null,
+                "structureType": "text"
+               },
+               "subreddit": {
+                "__typename": "SearchTelemetryTrackingContextSubreddit",
+                "id": "t5_85",
+                "isNsfw": false,
+                "isQuarantined": false,
+                "name": "text"
+               }
+              }
+             },
+             "url": "text"
+            },
+            "thumbnail": {
+             "__typename": "SearchPDPNavigationBehavior",
+             "id": "t3_86",
+             "pdpNavigationTarget": "text",
+             "telemetry": {
+              "__typename": "SearchElementTelemetry",
+              "events": [
+               {
+                "__typename": "SearchTelemetryEvent",
+                "action": "text",
+                "noun": "text",
+                "source": "text",
+                "trigger": "text",
+                "triggerConfiguration": null
+               }
+              ],
+              "trackingContext": {
+               "__typename": "SearchTelemetryTrackingContext",
+               "actionInfo": {
+                "__typename": "SearchTelemetryTrackingContextActionInfo",
+                "paneName": "text",
+                "position": 1,
+                "reason": null,
+                "relativePosition": 1,
+                "type": "thumbnail"
+               },
+               "answers": null,
+               "comment": null,
+               "discoveryUnit": null,
+               "metaSearch": null,
+               "post": {
+                "__typename": "SearchTelemetryTrackingContextPost",
+                "id": "t3_86",
+                "isNsfw": false,
+                "isSpoiler": false,
+                "title": "text",
+                "type": "TEXT"
+               },
+               "profile": {
+                "__typename": "SearchTelemetryTrackingContextProfile",
+                "id": "t2_87",
+                "name": "text",
+                "verificationStatus": null
+               },
+               "search": {
+                "__typename": "SearchTelemetryTrackingContextSearch",
+                "isNsfw": true,
+                "originElement": null,
+                "query": "text",
+                "queryID": "text",
+                "range": null,
+                "safeSearch": "text",
+                "scope": {
+                 "__typename": "SearchScope",
+                 "id": null,
+                 "name": null,
+                 "path": "text",
+                 "type": "GLOBAL"
+                },
+                "snippet": null,
+                "snippetId": null,
+                "sort": null,
+                "structureType": "text"
+               },
+               "subreddit": {
+                "__typename": "SearchTelemetryTrackingContextSubreddit",
+                "id": "t5_85",
+                "isNsfw": false,
+                "isQuarantined": false,
+                "name": "text"
+               }
+              }
+             },
+             "url": "text"
+            }
+           },
+           "id": "t3_86",
+           "post": {
+            "__typename": "SubredditPost",
+            "authorInfo": {
+             "__typename": "Redditor",
+             "attributes": {
+              "__typename": "RedditorAttributes",
+              "redditHandleInfo": {
+               "__typename": "RedditorHandleInfo",
+               "displayName": "text",
+               "prefixedUsername": "text",
+               "username": "text"
+              },
+              "redditorType": "text",
+              "verificationStatus": "text"
+             },
+             "displayName": "text",
+             "id": "t2_87",
+             "isBlocked": false,
+             "profile": {
+              "__typename": "Profile",
+              "isNsfw": true,
+              "styles": {
+               "__typename": "ProfileStyles",
+               "icon": "https://example.com/",
+               "legacyIcon": {
+                "__typename": "MediaSource",
+                "url": "https://example.com/"
+               },
+               "legacyPrimaryColor": null
+              }
+             },
+             "snoovatarIcon": null
+            },
+            "awardings": [],
+            "commentCount": 1,
+            "content": {
+             "__typename": "Content",
+             "markdown": "text",
+             "preview": "text",
+             "richtext": "text",
+             "richtextMedia": [],
+             "translationInfo": {
+              "__typename": "TranslationInfo",
+              "isTranslated": false,
+              "translatedLanguage": null
+             }
+            },
+            "createdAt": "text",
+            "crosspostRoot": null,
+            "devvit": null,
+            "discussionType": "text",
+            "flair": null,
+            "gallery": null,
+            "id": "t3_86",
+            "isGildable": true,
+            "isNsfw": false,
+            "isScoreHidden": false,
+            "isSelfPost": true,
+            "isSpoiler": false,
+            "isThumbnailEnabled": false,
+            "isTranslatable": false,
+            "isTranslated": false,
+            "media": null,
+            "outboundLink": {
+             "__typename": "OutboundLink",
+             "url": "https://example.com/"
+            },
+            "permalink": "text",
+            "score": 1,
+            "subreddit": {
+             "__typename": "Subreddit",
+             "id": "t5_85",
+             "isNsfw": false,
+             "isQuarantined": false,
+             "name": "text",
+             "path": "text",
+             "prefixedName": "text",
+             "styles": {
+              "__typename": "SubredditStyles",
+              "icon": null,
+              "legacyIcon": null
+             }
+            },
+            "suggestedCommentSort": null,
+            "thumbnail": null,
+            "title": "text",
+            "translatedLanguage": null,
+            "url": "https://example.com/"
+           },
+           "presentation": {
+            "__typename": "SearchPostDefaultPresentation",
+            "displayTags": []
+           },
+           "telemetry": {
+            "__typename": "SearchElementTelemetry",
+            "events": [
+             {
+              "__typename": "SearchTelemetryEvent",
+              "action": "text",
+              "noun": "text",
+              "source": "text",
+              "trigger": "text",
+              "triggerConfiguration": null
+             },
+             {
+              "__typename": "SearchTelemetryEvent",
+              "action": "text",
+              "noun": "text",
+              "source": "text",
+              "trigger": "text",
+              "triggerConfiguration": null
+             }
+            ],
+            "trackingContext": {
+             "__typename": "SearchTelemetryTrackingContext",
+             "actionInfo": {
+              "__typename": "SearchTelemetryTrackingContextActionInfo",
+              "paneName": "text",
+              "position": 1,
+              "reason": null,
+              "relativePosition": 1,
+              "type": null
+             },
+             "answers": null,
+             "comment": null,
+             "discoveryUnit": null,
+             "metaSearch": null,
+             "post": {
+              "__typename": "SearchTelemetryTrackingContextPost",
+              "id": "t3_86",
+              "isNsfw": false,
+              "isSpoiler": false,
+              "title": "text",
+              "type": "TEXT"
+             },
+             "profile": {
+              "__typename": "SearchTelemetryTrackingContextProfile",
+              "id": "t2_87",
+              "name": "text",
+              "verificationStatus": null
+             },
+             "search": {
+              "__typename": "SearchTelemetryTrackingContextSearch",
+              "isNsfw": true,
+              "originElement": null,
+              "query": "text",
+              "queryID": "text",
+              "range": null,
+              "safeSearch": "text",
+              "scope": {
+               "__typename": "SearchScope",
+               "id": null,
+               "name": null,
+               "path": "text",
+               "type": "GLOBAL"
+              },
+              "snippet": null,
+              "snippetId": null,
+              "sort": null,
+              "structureType": "text"
+             },
+             "subreddit": {
+              "__typename": "SearchTelemetryTrackingContextSubreddit",
+              "id": "t5_85",
+              "isNsfw": false,
+              "isQuarantined": false,
+              "name": "text"
+             }
+            }
+           }
+          }
+         ],
+         "presentation": {
+          "__typename": "SearchListComponentDefaultPresentation",
+          "isDefaultPresentation": false
+         }
+        }
+       },
+       {
+        "__typename": "SearchMainEdge",
+        "node": {
+         "__typename": "SearchRowComponent",
+         "behaviors": {
+          "__typename": "SearchRowComponentBehaviors",
+          "header": null
+         },
+         "children": [
+          {
+           "__typename": "SearchQuerySuggestion",
+           "behaviors": {
+            "__typename": "SearchQuerySuggestionBehaviors",
+            "suggestionDefault": {
+             "__typename": "SearchFilterBehavior",
+             "filters": [],
+             "id": "id84",
+             "isAppliedFiltersRemoved": true,
+             "isAppliedOptionsRemoved": true,
+             "navigationType": "text",
+             "options": [],
+             "pane": "",
+             "query": "text",
+             "telemetry": {
+              "__typename": "SearchElementTelemetry",
+              "events": [
+               {
+                "__typename": "SearchTelemetryEvent",
+                "action": "text",
+                "noun": "text",
+                "source": "text",
+                "trigger": "text",
+                "triggerConfiguration": null
+               }
+              ],
+              "trackingContext": {
+               "__typename": "SearchTelemetryTrackingContext",
+               "actionInfo": {
+                "__typename": "SearchTelemetryTrackingContextActionInfo",
+                "paneName": "text",
+                "position": 1,
+                "reason": null,
+                "relativePosition": 1,
+                "type": "query_suggestion_row"
+               },
+               "answers": null,
+               "comment": null,
+               "discoveryUnit": null,
+               "metaSearch": {
+                "__typename": "SearchTelemetryTrackingContextMetaSearch",
+                "displayQuery": "text",
+                "rawQuery": "text"
+               },
+               "post": null,
+               "profile": null,
+               "search": {
+                "__typename": "SearchTelemetryTrackingContextSearch",
+                "isNsfw": true,
+                "originElement": null,
+                "query": "text",
+                "queryID": "text",
+                "range": null,
+                "safeSearch": "text",
+                "scope": {
+                 "__typename": "SearchScope",
+                 "id": null,
+                 "name": null,
+                 "path": "text",
+                 "type": "GLOBAL"
+                },
+                "snippet": null,
+                "snippetId": null,
+                "sort": null,
+                "structureType": "text"
+               },
+               "subreddit": null
+              }
+             },
+             "treatment": ""
+            }
+           },
+           "id": "id89",
+           "presentation": {
+            "__typename": "SearchQuerySuggestionDefaultPresentation",
+            "chip": {
+             "__typename": "SearchChip",
+             "colorHint": {
+              "__typename": "SearchChipColorHint",
+              "backgroundColor": "",
+              "textColor": "text"
+             },
+             "icon": null,
+             "indicator": null,
+             "leadingIndicator": "text",
+             "richtext": null,
+             "text": "text"
+            }
+           },
+           "telemetry": {
+            "__typename": "SearchElementTelemetry",
+            "events": [
+             {
+              "__typename": "SearchTelemetryEvent",
+              "action": "text",
+              "noun": "text",
+              "source": "text",
+              "trigger": "text",
+              "triggerConfiguration": null
+             }
+            ],
+            "trackingContext": {
+             "__typename": "SearchTelemetryTrackingContext",
+             "actionInfo": {
+              "__typename": "SearchTelemetryTrackingContextActionInfo",
+              "paneName": "text",
+              "position": 1,
+              "reason": null,
+              "relativePosition": 1,
+              "type": null
+             },
+             "answers": null,
+             "comment": null,
+             "discoveryUnit": null,
+             "metaSearch": {
+              "__typename": "SearchTelemetryTrackingContextMetaSearch",
+              "displayQuery": "text",
+              "rawQuery": "text"
+             },
+             "post": null,
+             "profile": null,
+             "search": {
+              "__typename": "SearchTelemetryTrackingContextSearch",
+              "isNsfw": true,
+              "originElement": null,
+              "query": "text",
+              "queryID": "text",
+              "range": null,
+              "safeSearch": "text",
+              "scope": {
+               "__typename": "SearchScope",
+               "id": null,
+               "name": null,
+               "path": "text",
+               "type": "GLOBAL"
+              },
+              "snippet": null,
+              "snippetId": null,
+              "sort": null,
+              "structureType": "text"
+             },
+             "subreddit": null
+            }
+           }
+          },
+          {
+           "__typename": "SearchQuerySuggestion",
+           "behaviors": {
+            "__typename": "SearchQuerySuggestionBehaviors",
+            "suggestionDefault": {
+             "__typename": "SearchFilterBehavior",
+             "filters": [],
+             "id": "id84",
+             "isAppliedFiltersRemoved": true,
+             "isAppliedOptionsRemoved": true,
+             "navigationType": "text",
+             "options": [],
+             "pane": "",
+             "query": "text",
+             "telemetry": {
+              "__typename": "SearchElementTelemetry",
+              "events": [
+               {
+                "__typename": "SearchTelemetryEvent",
+                "action": "text",
+                "noun": "text",
+                "source": "text",
+                "trigger": "text",
+                "triggerConfiguration": null
+               }
+              ],
+              "trackingContext": {
+               "__typename": "SearchTelemetryTrackingContext",
+               "actionInfo": {
+                "__typename": "SearchTelemetryTrackingContextActionInfo",
+                "paneName": "text",
+                "position": 1,
+                "reason": null,
+                "relativePosition": 1,
+                "type": "query_suggestion_row"
+               },
+               "answers": null,
+               "comment": null,
+               "discoveryUnit": null,
+               "metaSearch": {
+                "__typename": "SearchTelemetryTrackingContextMetaSearch",
+                "displayQuery": "text",
+                "rawQuery": "text"
+               },
+               "post": null,
+               "profile": null,
+               "search": {
+                "__typename": "SearchTelemetryTrackingContextSearch",
+                "isNsfw": true,
+                "originElement": null,
+                "query": "text",
+                "queryID": "text",
+                "range": null,
+                "safeSearch": "text",
+                "scope": {
+                 "__typename": "SearchScope",
+                 "id": null,
+                 "name": null,
+                 "path": "text",
+                 "type": "GLOBAL"
+                },
+                "snippet": null,
+                "snippetId": null,
+                "sort": null,
+                "structureType": "text"
+               },
+               "subreddit": null
+              }
+             },
+             "treatment": ""
+            }
+           },
+           "id": "id90",
+           "presentation": {
+            "__typename": "SearchQuerySuggestionDefaultPresentation",
+            "chip": {
+             "__typename": "SearchChip",
+             "colorHint": {
+              "__typename": "SearchChipColorHint",
+              "backgroundColor": "",
+              "textColor": "text"
+             },
+             "icon": null,
+             "indicator": null,
+             "leadingIndicator": "text",
+             "richtext": null,
+             "text": "text"
+            }
+           },
+           "telemetry": {
+            "__typename": "SearchElementTelemetry",
+            "events": [
+             {
+              "__typename": "SearchTelemetryEvent",
+              "action": "text",
+              "noun": "text",
+              "source": "text",
+              "trigger": "text",
+              "triggerConfiguration": null
+             }
+            ],
+            "trackingContext": {
+             "__typename": "SearchTelemetryTrackingContext",
+             "actionInfo": {
+              "__typename": "SearchTelemetryTrackingContextActionInfo",
+              "paneName": "text",
+              "position": 1,
+              "reason": null,
+              "relativePosition": 1,
+              "type": null
+             },
+             "answers": null,
+             "comment": null,
+             "discoveryUnit": null,
+             "metaSearch": {
+              "__typename": "SearchTelemetryTrackingContextMetaSearch",
+              "displayQuery": "text",
+              "rawQuery": "text"
+             },
+             "post": null,
+             "profile": null,
+             "search": {
+              "__typename": "SearchTelemetryTrackingContextSearch",
+              "isNsfw": true,
+              "originElement": null,
+              "query": "text",
+              "queryID": "text",
+              "range": null,
+              "safeSearch": "text",
+              "scope": {
+               "__typename": "SearchScope",
+               "id": null,
+               "name": null,
+               "path": "text",
+               "type": "GLOBAL"
+              },
+              "snippet": null,
+              "snippetId": null,
+              "sort": null,
+              "structureType": "text"
+             },
+             "subreddit": null
+            }
+           }
+          }
+         ],
+         "id": "id91",
+         "presentation": {
+          "__typename": "SearchRowOverflowHeaderPresentation",
+          "headerText": "text"
+         },
+         "telemetry": {
+          "__typename": "SearchElementTelemetry",
+          "events": [
+           {
+            "__typename": "SearchTelemetryEvent",
+            "action": "text",
+            "noun": "text",
+            "source": "text",
+            "trigger": "text",
+            "triggerConfiguration": null
+           }
+          ],
+          "trackingContext": {
+           "__typename": "SearchTelemetryTrackingContext",
+           "actionInfo": {
+            "__typename": "SearchTelemetryTrackingContextActionInfo",
+            "paneName": "text",
+            "position": null,
+            "reason": null,
+            "relativePosition": null,
+            "type": "query_suggestion_row"
+           },
+           "answers": null,
+           "comment": null,
+           "discoveryUnit": null,
+           "metaSearch": null,
+           "post": null,
+           "profile": null,
+           "search": {
+            "__typename": "SearchTelemetryTrackingContextSearch",
+            "isNsfw": true,
+            "originElement": null,
+            "query": "text",
+            "queryID": "text",
+            "range": null,
+            "safeSearch": "text",
+            "scope": {
+             "__typename": "SearchScope",
+             "id": null,
+             "name": null,
+             "path": "text",
+             "type": "GLOBAL"
+            },
+            "snippet": null,
+            "snippetId": null,
+            "sort": null,
+            "structureType": "text"
+           },
+           "subreddit": null
+          }
+         }
+        }
+       }
+      ],
+      "pageInfo": {
+       "__typename": "PageInfo",
+       "endCursor": "text",
+       "hasNextPage": true
+      }
+     },
+     "telemetry": {
+      "__typename": "SearchElementTelemetry",
+      "events": [
+       {
+        "__typename": "SearchTelemetryEvent",
+        "action": "text",
+        "noun": "text",
+        "source": "text",
+        "trigger": "text",
+        "triggerConfiguration": null
+       },
+       {
+        "__typename": "SearchTelemetryEvent",
+        "action": "text",
+        "noun": "text",
+        "source": "text",
+        "trigger": "text",
+        "triggerConfiguration": {
+         "__typename": "SearchTelemetryEventTriggerConfiguration",
+         "timerDurations": [
+          1,
+          1
+         ]
+        }
+       }
+      ],
+      "trackingContext": {
+       "__typename": "SearchTelemetryTrackingContext",
+       "actionInfo": {
+        "__typename": "SearchTelemetryTrackingContextActionInfo",
+        "paneName": "text",
+        "position": null,
+        "reason": null,
+        "relativePosition": null,
+        "type": null
+       },
+       "answers": null,
+       "comment": null,
+       "discoveryUnit": null,
+       "metaSearch": null,
+       "post": null,
+       "profile": null,
+       "search": {
+        "__typename": "SearchTelemetryTrackingContextSearch",
+        "isNsfw": true,
+        "originElement": null,
+        "query": "text",
+        "queryID": "text",
+        "range": null,
+        "safeSearch": "text",
+        "scope": {
+         "__typename": "SearchScope",
+         "id": null,
+         "name": null,
+         "path": "text",
+         "type": "GLOBAL"
+        },
+        "snippet": null,
+        "snippetId": null,
+        "sort": null,
+        "structureType": "text"
+       },
+       "subreddit": null
+      }
+     },
+     "top": {
+      "__typename": "SearchTopSection",
+      "filterBar": [
+       {
+        "__typename": "SearchDropdown",
+        "behaviors": [
+         {
+          "__typename": "SearchFilterBehavior",
+          "filters": [
+           {
+            "__typename": "AppliedFilter",
+            "key": "text",
+            "value": "text"
+           }
+          ],
+          "id": "id92",
+          "isAppliedFiltersRemoved": false,
+          "isAppliedOptionsRemoved": false,
+          "navigationType": "text",
+          "options": [],
+          "pane": "text",
+          "query": "text",
+          "telemetry": {
+           "__typename": "SearchElementTelemetry",
+           "events": [
+            {
+             "__typename": "SearchTelemetryEvent",
+             "action": "text",
+             "noun": "text",
+             "source": "text",
+             "trigger": "text",
+             "triggerConfiguration": null
+            }
+           ],
+           "trackingContext": {
+            "__typename": "SearchTelemetryTrackingContext",
+            "actionInfo": {
+             "__typename": "SearchTelemetryTrackingContextActionInfo",
+             "paneName": "text",
+             "position": null,
+             "reason": null,
+             "relativePosition": null,
+             "type": "bottom_sheet"
+            },
+            "answers": null,
+            "comment": null,
+            "discoveryUnit": null,
+            "metaSearch": null,
+            "post": null,
+            "profile": null,
+            "search": {
+             "__typename": "SearchTelemetryTrackingContextSearch",
+             "isNsfw": true,
+             "originElement": null,
+             "query": "text",
+             "queryID": "text",
+             "range": null,
+             "safeSearch": "text",
+             "scope": {
+              "__typename": "SearchScope",
+              "id": null,
+              "name": null,
+              "path": "text",
+              "type": "GLOBAL"
+             },
+             "snippet": null,
+             "snippetId": null,
+             "sort": "text",
+             "structureType": "text"
+            },
+            "subreddit": null
+           }
+          },
+          "treatment": ""
+         },
+         {
+          "__typename": "SearchFilterBehavior",
+          "filters": [
+           {
+            "__typename": "AppliedFilter",
+            "key": "text",
+            "value": "text"
+           },
+           {
+            "__typename": "AppliedFilter",
+            "key": "text",
+            "value": ""
+           }
+          ],
+          "id": "id93",
+          "isAppliedFiltersRemoved": false,
+          "isAppliedOptionsRemoved": false,
+          "navigationType": "text",
+          "options": [],
+          "pane": "text",
+          "query": "text",
+          "telemetry": {
+           "__typename": "SearchElementTelemetry",
+           "events": [
+            {
+             "__typename": "SearchTelemetryEvent",
+             "action": "text",
+             "noun": "text",
+             "source": "text",
+             "trigger": "text",
+             "triggerConfiguration": null
+            }
+           ],
+           "trackingContext": {
+            "__typename": "SearchTelemetryTrackingContext",
+            "actionInfo": {
+             "__typename": "SearchTelemetryTrackingContextActionInfo",
+             "paneName": "text",
+             "position": null,
+             "reason": null,
+             "relativePosition": null,
+             "type": "bottom_sheet"
+            },
+            "answers": null,
+            "comment": null,
+            "discoveryUnit": null,
+            "metaSearch": null,
+            "post": null,
+            "profile": null,
+            "search": {
+             "__typename": "SearchTelemetryTrackingContextSearch",
+             "isNsfw": true,
+             "originElement": null,
+             "query": "text",
+             "queryID": "text",
+             "range": "",
+             "safeSearch": "text",
+             "scope": {
+              "__typename": "SearchScope",
+              "id": null,
+              "name": null,
+              "path": "text",
+              "type": "GLOBAL"
+             },
+             "snippet": null,
+             "snippetId": null,
+             "sort": "text",
+             "structureType": "text"
+            },
+            "subreddit": null
+           }
+          },
+          "treatment": ""
+         }
+        ],
+        "presentation": {
+         "__typename": "SearchFilterOptionListPresentation",
+         "buttonText": "text",
+         "id": "id94",
+         "options": [
+          {
+           "__typename": "SearchFilterOption",
+           "id": "id92",
+           "isSelected": true,
+           "secondaryText": null,
+           "text": "text"
+          },
+          {
+           "__typename": "SearchFilterOption",
+           "id": "id93",
+           "isSelected": false,
+           "secondaryText": null,
+           "text": "text"
+          }
+         ],
+         "title": "text"
+        }
+       },
+       {
+        "__typename": "SearchDropdown",
+        "behaviors": [
+         {
+          "__typename": "SearchFilterBehavior",
+          "filters": [
+           {
+            "__typename": "AppliedFilter",
+            "key": "text",
+            "value": "text"
+           }
+          ],
+          "id": "id95",
+          "isAppliedFiltersRemoved": false,
+          "isAppliedOptionsRemoved": false,
+          "navigationType": "text",
+          "options": [],
+          "pane": "text",
+          "query": "text",
+          "telemetry": {
+           "__typename": "SearchElementTelemetry",
+           "events": [
+            {
+             "__typename": "SearchTelemetryEvent",
+             "action": "text",
+             "noun": "text",
+             "source": "text",
+             "trigger": "text",
+             "triggerConfiguration": null
+            }
+           ],
+           "trackingContext": {
+            "__typename": "SearchTelemetryTrackingContext",
+            "actionInfo": {
+             "__typename": "SearchTelemetryTrackingContextActionInfo",
+             "paneName": "text",
+             "position": null,
+             "reason": null,
+             "relativePosition": null,
+             "type": "bottom_sheet"
+            },
+            "answers": null,
+            "comment": null,
+            "discoveryUnit": null,
+            "metaSearch": null,
+            "post": null,
+            "profile": null,
+            "search": {
+             "__typename": "SearchTelemetryTrackingContextSearch",
+             "isNsfw": true,
+             "originElement": null,
+             "query": "text",
+             "queryID": "text",
+             "range": "text",
+             "safeSearch": "text",
+             "scope": {
+              "__typename": "SearchScope",
+              "id": null,
+              "name": null,
+              "path": "text",
+              "type": "GLOBAL"
+             },
+             "snippet": null,
+             "snippetId": null,
+             "sort": null,
+             "structureType": "text"
+            },
+            "subreddit": null
+           }
+          },
+          "treatment": ""
+         },
+         {
+          "__typename": "SearchFilterBehavior",
+          "filters": [
+           {
+            "__typename": "AppliedFilter",
+            "key": "text",
+            "value": "text"
+           }
+          ],
+          "id": "id96",
+          "isAppliedFiltersRemoved": false,
+          "isAppliedOptionsRemoved": false,
+          "navigationType": "text",
+          "options": [],
+          "pane": "text",
+          "query": "text",
+          "telemetry": {
+           "__typename": "SearchElementTelemetry",
+           "events": [
+            {
+             "__typename": "SearchTelemetryEvent",
+             "action": "text",
+             "noun": "text",
+             "source": "text",
+             "trigger": "text",
+             "triggerConfiguration": null
+            }
+           ],
+           "trackingContext": {
+            "__typename": "SearchTelemetryTrackingContext",
+            "actionInfo": {
+             "__typename": "SearchTelemetryTrackingContextActionInfo",
+             "paneName": "text",
+             "position": null,
+             "reason": null,
+             "relativePosition": null,
+             "type": "bottom_sheet"
+            },
+            "answers": null,
+            "comment": null,
+            "discoveryUnit": null,
+            "metaSearch": null,
+            "post": null,
+            "profile": null,
+            "search": {
+             "__typename": "SearchTelemetryTrackingContextSearch",
+             "isNsfw": true,
+             "originElement": null,
+             "query": "text",
+             "queryID": "text",
+             "range": "text",
+             "safeSearch": "text",
+             "scope": {
+              "__typename": "SearchScope",
+              "id": null,
+              "name": null,
+              "path": "text",
+              "type": "GLOBAL"
+             },
+             "snippet": null,
+             "snippetId": null,
+             "sort": null,
+             "structureType": "text"
+            },
+            "subreddit": null
+           }
+          },
+          "treatment": ""
+         }
+        ],
+        "presentation": {
+         "__typename": "SearchFilterOptionListPresentation",
+         "buttonText": "text",
+         "id": "id97",
+         "options": [
+          {
+           "__typename": "SearchFilterOption",
+           "id": "id95",
+           "isSelected": true,
+           "secondaryText": null,
+           "text": "text"
+          },
+          {
+           "__typename": "SearchFilterOption",
+           "id": "id96",
+           "isSelected": false,
+           "secondaryText": null,
+           "text": "text"
+          }
+         ],
+         "title": "text"
+        }
+       }
+      ],
+      "filterModal": null,
+      "navigation": {
+       "__typename": "SearchNavigationList",
+       "behaviors": [
+        {
+         "__typename": "SearchFilterBehavior",
+         "filters": [
+          {
+           "__typename": "AppliedFilter",
+           "key": "text",
+           "value": "text"
+          }
+         ],
+         "id": "id98",
+         "isAppliedFiltersRemoved": true,
+         "isAppliedOptionsRemoved": false,
+         "navigationType": "text",
+         "options": [
+          {
+           "__typename": "AppliedFilter",
+           "key": "text",
+           "value": "text"
+          }
+         ],
+         "pane": "text",
+         "query": "text",
+         "telemetry": {
+          "__typename": "SearchElementTelemetry",
+          "events": [
+           {
+            "__typename": "SearchTelemetryEvent",
+            "action": "text",
+            "noun": "text",
+            "source": "text",
+            "trigger": "text",
+            "triggerConfiguration": null
+           }
+          ],
+          "trackingContext": {
+           "__typename": "SearchTelemetryTrackingContext",
+           "actionInfo": {
+            "__typename": "SearchTelemetryTrackingContextActionInfo",
+            "paneName": "text",
+            "position": null,
+            "reason": null,
+            "relativePosition": null,
+            "type": "posts"
+           },
+           "answers": null,
+           "comment": null,
+           "discoveryUnit": null,
+           "metaSearch": null,
+           "post": null,
+           "profile": null,
+           "search": {
+            "__typename": "SearchTelemetryTrackingContextSearch",
+            "isNsfw": true,
+            "originElement": null,
+            "query": "text",
+            "queryID": "text",
+            "range": null,
+            "safeSearch": "text",
+            "scope": {
+             "__typename": "SearchScope",
+             "id": null,
+             "name": null,
+             "path": "text",
+             "type": "GLOBAL"
+            },
+            "snippet": null,
+            "snippetId": null,
+            "sort": null,
+            "structureType": "text"
+           },
+           "subreddit": null
+          }
+         },
+         "treatment": ""
+        },
+        {
+         "__typename": "SearchFilterBehavior",
+         "filters": [
+          {
+           "__typename": "AppliedFilter",
+           "key": "text",
+           "value": "text"
+          }
+         ],
+         "id": "id99",
+         "isAppliedFiltersRemoved": true,
+         "isAppliedOptionsRemoved": false,
+         "navigationType": "text",
+         "options": [
+          {
+           "__typename": "AppliedFilter",
+           "key": "text",
+           "value": "text"
+          }
+         ],
+         "pane": "text",
+         "query": "text",
+         "telemetry": {
+          "__typename": "SearchElementTelemetry",
+          "events": [
+           {
+            "__typename": "SearchTelemetryEvent",
+            "action": "text",
+            "noun": "text",
+            "source": "text",
+            "trigger": "text",
+            "triggerConfiguration": null
+           }
+          ],
+          "trackingContext": {
+           "__typename": "SearchTelemetryTrackingContext",
+           "actionInfo": {
+            "__typename": "SearchTelemetryTrackingContextActionInfo",
+            "paneName": "text",
+            "position": null,
+            "reason": null,
+            "relativePosition": null,
+            "type": "communities"
+           },
+           "answers": null,
+           "comment": null,
+           "discoveryUnit": null,
+           "metaSearch": null,
+           "post": null,
+           "profile": null,
+           "search": {
+            "__typename": "SearchTelemetryTrackingContextSearch",
+            "isNsfw": true,
+            "originElement": null,
+            "query": "text",
+            "queryID": "text",
+            "range": null,
+            "safeSearch": "text",
+            "scope": {
+             "__typename": "SearchScope",
+             "id": null,
+             "name": null,
+             "path": "text",
+             "type": "GLOBAL"
+            },
+            "snippet": null,
+            "snippetId": null,
+            "sort": null,
+            "structureType": "text"
+           },
+           "subreddit": null
+          }
+         },
+         "treatment": ""
+        }
+       ],
+       "presentation": {
+        "__typename": "SearchNavigationListPresentation",
+        "items": [
+         {
+          "__typename": "SearchNavigationListItem",
+          "iconIndicator": null,
+          "id": "id98",
+          "isSelected": true,
+          "text": "text"
+         },
+         {
+          "__typename": "SearchNavigationListItem",
+          "iconIndicator": null,
+          "id": "id99",
+          "isSelected": false,
+          "text": "text"
+         }
+        ]
+       }
+      }
+     }
+    }
+   }
+  }
+ }
+}

@@ -592,16 +592,17 @@ static BOOL RFFilterPostExtras(NSMutableDictionary *root, const RFContext *ctx) 
 
 #pragma mark - Search
 
-// An ad among search results: a SearchAdPost card wrapping an AdPost, at
-// search.dynamic.components.main.edges (Reddit 2026.46). Matched by type rather than path, so it still
-// works if the results move.
-static BOOL RFIsSearchAd(id edge) {
-  NSDictionary *node = RFDict(RFDict(edge)[@"node"]);
+// An ad among search results: a SearchAdPost card wrapping an AdPost. Results are edges at
+// search.dynamic.components.main.edges, and most are in a SearchListComponent there, as its children
+// (Reddit 2026.46). Matched by type rather than path, so it still works if the results move.
+static BOOL RFIsSearchAd(id item) {
+  NSDictionary *card = RFDict(item);
+  NSDictionary *node = RFDict(card[@"node"]) ?: card;
   return [RFString(node[@"__typename"]) isEqualToString:@"SearchAdPost"] ||
          [RFString(RFDict(node[@"post"])[@"__typename"]) isEqualToString:@"AdPost"];
 }
 
-// Removes search ad cards from every list of edges in a search response. Removed rather than emptied:
+// Removes search ad cards from every list of results in a search response. Removed rather than emptied:
 // search sections are plain lists, so there's no card shape to keep.
 static BOOL RFDropSearchAds(id object) {
   BOOL changed = NO;
@@ -611,18 +612,19 @@ static BOOL RFDropSearchAds(id object) {
   }
   NSMutableDictionary *dict = RFMutableDict(object);
   if (!dict) return NO;
-  NSArray *edges = RFArray(dict[@"edges"]);
-  if (edges) {
-    NSMutableArray *kept = [NSMutableArray arrayWithCapacity:edges.count];
-    for (id edge in edges) {
-      if (RFIsSearchAd(edge)) {
-        RFCount(RFStatFeedAds, RFDict(edge)[@"node"]);
+  for (NSString *key in @[ @"edges", @"children" ]) {
+    NSArray *results = RFArray(dict[key]);
+    if (!results) continue;
+    NSMutableArray *kept = [NSMutableArray arrayWithCapacity:results.count];
+    for (id result in results) {
+      if (RFIsSearchAd(result)) {
+        RFCount(RFStatFeedAds, RFDict(RFDict(result)[@"node"]) ?: result);
         continue;
       }
-      [kept addObject:edge];
+      [kept addObject:result];
     }
-    if (kept.count != edges.count) {
-      dict[@"edges"] = kept;
+    if (kept.count != results.count) {
+      dict[key] = kept;
       changed = YES;
     }
   }

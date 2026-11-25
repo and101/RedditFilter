@@ -1,0 +1,381 @@
+{
+ "data": {
+  "postInfoById": {
+   "__typename": "SubredditPost",
+   "authorCommunityBadge": null,
+   "authorFlair": {
+    "__typename": "AuthorFlair",
+    "richtext": null,
+    "template": {
+     "__typename": "FlairTemplate",
+     "allowableContent": "text",
+     "backgroundRGBA": "text",
+     "id": "id50",
+     "isEditable": false,
+     "isModOnly": true,
+     "maxEmojis": 1,
+     "richtext": null,
+     "text": "text",
+     "textColor": "text",
+     "type": "text"
+    },
+    "text": "text",
+    "textColor": "text",
+    "type": "text"
+   },
+   "authorInfo": {
+    "__typename": "Redditor",
+    "accountType": "text",
+    "attributes": {
+     "__typename": "RedditorAttributes",
+     "redditHandleInfo": {
+      "__typename": "RedditorHandleInfo",
+      "displayName": "text",
+      "prefixedUsername": "text",
+      "username": "text"
+     },
+     "redditorType": "text",
+     "verificationStatus": "text"
+    },
+    "displayName": "text",
+    "id": "t2_51",
+    "isBlocked": false,
+    "isCakeDayNow": false,
+    "profile": {
+     "__typename": "Profile",
+     "isNsfw": false,
+     "styles": {
+      "__typename": "ProfileStyles",
+      "legacyIcon": {
+       "__typename": "MediaSource",
+       "url": "https://example.com/"
+      },
+      "legacyPrimaryColor": null
+     }
+    },
+    "profileExemptedExperiments": [],
+    "snoovatarIcon": {
+     "__typename": "MediaSource",
+     "url": "https://example.com/"
+    }
+   },
+   "authorOnlyInfo": null,
+   "automatedFeedback": null,
+   "awardings": [],
+   "commentCount": 1,
+   "content": {
+    "__typename": "Content",
+    "markdown": "text",
+    "preview": "text",
+    "richtext": "text",
+    "richtextMedia": [],
+    "translationInfo": {
+     "__typename": "TranslationInfo",
+     "isTranslated": false,
+     "translatedLanguage": null
+    }
+   },
+   "createdAt": "text",
+   "crosspostCount": null,
+   "crosspostRoot": null,
+   "crowdControlLevel": "text",
+   "devvit": null,
+   "discussionType": "text",
+   "distinguishedAs": null,
+   "domain": "text",
+   "editedAt": null,
+   "flair": {
+    "__typename": "PostFlair",
+    "richtext": null,
+    "template": {
+     "__typename": "FlairTemplate",
+     "allowableContent": "text",
+     "backgroundRGBA": "text",
+     "id": "id52",
+     "isEditable": false,
+     "isModOnly": false,
+     "maxEmojis": 1,
+     "richtext": null,
+     "text": "text",
+     "textColor": "text",
+     "type": "text"
+    },
+    "text": "text",
+    "textColor": "text",
+    "type": "text"
+   },
+   "gallery": null,
+   "id": "t3_53",
+   "isActiveComments": false,
+   "isArchived": false,
+   "isAuthorBlocked": false,
+   "isCommercialCommunication": false,
+   "isContestMode": false,
+   "isCreatedFromAdsUi": false,
+   "isCrosspostable": true,
+   "isCrowdControlFilterEnabled": false,
+   "isFollowed": false,
+   "isGildable": true,
+   "isHidden": false,
+   "isLocked": false,
+   "isNsfw": false,
+   "isOriginalContent": false,
+   "isOwnPost": false,
+   "isPollIncluded": false,
+   "isSaved": false,
+   "isScoreHidden": false,
+   "isSelfPost": true,
+   "isSpoiler": false,
+   "isStickied": true,
+   "isTextEditable": false,
+   "isThumbnailEnabled": false,
+   "isTranslatable": false,
+   "isTranslated": false,
+   "languageCode": "text",
+   "linkedComment": null,
+   "liveCommentsWebsocket": "text",
+   "media": {
+    "__typename": "Media",
+    "animated": null,
+    "download": null,
+    "obfuscated": null,
+    "packagedMedia": null,
+    "previewMediaId": "text",
+    "still": {
+     "__typename": "StillMedia",
+     "large": {
+      "__typename": "MediaSource",
+      "dimensions": {
+       "__typename": "Dimensions",
+       "height": 1,
+       "width": 1
+      },
+      "url": "https://example.com/"
+     },
+     "medium": {
+      "__typename": "MediaSource",
+      "dimensions": {
+       "__typename": "Dimensions",
+       "height": 1,
+       "width": 1
+      },
+      "url": "https://example.com/"
+     },
+     "small": {
+      "__typename": "MediaSource",
+      "dimensions": {
+       "__typename": "Dimensions",
+       "height": 1,
+       "width": 1
+      },
+      "url": "https://example.com/"
+     },
+     "source": {
+      "__typename": "MediaSource",
+      "dimensions": {
+       "__typename": "Dimensions",
+       "height": 1,
+       "width": 1
+      },
+      "url": "https://example.com/"
+     },
+     "xlarge": {
+      "__typename": "MediaSource",
+      "dimensions": {
+       "__typename": "Dimensions",
+       "height": 1,
+       "width": 1
+      },
+      "url": "https://example.com/"
+     },
+     "xxlarge": {
+      "__typename": "MediaSource",
+      "dimensions": {
+       "__typename": "Dimensions",
+       "height": 1,
+       "width": 1
+      },
+      "url": "https://example.com/"
+     },
+     "xxxlarge": {
+      "__typename": "MediaSource",
+      "dimensions": {
+       "__typename": "Dimensions",
+       "height": 1,
+       "width": 1
+      },
+      "url": "https://example.com/"
+     }
+    },
+    "streaming": null,
+    "typeHint": null,
+    "video": null
+   },
+   "moderationInfo": null,
+   "outboundLink": {
+    "__typename": "OutboundLink",
+    "expiresAt": "text",
+    "url": "https://example.com/"
+   },
+   "permalink": "text",
+   "poll": null,
+   "postEventInfo": null,
+   "postStats": {
+    "__typename": "PostStatsPublic",
+    "shareAllTotal": 1
+   },
+   "postStatsPrivate": {
+    "__typename": "PostStats",
+    "viewCountTotals": null
+   },
+   "removedByCategory": null,
+   "score": 1,
+   "subreddit": {
+    "__typename": "Subreddit",
+    "activeCount": 1,
+    "allowedMediaInComments": [],
+    "allowedPostTypes": [
+     "text",
+     "text"
+    ],
+    "authorFlair": null,
+    "authorFlairSettings": {
+     "__typename": "AuthorFlairSettings",
+     "isEnabled": false,
+     "isSelfAssignable": false
+    },
+    "communityPermissions": {
+     "__typename": "CommunityPermissions",
+     "isAppearanceEditingAllowed": false,
+     "isAutoModConfigReadAllowed": false,
+     "isAutoModConfigWriteAllowed": false,
+     "isChatChannelModOnlyReadAllowed": false,
+     "isChatChannelModOnlyWriteAllowed": false,
+     "isChatChannelReadAllowed": false,
+     "isChatChannelWriteAllowed": false,
+     "isModLogReadAllowed": false,
+     "isModMailAdminDiscussionsReadAllowed": false,
+     "isModMailAdminDiscussionsWriteAllowed": false,
+     "isModMailModDiscussionsReadAllowed": false,
+     "isModMailModDiscussionsWriteAllowed": false,
+     "isModMailModNoteReadAllowed": false,
+     "isModMailModNoteWriteAllowed": false,
+     "isModMailSubredditMessagesReadAllowed": false,
+     "isModMailSubredditMessagesWriteAllowed": false,
+     "isModMailUserMessagesReadAllowed": false,
+     "isModMailUserMessagesWriteAllowed": false,
+     "isModRemovedContentReadAllowed": false,
+     "isUserModNoteReadAllowed": false,
+     "isUserModNoteWriteAllowed": false,
+     "isWidgetEditingAllowed": false
+    },
+    "communityStatus": {
+     "__typename": "SubredditCommunityStatus",
+     "description": {
+      "__typename": "Content",
+      "markdown": "text",
+      "preview": "text",
+      "richtext": "text",
+      "richtextMedia": [],
+      "translationInfo": null
+     },
+     "emoji": {
+      "__typename": "SubredditEmoji",
+      "createdByInfo": {
+       "__typename": "Redditor",
+       "id": "t2_51"
+      },
+      "flairPermission": "text",
+      "isModOnly": true,
+      "name": "text",
+      "url": "https://example.com/"
+     }
+    },
+    "createdAt": "text",
+    "description": {
+     "__typename": "Content",
+     "markdown": "text"
+    },
+    "detectedLanguage": "text",
+    "featureVariants": [
+     {
+      "__typename": "SubredditFeatureVariant",
+      "experimentName": "text",
+      "id": "id54",
+      "name": "text",
+      "version": "text"
+     }
+    ],
+    "id": "t5_55",
+    "interstitialWarningMessage": null,
+    "isChatPostCreationAllowed": false,
+    "isChatPostFeatureEnabled": false,
+    "isCommentingRestricted": false,
+    "isContributor": false,
+    "isCrosspostDestination": true,
+    "isCrosspostSource": true,
+    "isEmojisEnabled": false,
+    "isFavorite": false,
+    "isMediaInCommentsSettingShown": true,
+    "isMuted": false,
+    "isNsfw": false,
+    "isPostingRestricted": true,
+    "isPredictionAllowed": false,
+    "isPredictionsTournamentAllowed": false,
+    "isQuarantined": false,
+    "isSubredditChannelsEnabled": {
+     "__typename": "SubredditChannelsEnabledByType",
+     "isChatEnabled": false,
+     "isPostEnabled": false
+    },
+    "isSubscribed": false,
+    "isThumbnailsEnabled": true,
+    "isUserBanned": false,
+    "modPermissions": null,
+    "name": "text",
+    "notificationLevel": null,
+    "path": "text",
+    "postFlairSettings": {
+     "__typename": "PostFlairSettings",
+     "isEnabled": true,
+     "isSelfAssignable": true
+    },
+    "predictionLeaderboardEntryType": "text",
+    "prefixedName": "text",
+    "publicDescriptionText": "text",
+    "quarantineMessage": null,
+    "styles": {
+     "__typename": "SubredditStyles",
+     "bannerBackgroundColor": null,
+     "bannerBackgroundImage": "https://example.com/",
+     "icon": "https://example.com/",
+     "legacyBannerBackgroundImage": null,
+     "legacyIcon": null,
+     "legacyPrimaryColor": null,
+     "mobileBannerImage": "https://example.com/",
+     "primaryColor": "text"
+    },
+    "submitText": "",
+    "subscribersCount": 1,
+    "suggestedCommentSort": null,
+    "tippingStatus": null,
+    "title": "text",
+    "type": "PUBLIC",
+    "yearInReviewSettings": {
+     "__typename": "YearInReviewSettings",
+     "isEligible": false,
+     "isEnabled": false
+    }
+   },
+   "suggestedCommentSort": null,
+   "thumbnail": null,
+   "title": "text",
+   "tombstone": null,
+   "translatedLanguage": null,
+   "trend": null,
+   "upvoteRatio": 1,
+   "url": "https://example.com/",
+   "voteState": "text"
+  }
+ }
+}
