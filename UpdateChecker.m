@@ -177,7 +177,7 @@ void RFCheckForUpdateNow(UIViewController *presenter, void (^finished)(void)) {
         break;
       case RFUpdateStatusFailed:
         title = @"Couldn't check for updates";
-        message = @"GitHub couldn't be reached. Check your connection and try again.";
+        message = @"Check your connection or try again later.";
         break;
     }
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:title

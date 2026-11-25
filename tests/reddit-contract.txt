@@ -43,7 +43,7 @@ FBPCommentSheetAdapterView
 # Keep feed position (FeedPosition.x)
 _TtC6Reddit13SceneDelegate
 _TtC8SliceKit18ListCollectionView
-# Reopen community and post (ScreenRestore.x)
+# Reopen screens (ScreenRestore.x)
 _TtC9Home_Impl41PerFeedScreenviewHomeScreenViewController
 _TtC18Subreddit_Internal29SubredditScreenViewController
 _TtC8Profiles30ProfileCoreStackViewController

@@ -1733,7 +1733,7 @@ static void RFFinishRestore(void) {
 @implementation RFCoverSkip
 + (void)skip:(UIButton *)button {
   if (!gPlan) return;
-  gOutcome = @"skipped (you tapped Skip)";
+  gOutcome = @"skipped (you tapped \"Skip\")";
   RFFinishRestore();
 }
 @end
@@ -2276,9 +2276,9 @@ static NSDictionary *RFUsablePlan(NSDictionary *plan, BOOL *tooOld) {
 }
 
 static void RFPlanRestoreNow(void) {
-  if (!RFFeedCacheEnabled()) return (void)(gOutcome = @"nothing (Keep feed position off)");
+  if (!RFFeedCacheEnabled()) return (void)(gOutcome = @"nothing (\"Keep feed position\" off)");
   if (!RFMayRestore()) return (void)(gOutcome = @"skipped (swiped away)");
-  if (!gRestoreScreens) return (void)(gOutcome = @"feeds only (Reopen community and post off)");
+  if (!gRestoreScreens) return (void)(gOutcome = @"feeds only (\"Reopen screens\" off)");
   BOOL tooOld = NO;
   NSDictionary *plan = RFUsablePlan(RFReadJSON(@"Screens.json"), &tooOld);
   // What was waiting for a return to Home when Reddit was left (only for a Home plan).

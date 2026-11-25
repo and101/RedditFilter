@@ -55,21 +55,21 @@ static const RFToggleRow kToggleRows[] = {
     {kRedditFilterKeywordCommentReplies, @"Hide replies too", @"Also hide the replies below them",
      @"rpl3/reply,icon_reply", NO, kRedditFilterKeywordComments},
     {kRedditFilterCheckUpdates, @"Check for updates",
-                                       @"Switch on to check daily, or tap to check now",
+                                       @"Check daily, or tap to check now",
                                        @"rpl3/download,rpl3/notifications", NO},
     {kRedditFilterRedgifsDirect, @"Play RedGIFs directly", @"Plays with sound, but can use more data",
      @"rpl3/volumeOn,rpl3/play", NO},
     // Saved as "prefer HD", so the switch is the opposite.
     {kRedditFilterRedgifsHD, @"Prefer SD", @"Uses about a tenth of the data of HD",
      @"rpl3/video,icon_video,icon_play", YES, kRedditFilterRedgifsDirect},
-    {kRedditFilterRedgifsHDWiFiOnly, @"Prefer SD on mobile data", @"And in Low Data Mode; HD on Wi-Fi",
+    {kRedditFilterRedgifsHDWiFiOnly, @"Prefer SD on mobile data", @"Also in Low Data Mode",
      @"rf/wifi", NO, kRedditFilterRedgifsHD},
     {kRedditFilterAutoCollapseAutoMod, @"AutoMod", @"Always collapse AutoMod comments", @"rpl3/mod,icon_mod", NO},
     {kRedditFilterDiagnostics, @"Diagnostics",
                                             @"Check the filters still work",
                                             @"rpl3/bug,icon_bug", NO},
     {kRedditFilterSwipeToCollapse, @"Swipe to collapse",
-     @"Swipe further to collapse the whole thread",
+     @"Swipe further for the whole thread",
      @"rpl3/swipeLeft,rpl3/comment,icon_comment", NO},
     {kRedditFilterSwipeLeftToCollapse, @"Swipe left",
      @"When off, swiping left changes post",
@@ -78,23 +78,23 @@ static const RFToggleRow kToggleRows[] = {
      @"Swiping from the edge still goes back",
      @"rpl3/swipeRight,rpl3/comment,icon_comment", NO, kRedditFilterSwipeToCollapse},
     {kRedditFilterSwipeCollapseHaptics, @"Swipe haptics",
-     @"Vibrate when a swipe reaches its action", @"rpl3/swipeLeft,rpl3/comment,icon_comment", NO},
+     @"Vibrate when a swipe is ready", @"rpl3/swipeLeft,rpl3/comment,icon_comment", NO},
     {kRedditFilterTapToCollapse, @"Tap to collapse too",
      @"Long press collapses the whole thread", @"rpl3/comment,icon_comment", NO,
      kRedditFilterSwipeToCollapse},
     {kRedditFilterKeepFeedPosition, @"Keep feed position", @"Stay where you were on Home",
      @"rpl3/home,icon_home", NO},
-    {kRedditFilterRestoreScreens, @"Reopen community and post", @"Communities, profiles and posts too",
+    {kRedditFilterRestoreScreens, @"Reopen screens", @"Communities, posts and more",
      @"rpl3/comment,icon_comment", NO, kRedditFilterKeepFeedPosition},
-    {kRedditFilterRestoreAfterSwipe, @"Restore after swiping away", @"Not only when iOS closed Reddit",
+    {kRedditFilterRestoreAfterSwipe, @"Restore after swiping away", @"Even if you closed Reddit yourself",
      @"rpl3/swipeUp,rpl3/refresh,icon_refresh", NO, kRedditFilterKeepFeedPosition},
     {kRedditFilterRefreshPill, @"Refresh button", @"Show the new posts button on Home",
      @"rpl3/refresh,icon_refresh", YES},
     {kRedditFilterCleanShareLinks, @"Clean share links", @"Share plain links, not ones tied to you",
      @"rpl3/share,icon_share", NO},
-    {kRedditFilterBlockTrackers, @"Block trackers", @"Stop analytics and ad tracking",
+    {kRedditFilterBlockTrackers, @"Block trackers", @"Block requests to known trackers",
      @"rpl3/hide,rpl3/lock,icon_hide", NO},
-    {kRedditFilterStartOnFollowing, @"Start on Following", @"Open Home on Following, not For You",
+    {kRedditFilterStartOnFollowing, @"Start on Following", @"Open Home on the Following tab",
      @"rpl3/home,icon_home", NO},
     {kRedditFilterSwipePosts, @"Swipe posts", @"Upvote, downvote or save from a feed",
      @"rpl3/swipeLeft,rpl3/upvote,icon_upvote", NO},
@@ -577,31 +577,31 @@ static UITableViewCell *RFDiagnosticCell(UITableView *tableView, NSString *ident
 static NSString *RFFooterText(id settings, NSInteger section) {
   switch (RFSectionAt(settings, section)) {
     case RFSectionStats: return nil;
-    case RFSectionFilters: return @"Turn a switch off to hide that content.";
+    case RFSectionFilters: return @"Turn off what you want to hide.";
     case RFSectionCollapse: return nil;
     case RFSectionSwipeHaptics: return @"For swipes on both posts and comments.";
     case RFSectionPostSwipe:
-      return @"In feeds, swipe a post left to upvote it, or further to downvote it. Swipe right to save it. "
-             @"Swiping again removes the vote or unsaves the post.";
+      return @"In feeds, swipe a post left to upvote or further left to downvote. Swipe right to save. "
+             @"Repeat the same swipe to undo it.";
     case RFSectionFeed:
-      return @"Reddit jumps back to the top of Home after 10 minutes away. This keeps your place in For You, "
-             @"and in Following and Popular while Reddit shows them as feed tabs, even after Reddit closes. "
-             @"Popular and Latest, which Reddit opens from the side menu, keep their place when Reopen "
-             @"community and post reopens them. Pull down to refresh.\n\n"
-             @"Reopened posts start at the top, with a button back to where you were in the comments.";
+      return @"Reddit jumps back to the top of Home after 10 minutes away. \"Keep feed position\" keeps your "
+             @"place in your Home feeds, even after Reddit closes. Pull down to refresh.\n\n"
+             @"Popular and Latest in the side menu keep their place only when \"Reopen screens\" reopens them. "
+             @"Reopened posts start at the top, with a button back to where you were.";
     case RFSectionRestoreOptions:
-      return @"Restore for is how long your place is kept after you leave Reddit.";
+      return @"\"Restore for\" sets how long your place is kept after you leave Reddit.";
     case RFSectionExperimental: return nil;
     case RFSectionSwipe:
-      return @"Turn on both sides to collapse either way. Swiping a collapsed comment or the post itself still "
-             @"changes post or goes back. With swipe to collapse off, a tap collapses comments as usual. "
+      return @"Turn on \"Swipe left\" and \"Swipe right\" to collapse either way. Swiping a collapsed comment or the "
+             @"post itself still changes post or goes back. With \"Swipe to collapse\" off, a tap collapses comments "
+             @"as usual. "
              @"A tap always reopens a collapsed comment.";
     case RFSectionRedgifs:
       return @"Plays RedGIFs' own videos with sound, connecting your device to RedGIFs directly. If RedGIFs "
              @"can't be reached, Reddit's silent version plays. HD plays when a video has no SD version, and "
              @"videos already loaded keep their quality if your network changes.";
     case RFSectionAppearance:
-      return @"Safari opens articles in an in-app sheet that uses your Safari content blockers.";
+      return @"\"Safari\" opens articles in an in-app sheet that uses your Safari content blockers.";
     case RFSectionRootFilters:
     case RFSectionDisplay:
     case RFSectionMore:
@@ -620,8 +620,8 @@ static NSString *RFFooterText(id settings, NSInteger section) {
     case RFSectionHome: return @"Reddit opens Home on the tab you last used. This opens it on Following every time.";
     case RFSectionPrivacy:
       return @"Reddit's share links (…/s/…) are tied to your account, so Reddit can link everyone who opens one back "
-             @"to you. Clean share links shares the plain link instead.\n\nBlock trackers stops analytics, crash "
-             @"reports and ad tracking from leaving your device. Logging in and feeds aren't affected.";
+             @"to you. \"Clean share links\" shares the plain link instead.\n\n\"Block trackers\" stops known "
+             @"analytics, crash report and ad trackers. Reddit's own usage data is still sent. Logging in and feeds aren't affected.";
   }
   return nil;
 }
@@ -752,7 +752,7 @@ static UITableViewCell *RFAboutCell(UITableView *tableView, NSInteger index) {
 
 static UITableViewCell *RFKeywordsCell(UITableView *tableView) {
   NSUInteger count = RFSavedKeywords().count;
-  NSString *subtitle = count == 0   ? @"Hide posts that mention a word or phrase"
+  NSString *subtitle = count == 0   ? @"Hide posts by word, website or flair"
                        : count == 1 ? @"1 keyword"
                                     : [NSString stringWithFormat:@"%lu keywords", (unsigned long)count];
   return RFLinkCell(tableView, @"Keywords", subtitle, @"rpl3/search", @"text.magnifyingglass");
@@ -793,9 +793,9 @@ static void RFShowSafariSetup(UIViewController *controller) {
   UIAlertController *alert = [UIAlertController
       alertControllerWithTitle:@"Open Reddit links here"
                        message:@"Reddit links you open in Safari can open in this app instead.\n\n"
-                               @"1. Open Settings, then Apps, then Safari, then Extensions.\n"
-                               @"2. Tap RedditFilter and turn on Allow Extension.\n"
-                               @"3. Under Permissions, set the Reddit websites to Allow.\n\n"
+                               @"1. Open Settings > Apps > Safari > Extensions.\n"
+                               @"2. Tap RedditFilter and turn on \"Allow Extension\".\n"
+                               @"3. Under Permissions, set the Reddit websites to \"Allow\".\n\n"
                                @"Safari asks before opening each link. Cancel once to stay on the page, "
                                @"or twice to stay on the web until you close that tab."
                 preferredStyle:UIAlertControllerStyleAlert];
@@ -1158,8 +1158,8 @@ static CGFloat RFSettingsTopInset(UIViewController *settings) {
         NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
         BOOL clean = [defaults boolForKey:kRedditFilterCleanShareLinks], block = [defaults boolForKey:kRedditFilterBlockTrackers];
         subtitle = clean && block ? @"Both on"
-                   : clean        ? @"Clean share links on"
-                   : block        ? @"Block trackers on"
+                   : clean        ? @"Cleaning share links"
+                   : block        ? @"Blocking trackers"
                                   : @"Off";
       }
         icon = @"rpl3/lock,icon_lock"; symbol = @"hand.raised";
@@ -1168,7 +1168,7 @@ static CGFloat RFSettingsTopInset(UIViewController *settings) {
         NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
         BOOL keep = [defaults boolForKey:kRedditFilterKeepFeedPosition];
         subtitle = !keep ? @"Off"
-                   : [defaults boolForKey:kRedditFilterRestoreScreens] ? @"Feed position, community and post"
+                   : [defaults boolForKey:kRedditFilterRestoreScreens] ? @"Feed position and screens"
                                                                        : @"Feed position";
         icon = @"rpl3/lab,rpl3/beaker,rpl3/science"; symbol = @"flask";
         break;

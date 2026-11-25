@@ -212,8 +212,8 @@ typedef NS_ENUM(NSInteger, RFStatsSection) {
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
   if (section == RFStatsSectionTrackers)
     return [NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterBlockTrackers] || self.trackers > 0
-               ? @"Tracker requests that Block trackers stopped. Not part of the hidden total."
-               : @"Turn on Block trackers in Privacy to count these.";
+               ? @"Requests stopped by \"Block trackers\". Not part of the hidden total."
+               : @"Turn on \"Block trackers\" in Privacy to count these.";
   if (section != RFStatsSectionFilters) return nil;
   return @"Counted on this device while a filter is on. A post counts once per launch, so it can count again "
          @"after a restart.";
@@ -284,7 +284,7 @@ typedef NS_ENUM(NSInteger, RFStatsSection) {
     [stack.bottomAnchor constraintEqualToAnchor:cell.contentView.bottomAnchor constant:-16],
   ]];
   cell.isAccessibilityElement = YES;
-  cell.accessibilityLabel = [NSString stringWithFormat:@"%@ hidden, %@", number.text, caption.text];
+  cell.accessibilityLabel = [NSString stringWithFormat:@"%@, %@", number.text, caption.text];
   return cell;
 }
 

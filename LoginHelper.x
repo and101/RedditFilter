@@ -570,7 +570,7 @@ static UIImageView *symbolView(NSString *name, UIColor *color, UIFontTextStyle s
     feedback = UINotificationFeedbackTypeError;
     if (!message.length || [message rangeOfString:@"username or password" options:NSCaseInsensitiveSearch].location != NSNotFound) {
       heading = @"Wrong username or password";
-      body = @"Fix it below and tap Log In.";
+      body = @"Fix it below and tap \"Log In\".";
     } else {
       heading = @"Reddit couldn't log you in";
       body = message;
@@ -859,7 +859,7 @@ static void tapWhenEnabled(UIViewController *viewController, NSInteger attemptsL
     } else if (attemptsLeft > 0) {
       tapWhenEnabled(controller, attemptsLeft - 1);
     } else {
-      showAlert(controller, @"Log in with browser", @"Your browser login is ready. Tap Continue to finish logging in.");
+      showAlert(controller, @"Log in with browser", @"Your browser login is ready. Tap \"Continue\" to finish logging in.");
     }
   });
 }
