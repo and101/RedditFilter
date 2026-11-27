@@ -50,6 +50,7 @@ static NSString *const kRFBackupSettingKeys[] = {
     kRedditFilterDiagnostics,
     kRedditFilterCleanShareLinks,
     kRedditFilterBlockTrackers,
+    kRedditFilterClassicCommentViewer,
 };
 static const NSInteger kRFBackupSettingKeyCount = sizeof(kRFBackupSettingKeys) / sizeof(kRFBackupSettingKeys[0]);
 

@@ -34,7 +34,7 @@ typedef NS_ENUM(NSInteger, RFToggleTag) {
   RFAwards, RFScores, RFColoured, RFApollo, RFKeywordComments, RFKeywordReplies,
   RFUpdates, RFDirect, RFSD, RFMobileSD, RFAutoMod, RFDiagnostics,
   RFSwipe, RFLeft, RFRight, RFHaptics, RFTap, RFKeepFeed, RFRestoreScreens, RFRestoreAfterSwipe,
-  RFRefreshPill, RFCleanShare, RFBlockTrackers, RFStartFollowing, RFSwipePosts,
+  RFRefreshPill, RFCleanShare, RFBlockTrackers, RFStartFollowing, RFSwipePosts, RFClassicCommentViewer,
 };
 static const RFToggleRow kToggleRows[] = {
     {kRedditFilterPromoted, @"Promoted", @"Show ads in feeds and comments", @"rpl3/tag,icon_tag", YES},
@@ -99,6 +99,8 @@ static const RFToggleRow kToggleRows[] = {
      @"rpl3/home,icon_home", NO},
     {kRedditFilterSwipePosts, @"Swipe posts", @"Upvote, downvote or save from a feed",
      @"rpl3/swipeLeft,rpl3/upvote,icon_upvote", NO},
+    {kRedditFilterClassicCommentViewer, @"Classic comment viewer", @"Swipe up for the comments",
+     @"rpl3/swipeUp,rpl3/comment,icon_comment", NO},
 };
 static const NSInteger kToggleRowCount = sizeof(kToggleRows) / sizeof(kToggleRows[0]);
 static const NSInteger kAboutUpdateRow = 1;
@@ -448,7 +450,7 @@ typedef NS_ENUM(NSInteger, RFSection) {
   RFSectionDebug,
   RFSectionAppearance, RFSectionRootFilters, RFSectionDisplay, RFSectionMore, RFSectionFeed,
   RFSectionExperimental, RFSectionRestoreOptions, RFSectionPrivacy, RFSectionHome, RFSectionPostSwipe,
-  RFSectionSwipeHaptics, RFSectionFilterChecks, RFSectionAppChecks, RFSectionResetChecks,
+  RFSectionSwipeHaptics, RFSectionFilterChecks, RFSectionAppChecks, RFSectionResetChecks, RFSectionMediaSwipe,
 };
 
 // The IPA includes the Safari extension unless it was built without it.
@@ -500,7 +502,8 @@ static NSArray<NSNumber *> *RFSections(id settings) {
     case RFPageExperimental: return @[@(RFSectionFeed), @(RFSectionRestoreOptions)];
     case RFPageAppearance: return @[@(RFSectionAppearance)];
     case RFPageCollapse:
-      return @[@(RFSectionSwipe), @(RFSectionCollapse), @(RFSectionPostSwipe), @(RFSectionSwipeHaptics)];
+      return @[@(RFSectionSwipe), @(RFSectionCollapse), @(RFSectionPostSwipe), @(RFSectionMediaSwipe),
+               @(RFSectionSwipeHaptics)];
     case RFPageRedgifs: return @[@(RFSectionRedgifs)];
     case RFPageBackup: return @[@(RFSectionBackup)];
     case RFPageDiagnostics:
@@ -528,6 +531,7 @@ static NSArray<NSNumber *> *RFTags(RFSection section) {
     case RFSectionHome: return @[@(RFStartFollowing)];
     case RFSectionPostSwipe: return @[@(RFSwipePosts)];
     case RFSectionSwipeHaptics: return @[@(RFHaptics)];
+    case RFSectionMediaSwipe: return @[@(RFClassicCommentViewer)];
     default: return @[];
   }
 }
@@ -558,6 +562,7 @@ static NSString *RFHeaderText(id settings, NSInteger section) {
     case RFSectionMore: return @"MORE";
     case RFSectionSwipe: return @"COMMENTS";
     case RFSectionPostSwipe: return @"POSTS";
+    case RFSectionMediaSwipe: return @"PICTURES AND VIDEOS";
     case RFSectionFilterChecks: return @"FILTER CHECKS";
     case RFSectionAppChecks: return @"APP CHECKS";
     default: return nil;
@@ -606,6 +611,9 @@ static NSString *RFFooterText(id settings, NSInteger section) {
     case RFSectionFilters: return @"Turn off what you want to hide.";
     case RFSectionCollapse: return nil;
     case RFSectionSwipeHaptics: return @"For swipes on both posts and comments.";
+    case RFSectionMediaSwipe:
+      return @"In full screen, swipe up for the comments and sideways for the next post, instead of Reddit's "
+             @"vertical feed of posts. Takes a restart of Reddit.";
     case RFSectionPostSwipe:
       return @"In feeds, swipe a post left to upvote or further left to downvote. Swipe right to save. "
              @"Repeat the same swipe to undo it. Profiles keep Reddit's own swipes.";
@@ -803,10 +811,14 @@ static UITableViewCell *RFStatsCell(UITableView *tableView) {
 static UITableViewCell *RFSwipeCell(UITableView *tableView) {
   NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
   BOOL comments = [defaults boolForKey:kRedditFilterSwipeToCollapse], posts = [defaults boolForKey:kRedditFilterSwipePosts];
-  NSString *subtitle = comments && posts ? @"Posts and comments"
-                       : comments        ? @"Comments"
-                       : posts           ? @"Posts"
-                                         : @"Off"; // AutoMod on this page can still be on
+  NSMutableArray<NSString *> *on = [NSMutableArray array];
+  if (posts) [on addObject:@"Posts"];
+  if (comments) [on addObject:on.count ? @"comments" : @"Comments"];
+  if ([defaults boolForKey:kRedditFilterClassicCommentViewer]) [on addObject:on.count ? @"media" : @"Media"];
+  NSString *subtitle = on.count == 3   ? @"Posts, comments and media"
+                       : on.count == 2 ? [on componentsJoinedByString:@" and "]
+                       : on.count == 1 ? on[0]
+                                       : @"Off"; // AutoMod on this page can still be on
   return RFLinkCell(tableView, @"Swipe gestures", subtitle, @"rpl3/swipeLeft,rpl3/comment,icon_comment", nil);
 }
 
@@ -901,10 +913,10 @@ void RFKeywordSettingsChanged(UISwitch *sender, UITableView *table) {
 // Keeps the picker's delegate alive for as long as the picker is on screen.
 static char kRFBackupPickerKey;
 
-static void RFShowRestartAlert(UIViewController *controller) {
+static void RFShowRestartAlert(UIViewController *controller, NSString *message) {
   UIAlertController *alert =
       [UIAlertController alertControllerWithTitle:@"Restart Reddit"
-                                          message:@"Fully close and reopen Reddit to finish blocking Home feed ads."
+                                          message:message
                                    preferredStyle:UIAlertControllerStyleAlert];
   [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
   [controller presentViewController:alert animated:YES completion:nil];
@@ -1141,9 +1153,7 @@ static void RFKeepTableInSheet(UITableView *table) {
                                             RFReloadPreferences();
                                             [weakSelf.tableView reloadData];
                                             // Same treatment as turning Promoted on by hand.
-                                            BOOL restart =
-                                                [NSUserDefaults.standardUserDefaults boolForKey:kRedditFilterPromoted] &&
-                                                RFCleanCachedExperiments();
+                                            BOOL restart = RFCleanCachedExperiments();
                                             UIAlertController *done = [UIAlertController
                                                 alertControllerWithTitle:@"Settings imported"
                                                                  message:@"Your settings, keywords and stats have been replaced."
@@ -1152,7 +1162,7 @@ static void RFKeepTableInSheet(UITableView *table) {
                                                                 actionWithTitle:@"OK"
                                                                           style:UIAlertActionStyleDefault
                                                                         handler:^(UIAlertAction *doneAction) {
-                                                                          if (restart) RFShowRestartAlert(weakSelf);
+                                                                          if (restart) RFShowRestartAlert(weakSelf, @"Fully close and reopen Reddit to finish applying your settings.");
                                                                         }]];
                                             RFPresentWhenFree(weakSelf, done, 30);
                                           }]];
@@ -1283,7 +1293,14 @@ static void RFKeepTableInSheet(UITableView *table) {
   // Some accounts are in a Reddit experiment that loads Home ads where the filter can't see them.
   // It's removed at launch, but the running app has already read it.
   if (filterOn && [row->key isEqualToString:kRedditFilterPromoted] && RFCleanCachedExperiments())
-    RFShowRestartAlert(self);
+    RFShowRestartAlert(self, @"Fully close and reopen Reddit to finish blocking Home feed ads.");
+  // The viewer is chosen by an experiment the running app has already read, so either way it takes a restart.
+  if ([row->key isEqualToString:kRedditFilterClassicCommentViewer]) {
+    RFCleanCachedExperiments();
+    RFShowRestartAlert(self, filterOn ? @"Fully close and reopen Reddit to switch to the classic comment viewer."
+                                      : @"Reddit's own viewer comes back once Reddit has fetched its settings again, "
+                                        @"usually after closing and reopening it.");
+  }
 
   // Show or hide the checks below the Diagnostics switch.
   // (A plain reload: an animated section reload lays the new footer out too wide.)

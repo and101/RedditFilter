@@ -35,6 +35,7 @@
 #define kRedditFilterRestoreAfterSwipe @"kRedditFilterRestoreAfterSwipe" // restore even after Reddit was swiped away
 #define kRedditFilterRestoreHours @"kRedditFilterRestoreHours" // restore for 12 or 24 hours after leaving, 0 = always
 #define kRedditFilterSafariLinks @"kRedditFilterSafariLinks"
+#define kRedditFilterClassicCommentViewer @"kRedditFilterClassicCommentViewer" // full-screen media: swipe up for the comments
 #define kRedditFilterCheckUpdates @"kRedditFilterCheckUpdates"
 #define kRedditFilterCleanShareLinks @"kRedditFilterCleanShareLinks" // share plain links, not Reddit's /s/ ones
 #define kRedditFilterBlockTrackers @"kRedditFilterBlockTrackers" // answer analytics, ad and crash-report requests on the device

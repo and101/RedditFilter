@@ -104,6 +104,8 @@ UpdatePostSaveState
 GetAllExperimentVariants
 experimentVariants
 ios_home_feed_defer_query
+# Vertical media viewer, removed with Classic comment viewer on (prefix match in JSONFilter.m)
+ios_fbp_reimagine_m2
 # Browser login (Tweak.xm)
 /auth/v2/login/password
 /auth/v2/oauth/access-token/session

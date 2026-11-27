@@ -108,12 +108,37 @@ int main(void) {
     NSData *noDeferData = [NSJSONSerialization dataWithJSONObject:noDefer options:0 error:NULL];
     Check(RFFilteredResponseData(noDeferData, @"GetAllExperimentVariants", ads) == nil, @"Leave other experiments untouched");
     NSDictionary *cache = @{@"metadata": @{@"identifier": @"t2_x"}, @"variants": @[deferVariant, otherVariant]};
-    NSData *cleaned = RFCachedExperimentsWithoutAdLeaks([NSJSONSerialization dataWithJSONObject:cache options:0 error:NULL]);
+    NSData *cleaned = RFCachedExperimentsCleaned([NSJSONSerialization dataWithJSONObject:cache options:0 error:NULL], ads);
     NSDictionary *cleanedCache = [NSJSONSerialization JSONObjectWithData:cleaned options:0 error:NULL];
     Check([cleanedCache[@"variants"] isEqual:@[otherVariant]] && [cleanedCache[@"metadata"] isEqual:cache[@"metadata"]],
           @"Clean the cached experiments file");
-    Check(RFCachedExperimentsWithoutAdLeaks(cleaned) == nil, @"Leave a clean cache alone");
-    Check(RFCachedExperimentsWithoutAdLeaks([@"not json" dataUsingEncoding:NSUTF8StringEncoding]) == nil, @"Ignore unreadable caches");
+    Check(RFCachedExperimentsCleaned(cleaned, ads) == nil, @"Leave a clean cache alone");
+    Check(RFCachedExperimentsCleaned([@"not json" dataUsingEncoding:NSUTF8StringEncoding], ads) == nil, @"Ignore unreadable caches");
+
+    // Classic comment viewer: the vertical media feed experiments go, whatever their stage.
+    RFPrefs classic = {.classicCommentViewer = YES};
+    NSDictionary *reimagineM2 = @{@"experimentName": @"ios_fbp_reimagine_m2", @"name": @"enabled"};
+    NSDictionary *reimagineM3 = @{@"experimentName": @"ios_fbp_reimagine_m3a", @"name": @"variant_1"};
+    NSDictionary *m2m3 = @{@"experimentName": @"ios_fbp_m2_m3_bridge", @"name": @"enabled"};
+    NSDictionary *viewerExperiments =
+        @{@"data": @{@"experimentVariants": @[reimagineM2, otherVariant, reimagineM3, deferVariant, m2m3]}};
+    Check(RFPrefsAnyEnabled(classic), @"Classic comment viewer counts as a filter");
+    Check([Filter(viewerExperiments, @"GetAllExperimentVariants", classic)[@"data"][@"experimentVariants"]
+              isEqual:(@[otherVariant, deferVariant])],
+          @"Drop the vertical viewer experiments, keep the rest");
+    Check([Filter(viewerExperiments, @"GetAllExperimentVariants", ads)[@"data"][@"experimentVariants"]
+              isEqual:(@[reimagineM2, otherVariant, reimagineM3, m2m3])],
+          @"Keep the vertical viewer with the switch off");
+    RFPrefs adsAndClassic = {.promoted = YES, .classicCommentViewer = YES};
+    Check([Filter(viewerExperiments, @"GetAllExperimentVariants", adsAndClassic)[@"data"][@"experimentVariants"]
+              isEqual:@[otherVariant]],
+          @"Drop both kinds together");
+    NSDictionary *viewerCache = @{@"metadata": @{@"identifier": @"t2_x"}, @"variants": @[reimagineM3, otherVariant]};
+    NSData *viewerCacheData = [NSJSONSerialization dataWithJSONObject:viewerCache options:0 error:NULL];
+    NSDictionary *cleanedViewerCache =
+        [NSJSONSerialization JSONObjectWithData:RFCachedExperimentsCleaned(viewerCacheData, classic) options:0 error:NULL];
+    Check([cleanedViewerCache[@"variants"] isEqual:@[otherVariant]], @"Clean the vertical viewer from the cache");
+    Check(RFCachedExperimentsCleaned(viewerCacheData, ads) == nil, @"Leave the cached viewer with the switch off");
 
     NSArray *cards = @[
       Card(@{@"__typename": @"IndicatorsCell", @"indicators": @[@"NSFW"]}),
