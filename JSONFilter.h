@@ -22,6 +22,7 @@ typedef struct {
   BOOL redgifsHD; // prefer the larger HD file
   BOOL redgifsHDWiFiOnly; // keep HD for Wi-Fi, rather than mobile data or Low Data Mode
   BOOL cleanShareLinks; // share plain links instead of Reddit's /s/ links tied to the account
+  BOOL classicCommentViewer; // the full-screen media viewer from before the vertical post feed
 } RFPrefs;
 
 #ifdef __cplusplus
@@ -64,10 +65,11 @@ NSData *RFLocalShareURLResponse(NSURLRequest *request);
 // in which case the caller should pass the original data through.
 NSData *RFFilteredResponseData(NSData *data, NSString *operationName, RFPrefs prefs);
 
-// Reddit's cached copy of its experiments (an ExperimentVariants file), minus the ones that make the
-// app load ads where the filter can't see them. The app reads it at launch, before it fetches fresh
-// ones (which RFFilteredResponseData cleans). Returns nil if nothing changed.
-NSData *RFCachedExperimentsWithoutAdLeaks(NSData *data);
+// Reddit's cached copy of its experiments (an ExperimentVariants file), minus the ones RedditFilter
+// removes with these settings: with promoted, those that make the app load ads where the filter can't
+// see them; with classicCommentViewer, the vertical media feed. The app reads it at launch, before it fetches
+// fresh ones (which RFFilteredResponseData cleans). Returns nil if nothing changed.
+NSData *RFCachedExperimentsCleaned(NSData *data, RFPrefs prefs);
 
 // Feed cards only carry the first 300 characters of a post's text. Returns a request for the full
 // posts on a feed page (the one the app itself makes after showing the page), or nil when there are

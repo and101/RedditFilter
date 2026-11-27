@@ -45,6 +45,7 @@ extern "C" void RFReloadPreferences(void) {
   prefs.redgifsHD = [defaults boolForKey:kRedditFilterRedgifsHD];
   prefs.redgifsHDWiFiOnly = [defaults boolForKey:kRedditFilterRedgifsHDWiFiOnly];
   prefs.cleanShareLinks = [defaults boolForKey:kRedditFilterCleanShareLinks];
+  prefs.classicCommentViewer = [defaults boolForKey:kRedditFilterClassicCommentViewer];
   RFSetTrackerBlocking([defaults boolForKey:kRedditFilterBlockTrackers]);
   // Keep feed position: the kept posts were filtered with the old settings, so a change forgets them
   // (otherwise posts the new settings hide could come back). Not at launch, only when they change.
@@ -616,9 +617,14 @@ static BOOL RFIsAPIHost(NSString *host) {
 
 // Reddit keeps each account's experiments in <group container>/Library/Application Support/<account>/
 // ExperimentVariants and applies them at launch, before it fetches fresh ones. Cleaned here so the
-// ad-leaking experiments are gone from the first launch, not just the one after. Returns YES if any
-// were removed (an app that has already read them keeps using them until it's reopened).
+// experiments RedditFilter removes (ad-leaking ones, the vertical media viewer) are gone from the first
+// launch, not just the one after. Returns YES if any were removed (an app that has already read them
+// keeps using them until it's reopened).
 BOOL RFCleanCachedExperiments(void) {
+  os_unfair_lock_lock(&globalPrefsLock);
+  RFPrefs prefs = globalPrefs;
+  os_unfair_lock_unlock(&globalPrefsLock);
+  if (!prefs.promoted && !prefs.classicCommentViewer) return NO;
   BOOL removed = NO;
   NSFileManager *fm = NSFileManager.defaultManager;
   NSString *group = @"group.com.reddit.Reddit";
@@ -632,7 +638,7 @@ BOOL RFCleanCachedExperiments(void) {
     NSString *support = [container stringByAppendingPathComponent:@"Library/Application Support"];
     for (NSString *account in [fm contentsOfDirectoryAtPath:support error:nil]) {
       NSString *path = [[support stringByAppendingPathComponent:account] stringByAppendingPathComponent:@"ExperimentVariants"];
-      NSData *cleaned = RFCachedExperimentsWithoutAdLeaks([NSData dataWithContentsOfFile:path]);
+      NSData *cleaned = RFCachedExperimentsCleaned([NSData dataWithContentsOfFile:path], prefs);
       if (cleaned && [cleaned writeToFile:path options:NSDataWritingAtomic error:nil]) removed = YES;
     }
   }
@@ -715,9 +721,10 @@ BOOL RFCleanCachedExperiments(void) {
     kRedditFilterCheckUpdates : @YES,
     kRedditFilterCleanShareLinks : @NO,
     kRedditFilterBlockTrackers : @NO,
+    kRedditFilterClassicCommentViewer : @NO,
   }];
   RFReloadPreferences();
-  if (globalPrefs.promoted) RFCleanCachedExperiments();
+  RFCleanCachedExperiments(); // only with Promoted or Classic comment viewer on
 
   %init;
   %init(SwiftClasses, Post = CoreClass(@"Post"), Comment = CoreClass(@"Comment"));

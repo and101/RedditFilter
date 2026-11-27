@@ -35,7 +35,7 @@ static id RFValueAtPath(id root, NSString *path) {
 
 BOOL RFPrefsAnyEnabled(RFPrefs p) {
   return p.promoted || p.recommended || p.nsfw || p.awards || p.scores || p.automod || p.videosForYou || p.extraCards || p.keywords ||
-         p.redgifsDirect;
+         p.redgifsDirect || p.classicCommentViewer;
 }
 
 #pragma mark - Counting what's hidden
@@ -725,30 +725,42 @@ static NSSet<NSString *> *RFAdLeakExperiments(void) {
   return set;
 }
 
+// The full-screen media viewer as a vertical feed, where swiping up shows the next post. Without these
+// the viewer is the earlier one: swipe up for the comments, sideways for the next post. Matched by
+// prefix, as Reddit numbers each stage (ios_fbp_reimagine_m2, ios_fbp_reimagine_m3a, ...).
+static BOOL RFIsVerticalViewerExperiment(NSString *name) {
+  return [name hasPrefix:@"ios_fbp_reimagine"] || [name hasPrefix:@"ios_fbp_m2_m3"];
+}
+
+static BOOL RFDropsExperiment(NSString *name, RFPrefs prefs) {
+  if (prefs.promoted && [RFAdLeakExperiments() containsObject:name]) return YES;
+  return prefs.classicCommentViewer && RFIsVerticalViewerExperiment(name);
+}
+
 // Removes those experiments from a list of variants: the app then treats them as not assigned.
-static BOOL RFDropAdLeakExperiments(NSMutableDictionary *container, NSString *key) {
+static BOOL RFDropExperiments(NSMutableDictionary *container, NSString *key, RFPrefs prefs) {
   NSArray *variants = RFArray(container[key]);
   if (!variants) return NO;
   NSArray *kept = [variants filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(id item, NSDictionary *b) {
-    return ![RFAdLeakExperiments() containsObject:RFString(RFDict(item)[@"experimentName"]) ?: @""];
+    return !RFDropsExperiment(RFString(RFDict(item)[@"experimentName"]) ?: @"", prefs);
   }]];
   if (kept.count == variants.count) return NO;
   container[key] = kept;
   return YES;
 }
 
-NSData *RFCachedExperimentsWithoutAdLeaks(NSData *data) {
+NSData *RFCachedExperimentsCleaned(NSData *data, RFPrefs prefs) {
   if (!data.length) return nil;
   NSMutableDictionary *json = RFMutableDict([NSJSONSerialization JSONObjectWithData:data
                                                                             options:NSJSONReadingMutableContainers
                                                                               error:NULL]);
-  if (!RFDropAdLeakExperiments(json, @"variants")) return nil;
+  if (!RFDropExperiments(json, @"variants", prefs)) return nil;
   return [NSJSONSerialization dataWithJSONObject:json options:0 error:NULL];
 }
 
 static BOOL RFFilterResponse(NSMutableDictionary *json, NSDictionary *payload, NSString *op, const RFContext *ctx) {
   if ([op isEqualToString:@"GetAllExperimentVariants"])
-    return ctx->prefs.promoted && RFDropAdLeakExperiments(RFMutableDict(payload), @"experimentVariants");
+    return RFDropExperiments(RFMutableDict(payload), @"experimentVariants", ctx->prefs);
   for (size_t i = 0; i < sizeof(kFastPaths) / sizeof(kFastPaths[0]); i++) {
     const RFFastPath *fast = &kFastPaths[i];
     if (![op isEqualToString:fast->operation]) continue;
